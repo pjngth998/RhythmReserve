@@ -1,0 +1,108 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor Customer
+actor "Front Desk Staff" as Staff
+actor "Branch Manager" as Manager
+actor "System Admin" as Admin
+actor "Payment System" as Payment
+actor "OTP System" as OTP
+
+rectangle "Booking System" {
+
+  Customer -- (Register)
+  (Register) ..> (Provide Personal Info) : <<include>>
+  (Register) ..> (Verify OTP) : <<include>>
+  (Verify OTP) ..> OTP : <<include>>
+
+  Customer -- (Login)
+  (Login) ..> (Verify Password) : <<include>>
+
+  Customer -- (Manage Profile)
+  Customer -- (View Membership & Privileges)
+  Customer -- (View Booking & Payment History)
+
+  Customer -- (Book Practice Room)
+  (Book Practice Room) ..> (Check Room Availability) : <<include>>
+  (Book Practice Room) ..> (Check Payment) : <<include>>
+  (Check Payment) ..> Payment : <<include>>
+
+  (Book Practice Room) ..> (Book Equipment) : <<extend>>
+  (Book Equipment) ..> (Check Available Equipment) : <<include>>
+
+  (Book Practice Room) ..> (Edit Booking) : <<extend>>
+  (Book Practice Room) ..> (Cancel Booking) : <<extend>>
+  (Cancel Booking) ..> (Return Equipment) : <<include>>
+
+  Customer -- (Report Room/Equipment Issue)
+
+  Staff -- (Staff Login)
+  (Staff Login) ..> (Verify Staff ID) : <<include>>
+  (Staff Login) ..> (Verify Password) : <<include>>
+
+  Staff -- (View Daily Booking List)
+
+  Staff -- (Update Customer Status)
+  (Update Customer Status) ..> (Customer Check-in) : <<extend>>
+  (Customer Check-in) ..> (Set Room Status In Use) : <<include>>
+  (Customer Check-in) ..> (Set Equipment Borrowed) : <<extend>>
+
+  (Update Customer Status) ..> (Customer Check-out) : <<extend>>
+  (Customer Check-out) ..> (Update Room Status) : <<include>>
+  (Update Room Status) ..> (Room Available) : <<extend>>
+  (Update Room Status) ..> (Room Maintenance) : <<extend>>
+
+  (Customer Check-out) ..> (Update Equipment Status) : <<extend>>
+  (Update Equipment Status) ..> (Equipment Available) : <<extend>>
+  (Update Equipment Status) ..> (Equipment Maintenance) : <<extend>>
+
+  Staff -- (Manage Equipment)
+  (Manage Equipment) ..> (Add Equipment) : <<extend>>
+  (Manage Equipment) ..> (Remove Equipment) : <<extend>>
+
+  Staff -- (Daily Report)
+  (Daily Report) ..> (Room & Equipment Status Report) : <<include>>
+  (Daily Report) ..> (Daily Revenue Report) : <<include>>
+  (Daily Report) ..> (Penalty & Notes) : <<extend>>
+
+  Manager -- (Manager Login)
+  (Manager Login) ..> (Verify Branch ID) : <<include>>
+  (Manager Login) ..> (Verify Password) : <<include>>
+
+  Manager -- (Read Reports)
+  Manager -- (Approve Room Maintenance)
+  Manager -- (Approve Equipment Maintenance)
+
+  Manager -- (Manage Rooms)
+  (Manage Rooms) ..> (Add Room) : <<extend>>
+  (Manage Rooms) ..> (Close Room) : <<extend>>
+
+  Manager -- (Manage Branch Staff)
+  (Manage Branch Staff) ..> (Add Staff) : <<extend>>
+  (Manage Branch Staff) ..> (Remove Staff) : <<extend>>
+
+  Admin -- (Admin Login)
+  (Admin Login) ..> (Verify Admin ID) : <<include>>
+  (Admin Login) ..> (Verify Password) : <<include>>
+
+  Admin -- (Manage Membership Levels)
+  Admin -- (Manage Booking Rules & Penalties)
+  Admin -- (Manage Pricing)
+
+  Admin -- (Manage Coupons)
+  (Manage Coupons) ..> (Add Coupon) : <<extend>>
+  (Manage Coupons) ..> (Remove Coupon) : <<extend>>
+  (Manage Coupons) ..> (Set Expiry Date) : <<include>>
+
+  Admin -- (Manage Branches)
+  (Manage Branches) ..> (Add Branch) : <<extend>>
+  (Manage Branches) ..> (Remove Branch) : <<extend>>
+
+  Admin -- (Manage All Staff)
+  (Manage All Staff) ..> (Add Staff) : <<extend>>
+  (Manage All Staff) ..> (Remove Staff) : <<extend>>
+
+  Admin -- (View Audit Log)
+}
+@enduml
