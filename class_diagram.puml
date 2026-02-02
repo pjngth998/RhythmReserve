@@ -1,0 +1,123 @@
+@startuml
+
+class ReserveSystem{
+    
+}
+
+class Branches{
+
+}
+
+class Room {
+
+}
+
+class SmallRoom{
+
+}
+
+class MediumRoom{
+
+}
+
+class LargeRoom{
+
+}
+
+class ExtralargeRoom{
+
+}
+
+class Equipment{
+
+}
+
+class BookStatus{
+
+}
+
+class Booking{
+
+}
+
+class Cart{
+
+}
+
+class PaymentChannel{
+
+}
+
+class Payment{
+
+}
+
+class Transaction{
+
+}
+
+class History{
+
+}
+
+class Package{
+
+}
+
+class User{
+
+}
+
+class Officer{
+
+}
+
+class BranchManager{
+
+}
+
+class FrontDesk{
+
+}
+
+class SystemAdmin{
+
+}
+
+class Customer{
+
+}
+
+class Standard{
+
+}
+
+class Premium{
+
+}
+
+class Diamond{
+
+}
+
+class Policy{
+
+}
+
+class Notification{
+
+}
+
+User <|-- Officer
+User <|-- Customer
+Customer <|-- Standard
+Customer <|-- Premium
+Customer <|-- Diamond
+Officer <|-- BranchManager
+Officer <|-- FrontDesk
+Officer <|-- SystemAdmin
+Room <|-- SmallRoom
+Room <|-- MediumRoom
+Room <|-- LargeRoom
+Room <|-- ExtralargeRoom
+@enduml
