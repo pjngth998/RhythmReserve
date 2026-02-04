@@ -1,0 +1,60 @@
+@startuml
+title Daily Report
+
+actor "Front Desk Staff" as Staff
+actor "Manager" as Manager
+participant "BookingSystem" as System
+participant "User" as User
+participant "Transaction" as Transaction
+participant "BookingStatus" as BookingRoomDB
+participant "Equipment" as EquipmentDB
+participant Policy as Policy
+
+
+Staff -> System : requestDailyReport(date)
+activate System
+System -> System : find_user_id()
+System -> User 
+activate User
+User -> Transaction : user_transaction
+activate Transaction
+Transaction -> BookingRoomDB : getRoomStatus(date)
+activate BookingRoomDB
+BookingRoomDB --> Transaction 
+Transaction --> User
+User --> System : statusData
+deactivate BookingRoomDB
+
+User -> Transaction : getDailyRevenue(date)
+Transaction --> User
+User --> System  : revenueData
+deactivate User
+
+
+Transaction  -> EquipmentDB : getEquipmentStatus(date)
+activate EquipmentDB
+
+EquipmentDB --> Transaction
+Transaction --> User
+activate User
+User --> System : statusData
+deactivate User
+deactivate EquipmentDB
+
+opt Penalty & Notes
+    Transaction -> Policy : getAllPenalties(date)
+    activate Policy
+    Policy --> Transaction 
+    Transaction --> User
+    activate User
+    User --> System : penaltyList
+    deactivate Policy
+    deactivate Transaction
+    deactivate User
+end
+
+System -> System : generateDailyReport()
+System --> Manager : dailyReport
+deactivate System
+
+@enduml
