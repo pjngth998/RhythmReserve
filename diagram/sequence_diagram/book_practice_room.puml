@@ -1,0 +1,70 @@
+@startuml
+actor Customer as C
+participant ReserveSystem as Rs
+participant Member as Mb
+participant Cart as Ct
+participant Branch as Br
+participant Payment as Pm
+participant PaymentChannel as Pmch
+participant Booking as B
+participant Notification as N
+participant Policy as P
+participant Room as R
+participant Equipment as E
+
+C -> Rs: login(username, password)
+activate Rs
+loop [for each item]
+    Rs -> Rs: find member
+end loop
+Rs -> Mb: member
+Mb --> Rs: member
+
+C -> Rs: search_room(brach, date, timeSlot, roomSize, amount)
+
+Rs -> Br: check_available_room(date, timeSlot, roomSize)
+activate Br
+Br --> C: show_available_room(room)
+
+
+C -> Rs: booking_room(room, duration)
+Rs --> Ct: booking_room(room, duration)
+activate Ct
+Ct --> Mb: 
+Mb -> Mb: check_facilities()
+activate Mb
+
+Mb -> Br: check_available_equipment(eq_quota)
+Mb --> C: show_available_equuipment(eq)
+
+
+Mb -> Rs: booking_equipment(eq)
+Rs -> Ct: booking_equipment(eq)
+
+Rs -> Mb: check_discount()
+Mb --> Ct: discount
+Ct --> C : total
+
+Ct -> P: get_policy()
+P --> Ct: policy
+
+Ct -> C : policy_and_reserve_accepted()
+alt accept
+    Ct -> B: holding()
+    Mb -> Pm: pay()
+    Pm -> Pmch: validation()
+    alt succeed
+        Ct -> B: confirm_booking()
+        B -> N: send_booking_info()
+        N --> C: display_noti()
+    else failed
+        Pm --> C: payment failed
+    end
+else not accept
+end
+    
+
+
+
+
+@enduml

@@ -28,11 +28,11 @@ rectangle "Booking System" {
   (Book Practice Room) ..> (Check Payment) : <<include>>
   (Check Payment) ..> Payment : <<include>>
 
-  (Book Practice Room) ..> (Book Equipment) : <<extend>>
+  (Book Practice Room) <.. (Book Equipment) : <<extend>>
   (Book Equipment) ..> (Check Available Equipment) : <<include>>
 
-  (Book Practice Room) ..> (Edit Booking) : <<extend>>
-  (Book Practice Room) ..> (Cancel Booking) : <<extend>>
+  (Book Practice Room) <.. (Edit Booking) : <<extend>>
+  (Book Practice Room) <.. (Cancel Booking) : <<extend>>
   (Cancel Booking) ..> (Return Equipment) : <<include>>
 
   Customer -- (Report Room/Equipment Issue)
@@ -44,27 +44,24 @@ rectangle "Booking System" {
   Staff -- (View Daily Booking List)
 
   Staff -- (Update Customer Status)
-  (Update Customer Status) ..> (Customer Check-in) : <<extend>>
+  (Update Customer Status) <.. (Customer Check-in) : <<extend>>
   (Customer Check-in) ..> (Set Room Status In Use) : <<include>>
-  (Customer Check-in) ..> (Set Equipment Borrowed) : <<extend>>
+  (Customer Check-in) <.. (Set Equipment Borrowed) : <<extend>>
 
-  (Update Customer Status) ..> (Customer Check-out) : <<extend>>
-  (Customer Check-out) ..> (Update Room Status) : <<include>>
-  (Update Room Status) ..> (Room Available) : <<extend>>
+  (Update Customer Status) <.. (Customer Check-out) : <<extend>>
+  (Customer Check-out) ..> (Room Available) : <<extend>>
   (Update Room Status) ..> (Room Maintenance) : <<extend>>
 
-  (Customer Check-out) ..> (Update Equipment Status) : <<extend>>
-  (Update Equipment Status) ..> (Equipment Available) : <<extend>>
-  (Update Equipment Status) ..> (Equipment Maintenance) : <<extend>>
+  (Customer Check-out)  <.. (Equipment Available) : <<extend>>
+  (Customer Check-out) <.. (Equipment Maintenance) : <<extend>>
 
-  Staff -- (Manage Equipment)
-  (Manage Equipment) ..> (Add Equipment) : <<extend>>
-  (Manage Equipment) ..> (Remove Equipment) : <<extend>>
+  Staff -- (Add Equipment)
+  Staff -- (Remove Equipment)
 
   Staff -- (Daily Report)
   (Daily Report) ..> (Room & Equipment Status Report) : <<include>>
   (Daily Report) ..> (Daily Revenue Report) : <<include>>
-  (Daily Report) ..> (Penalty & Notes) : <<extend>>
+  (Daily Report) <.. (Penalty & Notes) : <<extend>>
 
   Manager -- (Manager Login)
   (Manager Login) ..> (Verify Branch ID) : <<include>>
@@ -74,13 +71,11 @@ rectangle "Booking System" {
   Manager -- (Approve Room Maintenance)
   Manager -- (Approve Equipment Maintenance)
 
-  Manager -- (Manage Rooms)
-  (Manage Rooms) ..> (Add Room) : <<extend>>
-  (Manage Rooms) ..> (Close Room) : <<extend>>
+  Manager --  (Add Room) 
+  Manager -- (Close Room) 
 
-  Manager -- (Manage Branch Staff)
-  (Manage Branch Staff) ..> (Add Staff) : <<extend>>
-  (Manage Branch Staff) ..> (Remove Staff) : <<extend>>
+  Manager --  (Add Staff) 
+  Manager --  (Remove Staff)
 
   Admin -- (Admin Login)
   (Admin Login) ..> (Verify Admin ID) : <<include>>
@@ -90,19 +85,10 @@ rectangle "Booking System" {
   Admin -- (Manage Booking Rules & Penalties)
   Admin -- (Manage Pricing)
 
-  Admin -- (Manage Coupons)
-  (Manage Coupons) ..> (Add Coupon) : <<extend>>
-  (Manage Coupons) ..> (Remove Coupon) : <<extend>>
-  (Manage Coupons) ..> (Set Expiry Date) : <<include>>
+  Admin -- (Add Coupon) 
+  Admin -- (Remove Coupon)
+  Admin -- (Set Expiry Date) 
 
   Admin -- (Manage Branches)
-  (Manage Branches) ..> (Add Branch) : <<extend>>
-  (Manage Branches) ..> (Remove Branch) : <<extend>>
-
-  Admin -- (Manage All Staff)
-  (Manage All Staff) ..> (Add Staff) : <<extend>>
-  (Manage All Staff) ..> (Remove Staff) : <<extend>>
-
-  Admin -- (View Audit Log)
-}
-@enduml
+  (Manage Branches) <.. (Add Branch) : <<extend>>
+  (Manage Branches) <.. (Remove Branch) : <<extend>>
