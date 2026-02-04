@@ -89,6 +89,5 @@ rectangle "Booking System" {
   Admin -- (Remove Coupon)
   Admin -- (Set Expiry Date) 
 
-  Admin -- (Manage Branches)
-  (Manage Branches) <.. (Add Branch) : <<extend>>
-  (Manage Branches) <.. (Remove Branch) : <<extend>>
+  Admin --  (Add Branch)
+  Admin -- (Remove Branch)
