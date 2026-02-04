@@ -48,6 +48,8 @@ rectangle "Booking System" {
   (Customer Check-in) ..> (Set Room Status In Use) : <<include>>
   (Customer Check-in) <.. (Set Equipment Borrowed) : <<extend>>
 
+  Staff -- (Update Room Status)
+
   (Update Customer Status) <.. (Customer Check-out) : <<extend>>
   (Customer Check-out) ..> (Room Available) : <<extend>>
   (Update Room Status) ..> (Room Maintenance) : <<extend>>
@@ -91,4 +93,5 @@ rectangle "Booking System" {
 
   Admin -- (Manage Branches)
   (Manage Branches) <.. (Add Branch) : <<extend>>
-  (Manage Branches) <.. (Remove Branch) : <<extend>>
+  (Manage Branches) <.. (Remove Branch) : <<extend>>\
+}
