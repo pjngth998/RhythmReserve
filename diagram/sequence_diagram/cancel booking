@@ -1,0 +1,39 @@
+@startuml
+autonumber
+actor Customer as C
+participant ReserveSystem as RS
+participant User as U
+participant Transaction as T
+participant Policy as Pol
+participant Payment as Pay
+participant Time_slot as TS
+
+C->RS : Cancel_Reservation(user_id)
+activate RS
+RS -> U: searching_user(user_id)
+activate U
+U -> T: get_transaction()
+deactivate U
+activate T
+T -> Pol: check_cancel_rule(timestamp,current)
+deactivate T
+activate Pol
+Pol -> RS : return {isAllowed,refund}
+deactivate Pol
+
+alt isAllowed == False
+    RS -> C: return error{cannot cancel}
+
+else isAllowed == True
+    opt refund > 0
+        RS -> Pay : paymentrefund(refund)
+        activate Pay
+        Pay -> RS: return{success}
+        deactivate Pay
+    end
+    RS -> TS: set_status(availble)
+    activate TS
+    TS -> C : return{success}
+    deactivate TS
+end
+@enduml
