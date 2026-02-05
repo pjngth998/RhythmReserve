@@ -32,15 +32,12 @@ class Equipment{
 
 }
 
-class BookStatus{
-
-}
 
 class Booking{
 
 }
 
-class Cart{
+class Order{
 
 }
 
