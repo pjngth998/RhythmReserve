@@ -1,0 +1,54 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "FrontDeskStaff" as staff
+participant "ReserveSystem" as system
+participant "User" as user
+participant "Transaction" as transaction
+participant "TimeSlot" as slot
+
+== Check-in Phase ==
+
+staff -> system :Checkin(user_id, time)
+activate system
+system -> system :Search_user(user_id)
+
+system -> user :get_transaction(time)
+activate user
+user -> user : Search_transaction()
+
+user -> transaction :get_reserve_detail()
+activate transaction
+transaction --> user : name, room_id, time
+deactivate transaction
+
+deactivate user
+user --> system : success
+deactivate system
+
+== Check-out Phase ==
+staff -> system :Checkout(user_id)
+activate system
+
+system -> system :Search_user(user_id)
+
+system -> user :get_transaction(time)
+activate user
+
+user -> user : Search_transaction()
+
+user -> transaction : get_timeslot()
+activate transaction
+
+transaction -> slot : Update_status(status)
+activate slot
+slot --> transaction : success
+deactivate slot
+transaction --> user : success
+deactivate transaction
+
+user --> system :success
+deactivate system
+@enduml
