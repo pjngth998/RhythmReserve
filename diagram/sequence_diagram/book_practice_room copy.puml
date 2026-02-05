@@ -1,0 +1,131 @@
+@startuml
+actor Customer as C
+participant ReserveSystem as Rs
+participant Member as Mb
+participant Cart as Ct
+participant Branch as Br
+participant Payment as Pm
+participant PaymentChannel as Pmch
+participant Booking as B
+participant Notification as N
+participant Policy as P
+
+C -> Rs: login(username, password)
+activate Rs
+Rs -> Mb: find_member(username)
+activate Mb
+
+Mb --> Rs: member
+deactivate Mb
+Rs --> C: member
+
+
+C -> Rs: search_room(branch, date, timeSlot, roomSize, amount)
+
+Rs -> Br: check_available_room(date, timeSlot, roomSize)
+activate Br
+Br --> Rs: show_available_room(room)
+deactivate Br
+Rs --> C: show_available_room(room)
+
+
+C -> Rs: booking_room(room, duration)
+Rs -> Ct: booking_room(room, duration)
+activate Ct
+Ct --> Rs: make cart
+deactivate Ct
+Rs -> Mb: check_facilities()
+activate Mb
+Mb --> Rs: return facilities
+deactivate Mb
+
+
+Rs -> Br: check_available_equipment(eq_quota)
+activate Br
+Br --> Rs: show_available_equipment(eq)
+deactivate Br
+Rs --> C: show_available_equipment(eq)
+
+
+C -> Rs: booking_equipment(eq)
+Rs -> Ct: booking_equipment(eq)
+activate Ct
+Ct --> Rs: equipment booked
+deactivate Ct
+
+Rs -> Mb: check_discount()
+activate Mb
+Mb --> Rs: discount
+deactivate Mb
+Rs -> Ct: discount
+activate Ct
+Ct --> Rs : total
+deactivate Ct
+Rs --> C : total
+
+Rs -> P: get_policy()
+activate P
+P --> Rs: policy
+deactivate P
+
+
+Rs -> C : show_policy_and_ask_consent()
+Rs -> B: holding()
+activate B
+B --> Rs : held
+deactivate B
+alt accept
+    C -> Rs : acceptPolicy()
+    C -> Rs: pay()
+    Rs -> Pm: requestPayment
+    activate Pm
+    Pm -> Pmch: validation()
+    activate Pmch
+    alt succeed
+        Pmch --> Pm :payment succeed
+        
+        Pm --> Rs : succeed
+         
+        Rs -> B: confirm_booking()
+        activate B
+        B --> Rs: make booking
+        B -> N: send_booking_info()
+        deactivate B
+        activate N
+        N --> C: display_noti()
+        deactivate N
+    else failed
+
+        Pmch --> Pm: payment failed
+        deactivate Pmch
+        Pm -> N: failed info
+        
+        
+        activate N
+        N --> Pm: fail noti
+        deactivate N
+        Pm --> C: display fail()
+        deactivate Pm
+        Rs -> B: release_hold()
+        activate B
+        B --> Rs: unheld
+        deactivate B
+    end
+else not accept
+    C -> Rs : rejectPolicy()
+    Rs -> N: cancel info
+    activate N
+    N --> Rs : cancel noti
+    deactivate N
+    Rs --> C: display cancel()
+    Rs -> B: release_hold()
+    activate B
+    B --> Rs: unheld
+    deactivate B
+end
+    
+
+
+
+
+@enduml
