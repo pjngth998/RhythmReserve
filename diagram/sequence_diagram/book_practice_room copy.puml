@@ -1,5 +1,4 @@
 @startuml
-actor Customer as C
 participant ReserveSystem as Rs
 participant Member as Mb
 participant Cart as Ct
