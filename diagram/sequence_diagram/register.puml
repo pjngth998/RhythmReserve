@@ -1,0 +1,33 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "Customer" as customer
+participant "ReserveSystem" as system
+participant "User" as user
+participant "Notification" as noti
+
+customer -> system : Signin(user_name, email, password)
+activate system
+
+system -> system : check_account_exist(email)
+alt #Lightblue [Gmail Available]
+    system -> user : CreateAccount(user_name, email, password)
+    activate user
+    user --> system : Account Created
+    deactivate user
+    system -> noti : Sent_Vertify_Create_Account(email)
+    activate noti
+    noti --> system : sent email already
+    deactivate noti
+
+    system --> customer : Created Account Successfully
+
+else #LightPink [Gmail Exist]
+    system --> customer : Gmail Already Use
+end
+
+deactivate system
+
+@enduml
