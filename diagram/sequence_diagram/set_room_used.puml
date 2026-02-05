@@ -1,0 +1,24 @@
+@startuml set_room_used
+
+actor Front_desk_staff as FDS
+participant ReserveSystem as Sys
+participant User as User
+participant Transection as Trans
+participant Time_slot as Time
+
+FDS -> Sys: equipments_maintenance(user_id)
+activate Sys
+Sys -> User : searching_user()
+activate User
+User -> Trans: get_transection()
+deactivate User
+activate Trans
+Trans -> Sys: return(roomID,timeslot)
+deactivate Trans
+Sys -> Time: set_status(roomID,timeslot,"Used")
+deactivate Sys
+activate Time
+Time -> FDS : return{success}
+deactivate Time
+
+@enduml

@@ -1,4 +1,4 @@
-@startuml
+@startuml cancel_booking
 autonumber
 actor Customer as C
 participant ReserveSystem as RS

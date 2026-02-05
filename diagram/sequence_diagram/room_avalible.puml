@@ -1,0 +1,24 @@
+@startuml room_avalible
+
+actor Front_desk_staff as FDS
+participant ReserveSystem as Sys
+participant User as User
+participant Transection as Trans
+participant Time_slot as Time
+
+FDS -> Sys: room_avalible(user_id)
+activate Sys
+Sys -> User : searching_user()
+activate User
+User -> Trans: get_transection()
+deactivate User
+activate Trans
+Trans -> Sys: return(room_id,timeslot)
+deactivate Trans
+Sys -> Time: set_status(room_id,timeslot,"avalible")
+deactivate Sys
+activate Time
+Time -> FDS : return{success}
+deactivate Time
+
+@enduml
