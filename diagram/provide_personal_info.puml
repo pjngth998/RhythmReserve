@@ -1,0 +1,28 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "Customer" as customer
+participant "ReserveSystem" as system
+participant "User" as user
+
+customer -> system : Input_info(name, age , phone , email, address)
+activate system
+system-> system  : validate_format(userdata)
+    alt #LightBlue [Format_Correct]
+        system -> system :check_email_already(email)
+            alt #LightGreen [Email can use]
+                system -> user :createNewAccount()
+                activate user
+                user --> system : create success
+                deactivate user
+                system --> customer : Create Account Successfully
+            else #LightCoral [Email Already]
+                system --> customer : Email Already Use
+        end
+    else #LightPink [Format_Incorrect]
+        system -->customer : Personal Info Format Incorrect
+end
+deactivate system
+@enduml
