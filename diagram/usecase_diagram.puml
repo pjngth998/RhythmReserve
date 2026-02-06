@@ -7,14 +7,14 @@ actor "Front Desk Staff" as Staff
 actor "Branch Manager" as Manager
 actor "System Admin" as Admin
 actor "Payment System" as Payment
-actor "OTP System" as OTP
+' actor "OTP System" as OTP
 
 rectangle "Booking System" {
 
   Customer -- (Register)
   (Register) ..> (Provide Personal Info) : <<include>>
-  (Register) ..> (Verify OTP) : <<include>>
-  (Verify OTP) ..> OTP : <<include>>
+  ' (Register) ..> (Verify OTP) : <<include>>
+  ' (Verify OTP) ..> OTP : <<include>>
 
   Customer -- (Login)
   (Login) ..> (Verify Password) : <<include>>
@@ -93,3 +93,4 @@ rectangle "Booking System" {
 
   Admin --  (Add Branch)
   Admin -- (Remove Branch)
+}

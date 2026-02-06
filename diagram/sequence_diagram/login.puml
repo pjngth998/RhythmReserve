@@ -1,0 +1,33 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "Customer" as customer
+participant "ReserveSystem" as system
+participant "User" as user
+
+customer -> system : login(user_name,password)
+activate system
+system -> system : search_user(user_name)
+
+alt #LightSalmon [User Not Found]
+
+    system --> customer : User Not Found
+else #LightGreen [User Found]
+    system -> user : verify_password(user_name, password)
+    activate user
+
+    alt #LightBlue [Password Correct]
+        user --> system : Password Correct
+        system --> customer : Login Successfully
+    else #LightPink [Password Incorrect]
+        user --> system : Password Incorrect
+        deactivate user
+        system --> customer : Can't Login
+    end
+end
+
+deactivate system
+
+@enduml
