@@ -1,15 +1,31 @@
 @startuml
 
 class ReserveSystem{
+    -branch_list : list
+    -policy : class
     
 }
 
-class Branches{
+class Branch{
+    -room_list : list
+    -officer_list : list
+    -equipment_list : list
 
 }
 
 class Room {
+    -room_id : str
+    -time_slot : class
+    -price : int
 
+}
+
+class Time_slot{
+    -room : class
+    -equipment : class
+    -start_time : datetime
+    -end_time : datetime
+    -status : str
 }
 
 class SmallRoom{
@@ -29,15 +45,51 @@ class ExtralargeRoom{
 }
 
 class Equipment{
+    -eq_id : str
+    -time_slot : class
+    -price : int
 
 }
 
+class Microphone{
+
+}
+
+class ElectricGuitar{
+
+}
+
+class AcousticGuitar{
+
+}
+
+class Drum{
+
+}
+
+class Bass{
+
+}
+
+class Keyboard {
+
+}
 
 class Booking{
+    -room : class
+    -equipment_list : list
+    -customer : class
+    -time_slot : class
+    -total_price : float
 
 }
 
 class Order{
+    -customer : class
+    -booking_list : list
+    -total_price : float
+    -coupon : class
+    -payment : class
 
 }
 
@@ -45,19 +97,36 @@ class PaymentChannel{
 
 }
 
+class QrScan{
+
+}
+
+class CreditCard{
+
+}
+
 class Payment{
+    -order : class
+    -coupon : class
+    -fine : class
+    -refund : class
+    -payment_channel : class
+    -payment_status : class
 
 }
 
 class Transaction{
+    -timestamp : datetime
+    -order : class
+    -type : str
 
 }
 
-class History{
-
-}
 
 class User{
+    -user_id
+    -user_name
+    -password
 
 }
 
@@ -94,12 +163,27 @@ class Diamond{
 }
 
 class Policy{
+    +cancel : void
+    +refund : void
+    +fine : void
 
 }
 
 class Notification{
+    -user : class
+    -order : class
 
 }
+
+
+
+class Coupon{
+    -expired_date : datetime
+    -discount : float
+
+}
+
+
 
 User <|-- Officer
 User <|-- Customer
@@ -113,4 +197,24 @@ Room <|-- SmallRoom
 Room <|-- MediumRoom
 Room <|-- LargeRoom
 Room <|-- ExtralargeRoom
+Equipment <|-- ElectricGuitar
+Equipment <|-- AcousticGuitar
+Equipment <|-- Microphone
+Equipment <|-- Drum
+Equipment <|-- Keyboard
+Equipment <|-- Bass
+PaymentChannel <|-- QrScan
+PaymentChannel <|-- CreditCard
+ReserveSystem o-- Branch
+ReserveSystem o-- Policy
+Customer o-- Coupon
+Branch o-- Room
+Branch o-- Equipment
+Room o-- Time_slot
+Equipment o-- Time_slot
+Customer o-- order
+Order o-- Booking
+Customer o-- Transaction
+Customer o-- Notification
+Order <-- Payment
 @enduml
