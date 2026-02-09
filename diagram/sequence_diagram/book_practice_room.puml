@@ -2,28 +2,28 @@
 actor Customer as C
 participant ReserveSystem as Rs
 participant Branch as Br
-participant Cart as Ct
 participant Room as R
-
+participant Booking as B
 
 
 C -> Rs: booking_room(room _id, duration)
+activate Rs
 loop [for each room in branch]
     Rs -> Br: get_room(room_id)
     activate Br
     Br -> R:find_room
     activate R
-    R -> Br: room instance
-    deactivate R
-    Br -> Rs: room instance
-    deactivate Br
     end
-
-Rs -> Ct: make cart()
-activate Ct
-Ct --> Rs: cart instance
-deactivate Ct
-
+R -> Br: room instance
+deactivate R
+Br -> Rs: room instance
+deactivate Br
+Rs -> B: create booking(room)
+activate B
+B --> Rs:booking instance
+deactivate B
+Rs --> C: booking_complete
+deactivate Rs
 
 
 
