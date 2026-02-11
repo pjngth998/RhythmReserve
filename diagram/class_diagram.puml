@@ -232,12 +232,12 @@ class RoomType <<enumeration>>{
 }
 
 class EquipmentType <<enumeration>> {
-    EGTR
-    AGTR
-    BS
-    MC
-    KB
-    DM
+    ELECTRICGUITAR
+    ACOUSTICGUITAR
+    DRUM
+    MICROPHONE
+    BASS
+    KEYBOARD
 }
 
 class RoomEquipmentStatus <<enumeration>> {
