@@ -27,23 +27,23 @@ class Time_slot{
     -start_time : datetime
     -end_time : datetime
     -status : str
-    -set-status()
+    -set_status()
 }
 
 class SmallRoom{
-
+    -capacity : 5 
 }
 
 class MediumRoom{
-
+    -capacity : 8
 }
 
 class LargeRoom{
-
+    -capacity : 12
 }
 
 class ExtralargeRoom{
-
+    -capacity : 20
 }
 
 class Equipment{
@@ -96,24 +96,30 @@ class Order{
 }
 
 class PaymentChannel{
-
+    process() : bool
 }
 
 class QrScan{
-
+    -qr_image : str
+    -generate_qr()
 }
 
 class CreditCard{
-
+    -card_number : str
+    -cvv : str
+    -validate_card()
 }
 
 class Payment{
+    -payment_id : str
     -order : class
     -coupon : class
     -fine : class
     -refund : class
     -payment_channel : class
-    -payment_status : class
+    -payment_status : str
+    -amount : float
+    -process_payment()
     -payment_refund()
 
 }
@@ -223,4 +229,7 @@ Order o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
 Order <-- Payment
+PaymentChannel <-- Payment
+Policy o-- Payment
+Transaction <-- Payment
 @enduml
