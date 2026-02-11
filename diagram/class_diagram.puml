@@ -243,9 +243,9 @@ class PenaltyType <<enumeration>> {
 }
 
 class PenaltyStatus <<enumeration>> {
-    PENDING      // รอชำระ
-    APPLIED      // หักเงินแล้ว
-    WAIVED       // ยกเว้นค่าปรับ
+    PENDING      
+    APPLIED      
+    WAIVED       
 }
 
 class Penalty {
@@ -253,8 +253,8 @@ class Penalty {
     -amount :float
     -reason :str
     - penalty_id : str
-    - type : Enum (CANCEL_LATE, NO_SHOW, DAMAGE)
-    - rate : float (เช่น 0.5 = 50%)
+    - type : Enum 
+    - rate : float 
     - fixed_amount : float
     - created_at : datetime
     - status : Enum 
