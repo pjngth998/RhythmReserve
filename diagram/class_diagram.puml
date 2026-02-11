@@ -118,18 +118,18 @@ class Order {
 
 
 class PaymentChannel{
-    process() : bool
+    +process() : bool
 }
 
 class QrScan{
     -qr_image : str
-    -generate_qr()
+    +generate_qr()
 }
 
 class CreditCard{
     -card_number : str
     -cvv : str
-    -validate_card()
+    +validate_card()
 }
 
 class Payment{
@@ -141,8 +141,8 @@ class Payment{
     -payment_channel : class
     -payment_status : str
     -amount : float
-    -process_payment()
-    -payment_refund()
+    +process_payment()
+    +payment_refund()
 
 }
 class TransStatus <<enumeration>> {
@@ -157,6 +157,8 @@ class Transaction{
     -timestamp : datetime
     -order : class
     -type : str
+    +check_cancel_rule()
+
     -status : enum
     +check_cancel_rule()
     +do_checkin()
@@ -180,6 +182,8 @@ class User{
     -age : int
     -transaction_ls : list
     -role : enum
+    +log_in()
+    +log_out()
     +verify_password()
     +update_profile()
     +change_password()
@@ -189,23 +193,43 @@ class User{
 }
 
 class Officer{
-
+    -brance_id : str
+    -history_working : list
 }
 
 class BranchManager{
-
+    -All_staff : list
+    +add_staff()
+    +remove_staff()
+    +get_report()
+    + approve_maintenance_request()
 }
 
 class FrontDesk{
-
+    -daily_report : list
+    +add_equipment()
+    +add_Daily_report()
+    +customer_check_in()
+    +customer_check_out()
 }
 
 class SystemAdmin{
-
+    +add_coupon()
+    +add_Room()
+    +add_Branch()
+    +Manage_membership_level()
+    +Manage_booking_rules_and_penalties()
+    +Mansge_Pricing()
 }
 
 class Customer{
-
+    -current_points : int
+    -booking_history : list
+    -my_coupon : list
+    +redeem_point()
+    +Booking_room()
+    +Report_room()
+    +view_membership_and_privileges()
 }
 
 class Standard{
@@ -237,6 +261,7 @@ class Notification{
 
 
 class Coupon{
+    -All_coupon : list
     -expired_date : datetime
     -discount : float
 
