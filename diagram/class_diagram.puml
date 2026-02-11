@@ -31,19 +31,19 @@ class Time_slot{
 }
 
 class SmallRoom{
-    -capacity : 5 
+    
 }
 
 class MediumRoom{
-    -capacity : 8
+
 }
 
 class LargeRoom{
-    -capacity : 12
+
 }
 
 class ExtralargeRoom{
-    -capacity : 20
+
 }
 
 class Equipment{
