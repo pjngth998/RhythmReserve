@@ -225,15 +225,21 @@ class Customer{
 }
 
 class Standard{
-
+    -recive_point_per_hr : int (3)
+    +redeem_point()
+    +get_cancellation_limit_hours() : int { return 24 }
 }
 
 class Premium{
-
+    -recive_point_per_hr : int (5)
+    +redeem_point()
+    +get_cancellation_limit_hours() : int { return 12 }
 }
 
 class Diamond{
-
+    -recive_point_per_hr : int (8)
+    +redeem_point()
+    +get_cancellation_limit_hours() : int { return 6 }
 }
 
 class PenaltyType <<enumeration>> {
@@ -290,6 +296,7 @@ class Coupon{
     -All_coupon : list
     -expired_date : datetime
     -discount : float
+    +create_coupon()
 
 }
 
