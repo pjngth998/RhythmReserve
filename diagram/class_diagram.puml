@@ -35,6 +35,7 @@ class Time_slot{
     -set_status()
 }
 
+
 class SmallRoom{
     
 }
@@ -163,13 +164,23 @@ class Payment{
     -payment_refund()
 
 }
-
+class TransStatus <<enumeration>> {
+    PENDING
+    CHECK_IN
+    COMPLETED
+    CANCELLED
+    FAILED
+}
 class Transaction{
+    -transaction_id : str
     -timestamp : datetime
     -order : class
     -type : str
-    -check_cancel_rule()
-
+    -status : enum
+    +check_cancel_rule()
+    +do_checkin()
+    +do_checkout()
+    +get_reserve_detail()
 }
 
 class UserRole <<enumeration>>{
