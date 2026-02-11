@@ -20,7 +20,14 @@ class Branch{
     -room_list : list
     -officer_list : list
     -equipment_list : list
-
+    +id(): str
+    +name() : str
+    +room() : list
+    +room(new_room) : void
+    +equipment() : list
+    +equipment(new_equipment) : void
+    +get_available_slot(size, date) : list
+    
 }
 
 class RoomStatus <<enumeration>>{
