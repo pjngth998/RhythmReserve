@@ -1,146 +1,90 @@
 @startuml
 
 
-
 class ReserveSystem{
     -branch_list : list
-    -policy : class
-    -process_cancellation()
-    
+    +process_cancellation() : void
+    +create_booking(customer_id, room_id, branch_id, equipment_list)
 }
 
 class Branch{
     -name : str
     -id : str
-    -max_room : str
     -room_list : list
     -officer_list : list
     -equipment_list : list
-
+    +id(): str
+    +name() : str
+    +room() : list
+    +room(new_room) : void
+    +equipment() : list
+    +equipment(new_equipment) : void
+    +get_available_slot(size, date) : list
+    
 }
 
 class Room {
     -room_id : str
-    -time_slot : class
-    -price : int
     -time_slot : list
+    -size : str
     -rate : float
     -eq_quota : int
 }
 
 
 class Time_slot{
-    -room : class
-    -equipment : class
-    -start_time : datetime
-    -end_time : datetime
+    -start_time : str
+    -end_time : str
     -status : str
-    -set_status()
+    +set_status(status) : void
 }
 
-class SmallRoom{
-    
-}
-
-class MediumRoom{
-
-}
-
-class LargeRoom{
-
-}
-
-class ExtralargeRoom{
-    
-}
 
 class Equipment{
     -eq_id : str
     -time_slot : class
-    -price : int
-
+    -size : int
+    +id() : str
 }
 
 
 
-class BookingStatus <<enumeration>> {
-    CART
-    ORDERED
-    CONFIRMED
-    CANCELLED
-}
-
-class Booking {
-    -booking_id : str
-    -customer : class
+class Booking{
     -room : class
-    -time_slot : class
     -equipment_list : list
-    -created_at : datetime
-    -status : Enum
-    -price : float
-
-    +add_equipment() : void
-    +remove_equipment(): void
-    +change_room() : void
-    +change_time_slot() : void
-
-    +calculate_price() : float
-
-    +change_status(new_status: BookingStatus) : void
+    -customer : class
+    -time_slot : class
+    -total_price : float
 }
 
-class OrderStatus <<enumeration>> {
-    PENDING_PAYMENT
-    PAID
-    CANCELLED
-    REFUNDED
-}
-
-class Order {
-    -order_id : str
+class Order{
     -customer : class
     -booking_list : list
-    -created_at : datetime
-    -status : Enum
     -total_price : float
-    -coupon : Coupon
+    -coupon : class
+    -payment : class
 
-    +add_booking(booking: Booking) : void
-    +remove_booking(booking: Booking) : void
-
-    +calculate_total() : float
-    +apply_coupon(coupon: Coupon) : void
-
-    +change_status(new_status: OrderStatus) : void
 }
 
-
 class PaymentChannel{
-    process() : bool
+
 }
 
 class QrScan{
-    -qr_image : str
-    -generate_qr()
+
 }
 
 class CreditCard{
-    -card_number : str
-    -cvv : str
-    -validate_card()
+
 }
 
 class Payment{
-    -payment_id : str
     -order : class
     -coupon : class
     -fine : class
     -refund : class
     -payment_channel : class
-    -payment_status : str
-    -amount : float
-    -process_payment()
+    -payment_status : class
     -payment_refund()
 
 }
@@ -153,27 +97,12 @@ class Transaction{
 
 }
 
-class UserRole <<enumeration>>{
-    ADMIN
-    STAFF
-    CUSTOMER
-}
 
 class User{
-    -user_id : str
-    -username : str
-    -password : str
-    -name : str
-    -email : str
-    -phone : str
-    -age : int
-    -transaction_ls : list
-    -role : enum
-    +verify_password()
-    +update_profile()
-    +change_password()
-    +add_transaction()
-    +search_transaction()
+    -user_id
+    -user_name
+    -password
+    -get_transection()
 
 }
 
@@ -194,7 +123,13 @@ class SystemAdmin{
 }
 
 class Customer{
-
+    -transaction_list : list
+    -notification : list
+    -coupon_list : list
+    +id() : str
+    +notification() : class
+    +notification(new_notification) : void
+    +booking(branch, room_size, date) : 
 }
 
 class Standard{
@@ -224,7 +159,6 @@ class Notification{
 }
 
 
-
 class Coupon{
     -expired_date : datetime
     -discount : float
@@ -247,6 +181,10 @@ class EquipmentType <<enumeration>> {
     DM
 }
 
+class RoomEquipmentStatus <<enumeration>> {
+
+}
+
 
 
 User <|-- Officer
@@ -267,14 +205,11 @@ Branch o-- Room
 Branch o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
-Customer o-- order
+Customer o-- Order
 Order o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
 Order <-- Payment
 Room --* RoomType
 Equipment --* EquipmentType 
-PaymentChannel <-- Payment
-Policy o-- Payment
-Transaction <-- Payment
 @enduml
