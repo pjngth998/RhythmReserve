@@ -2,9 +2,15 @@
 
 class ReserveSystem{
     -branch_list : list
+    -user_list : list
     -policy : class
-    -process_cancellation()
-    
+    +add_user()
+    +search_user()
+    +get_transaction()
+    +process_cancellation()
+    +create_reservation()
+    +notify_user()
+    +update_room_status()
 }
 
 class Branch{
@@ -17,13 +23,19 @@ class Branch{
 
 }
 
+class RoomStatus <<enumeration>>{
+    AVAILABLE
+    RESERVED
+    OCCUPIED
+    MAINTENANCE
+}
 class Room {
     -room_id : str
-    -time_slot : class
-    -price : int
     -time_slot : list
     -rate : float
     -eq_quota : int
+    -size : str
+    -room_status : enum
 }
 
 
