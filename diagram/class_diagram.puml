@@ -33,7 +33,7 @@ class Branch{
     
 }
 
-class RoomStatus <<enumeration>>{
+class RoomEquipmentStatus <<enumeration>>{
     AVAILABLE
     RESERVED
     OCCUPIED
@@ -334,9 +334,7 @@ class EquipmentType <<enumeration>> {
     KEYBOARD
 }
 
-class RoomEquipmentStatus <<enumeration>> {
 
-}
 
 
 
@@ -363,6 +361,4 @@ Order o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
 Order <-- Payment
-Room --* RoomType
-Equipment --* EquipmentType 
 @enduml
