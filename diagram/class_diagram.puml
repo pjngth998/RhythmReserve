@@ -1,5 +1,7 @@
 @startuml
 
+
+
 class ReserveSystem{
     -branch_list : list
     -policy : class
@@ -20,10 +22,11 @@ class Branch{
 class Room {
     -room_id : str
     -time_slot : list
-    -rate : int
+    -rate : float
     -eq_quota : int
 
 }
+
 
 class Time_slot{
     -room : class
@@ -34,21 +37,6 @@ class Time_slot{
     -set-status()
 }
 
-class SmallRoom{
-
-}
-
-class MediumRoom{
-
-}
-
-class LargeRoom{
-
-}
-
-class ExtralargeRoom{
-    
-}
 
 class Equipment{
     -eq_id : str
@@ -57,29 +45,7 @@ class Equipment{
 
 }
 
-class Microphone{
 
-}
-
-class ElectricGuitar{
-
-}
-
-class AcousticGuitar{
-
-}
-
-class Drum{
-
-}
-
-class Bass{
-
-}
-
-class Keyboard {
-
-}
 
 class Booking{
     -room : class
@@ -193,6 +159,22 @@ class Coupon{
 
 }
 
+class RoomType <<enumeration>>{
+    S
+    M
+    L
+    XL
+}
+
+class EquipmentType <<enumeration>> {
+    EGTR
+    AGTR
+    BS
+    MC
+    KB
+    DM
+}
+
 
 
 User <|-- Officer
@@ -203,16 +185,7 @@ Customer <|-- Diamond
 Officer <|-- BranchManager
 Officer <|-- FrontDesk
 Officer <|-- SystemAdmin
-Room <|-- SmallRoom
-Room <|-- MediumRoom
-Room <|-- LargeRoom
-Room <|-- ExtralargeRoom
-Equipment <|-- ElectricGuitar
-Equipment <|-- AcousticGuitar
-Equipment <|-- Microphone
-Equipment <|-- Drum
-Equipment <|-- Keyboard
-Equipment <|-- Bass
+Payment <|-- PaymentChannel 
 PaymentChannel <|-- QrScan
 PaymentChannel <|-- CreditCard
 ReserveSystem o-- Branch
@@ -227,4 +200,6 @@ Order o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
 Order <-- Payment
+Room --* RoomType
+Equipment --* EquipmentType 
 @enduml
