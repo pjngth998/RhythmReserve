@@ -77,23 +77,58 @@ class Keyboard {
 
 }
 
-class Booking{
-    -room : class
-    -equipment_list : list
-    -customer : class
-    -time_slot : class
-    -total_price : float
-
+class BookingStatus <<enumeration>> {
+    CART
+    ORDERED
+    CONFIRMED
+    CANCELLED
 }
 
-class Order{
+class Booking {
+    -booking_id : str
+    -customer : class
+    -room : class
+    -time_slot : class
+    -equipment_list : list
+    -created_at : datetime
+    -status : Enum
+    -price : float
+
+    +add_equipment() : void
+    +remove_equipment(): void
+    +change_room() : void
+    +change_time_slot() : void
+
+    +calculate_price() : float
+
+    +change_status(new_status: BookingStatus) : void
+}
+
+class OrderStatus <<enumeration>> {
+    PENDING_PAYMENT
+    PAID
+    CANCELLED
+    REFUNDED
+}
+
+class Order {
+    -order_id : str
     -customer : class
     -booking_list : list
+    -created_at : datetime
+    -status : Enum
     -total_price : float
-    -coupon : class
-    -payment : class
+    -coupon : Coupon
 
+    +add_booking(booking: Booking) : void
+    +remove_booking(booking: Booking) : void
+
+    +calculate_total() : float
+    +apply_coupon(coupon: Coupon) : void
+
+    +change_status(new_status: OrderStatus) : void
 }
+
 
 class PaymentChannel{
 
