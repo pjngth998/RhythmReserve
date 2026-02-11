@@ -64,22 +64,51 @@ class Equipment{
 
 
 
-class Booking{
-    -room : class
-    -equipment_list : list
+class BookingStatus <<enumeration>> {
+    ORDERED
+    CONFIRMED
+    CANCELLED
+}
+
+class Booking {
+    -booking_id : str
     -customer : class
     -time_slot : class
-    -total_price : float
+    -equipment_list : list
+    -created_at : datetime
+    -status : Enum
+    -price : float
+
+    +add_equipment() : void
+    +remove_equipment(): void
+    +change_room() : void
+    +change_time_slot() : void
+    +calculate_price() : float
+    +change_booking_status() : void
+}
+
+class OrderStatus <<enumeration>> {
+    PENDING_PAYMENT
+    PAID
+    CANCELLED
+    REFUNDED
 }
 
 class Order{
     -customer : class
     -booking_list : list
     -total_price : float
-    -coupon : class
-    -payment : class
+    -coupon : Coupon
 
+    +add_booking() : void
+    +remove_booking() : void
+
+    +calculate_total() : float
+    +apply_coupon() : void
+
+    +change_status() : void
 }
+
 
 class PaymentChannel{
     +process() : bool
@@ -129,6 +158,11 @@ class Transaction{
     +get_reserve_detail()
 }
 
+class UserRole <<enumeration>> {
+    ADMIN
+    STAFF
+    CUSTOMER
+}
 
 class User{
     -user_id : str
@@ -202,12 +236,47 @@ class Diamond{
 
 }
 
-class Policy{
-    +cancel : void
-    +refund : void
-    +fine : void
-    -check_cancel_rule()
+class PenaltyType <<enumeration>> {
+    NO_SHOW
+    CANCEL_LATE
+    DAMAGE
+}
 
+class PenaltyStatus <<enumeration>> {
+    PENDING      // รอชำระ
+    APPLIED      // หักเงินแล้ว
+    WAIVED       // ยกเว้นค่าปรับ
+}
+
+class Penalty {
+    -date :str
+    -amount :float
+    -reason :str
+    - penalty_id : str
+    - type : Enum (CANCEL_LATE, NO_SHOW, DAMAGE)
+    - rate : float (เช่น 0.5 = 50%)
+    - fixed_amount : float
+    - created_at : datetime
+    - status : Enum 
+    - booking : Booking
+    +change_penalty_status()
+}
+
+class Policy{
+    - policy_id : str
+    - name : str
+    -penalty_list : list
+    - description : str
+    - cancel_before_hours : int
+    - refund_rate : float
+    - no_show_rate : float
+    - active : bool
+    +check_cancel_rule() : void
+    +get_all_penalty() : void
+    +add_penalty() : void
+    + calculate_penalty() : class
+    + calculate_refund() : float
+    + is_refundable() : bool
 }
 
 class Notification{
