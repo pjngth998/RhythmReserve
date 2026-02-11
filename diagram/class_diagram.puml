@@ -1,7 +1,5 @@
 @startuml
 
-
-
 class ReserveSystem{
     -branch_list : list
     -policy : class
@@ -64,7 +62,6 @@ class Equipment{
 
 
 class BookingStatus <<enumeration>> {
-    CART
     ORDERED
     CONFIRMED
     CANCELLED
@@ -84,10 +81,8 @@ class Booking {
     +remove_equipment(): void
     +change_room() : void
     +change_time_slot() : void
-
     +calculate_price() : float
-
-    +change_status(new_status: BookingStatus) : void
+    +change_booking_status() : void
 }
 
 class OrderStatus <<enumeration>> {
@@ -106,13 +101,13 @@ class Order {
     -total_price : float
     -coupon : Coupon
 
-    +add_booking(booking: Booking) : void
-    +remove_booking(booking: Booking) : void
+    +add_booking() : void
+    +remove_booking() : void
 
     +calculate_total() : float
-    +apply_coupon(coupon: Coupon) : void
+    +apply_coupon() : void
 
-    +change_status(new_status: OrderStatus) : void
+    +change_status() : void
 }
 
 
@@ -153,7 +148,7 @@ class Transaction{
 
 }
 
-class UserRole <<enumeration>>{
+class UserRole <<enumeration>> {
     ADMIN
     STAFF
     CUSTOMER
@@ -209,12 +204,47 @@ class Diamond{
 
 }
 
-class Policy{
-    +cancel : void
-    +refund : void
-    +fine : void
-    -check_cancel_rule()
+class PenaltyType <<enumeration>> {
+    NO_SHOW
+    CANCEL_LATE
+    DAMAGE
+}
 
+class PenaltyStatus <<enumeration>> {
+    PENDING      // รอชำระ
+    APPLIED      // หักเงินแล้ว
+    WAIVED       // ยกเว้นค่าปรับ
+}
+
+class Penalty {
+    -date :str
+    -amount :float
+    -reason :str
+    - penalty_id : str
+    - type : Enum (CANCEL_LATE, NO_SHOW, DAMAGE)
+    - rate : float (เช่น 0.5 = 50%)
+    - fixed_amount : float
+    - created_at : datetime
+    - status : Enum 
+    - booking : Booking
+    +change_penalty_status()
+}
+
+class Policy{
+    - policy_id : str
+    - name : str
+    -penalty_list : list
+    - description : str
+    - cancel_before_hours : int
+    - refund_rate : float
+    - no_show_rate : float
+    - active : bool
+    +check_cancel_rule() : void
+    +get_all_penalty() : void
+    +add_penalty() : void
+    + calculate_penalty() : class
+    + calculate_refund() : float
+    + is_refundable() : bool
 }
 
 class Notification{
