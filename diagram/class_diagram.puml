@@ -18,7 +18,6 @@ class Room {
     -room_id : str
     -time_slot : class
     -price : int
-
 }
 
 class Time_slot{
@@ -126,12 +125,27 @@ class Transaction{
 
 }
 
+class UserRole <<enumeration>>{
+    ADMIN
+    STAFF
+    CUSTOMER
+}
 
 class User{
-    -user_id
-    -user_name
-    -password
-    -get_transection()
+    -user_id : str
+    -username : str
+    -password : str
+    -name : str
+    -email : str
+    -phone : str
+    -age : int
+    -transaction_ls : list
+    -role : enum
+    +verify_password()
+    +update_profile()
+    +change_password()
+    +add_transaction()
+    +search_transaction()
 
 }
 
