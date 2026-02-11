@@ -21,10 +21,11 @@ class Branch{
 
 class Room {
     -room_id : str
+    -time_slot : class
+    -price : int
     -time_slot : list
     -rate : float
     -eq_quota : int
-
 }
 
 
@@ -34,9 +35,24 @@ class Time_slot{
     -start_time : datetime
     -end_time : datetime
     -status : str
-    -set-status()
+    -set_status()
 }
 
+class SmallRoom{
+    
+}
+
+class MediumRoom{
+
+}
+
+class LargeRoom{
+
+}
+
+class ExtralargeRoom{
+    
+}
 
 class Equipment{
     -eq_id : str
@@ -47,43 +63,84 @@ class Equipment{
 
 
 
-class Booking{
-    -room : class
-    -equipment_list : list
-    -customer : class
-    -time_slot : class
-    -total_price : float
-
+class BookingStatus <<enumeration>> {
+    CART
+    ORDERED
+    CONFIRMED
+    CANCELLED
 }
 
-class Order{
+class Booking {
+    -booking_id : str
+    -customer : class
+    -room : class
+    -time_slot : class
+    -equipment_list : list
+    -created_at : datetime
+    -status : Enum
+    -price : float
+
+    +add_equipment() : void
+    +remove_equipment(): void
+    +change_room() : void
+    +change_time_slot() : void
+
+    +calculate_price() : float
+
+    +change_status(new_status: BookingStatus) : void
+}
+
+class OrderStatus <<enumeration>> {
+    PENDING_PAYMENT
+    PAID
+    CANCELLED
+    REFUNDED
+}
+
+class Order {
+    -order_id : str
     -customer : class
     -booking_list : list
+    -created_at : datetime
+    -status : Enum
     -total_price : float
-    -coupon : class
-    -payment : class
+    -coupon : Coupon
 
+    +add_booking(booking: Booking) : void
+    +remove_booking(booking: Booking) : void
+
+    +calculate_total() : float
+    +apply_coupon(coupon: Coupon) : void
+
+    +change_status(new_status: OrderStatus) : void
 }
 
-class PaymentChannel{
 
+class PaymentChannel{
+    process() : bool
 }
 
 class QrScan{
-
+    -qr_image : str
+    -generate_qr()
 }
 
 class CreditCard{
-
+    -card_number : str
+    -cvv : str
+    -validate_card()
 }
 
 class Payment{
+    -payment_id : str
     -order : class
     -coupon : class
     -fine : class
     -refund : class
     -payment_channel : class
-    -payment_status : class
+    -payment_status : str
+    -amount : float
+    -process_payment()
     -payment_refund()
 
 }
@@ -96,12 +153,27 @@ class Transaction{
 
 }
 
+class UserRole <<enumeration>>{
+    ADMIN
+    STAFF
+    CUSTOMER
+}
 
 class User{
-    -user_id
-    -user_name
-    -password
-    -get_transection()
+    -user_id : str
+    -username : str
+    -password : str
+    -name : str
+    -email : str
+    -phone : str
+    -age : int
+    -transaction_ls : list
+    -role : enum
+    +verify_password()
+    +update_profile()
+    +change_password()
+    +add_transaction()
+    +search_transaction()
 
 }
 
@@ -202,4 +274,7 @@ Customer o-- Notification
 Order <-- Payment
 Room --* RoomType
 Equipment --* EquipmentType 
+PaymentChannel <-- Payment
+Policy o-- Payment
+Transaction <-- Payment
 @enduml
