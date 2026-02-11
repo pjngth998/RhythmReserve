@@ -43,22 +43,18 @@ rectangle "Booking System" {
 
   Staff -- (View Daily Booking List)
 
-  Staff -- (Update Customer Status)
-  (Update Customer Status) <.. (Customer Check-in) : <<extend>>
+  Staff -- (Customer Check-in) 
   (Customer Check-in) ..> (Set Room Status In Use) : <<include>>
   (Customer Check-in) <.. (Set Equipment Borrowed) : <<extend>>
 
-  Staff -- (Update Room Status)
-
-  (Update Customer Status) <.. (Customer Check-out) : <<extend>>
-  (Customer Check-out) ..> (Room Available) : <<extend>>
-  (Update Room Status) ..> (Room Maintenance) : <<extend>>
-
+  Staff -- (Customer Check-out)
+  (Customer Check-out) ..> (Room Available) : <<include>>
+  (Customer Check-out) ..> (Room Maintenance) : <<include>>
   (Customer Check-out)  <.. (Equipment Available) : <<extend>>
   (Customer Check-out) <.. (Equipment Maintenance) : <<extend>>
 
   Staff -- (Add Equipment)
-  Staff -- (Remove Equipment)
+  (Add Equipment) <.. (Remove Equipment) : <<eextend>>
 
   Staff -- (Daily Report)
   (Daily Report) ..> (Room & Equipment Status Report) : <<include>>
@@ -73,11 +69,10 @@ rectangle "Booking System" {
   Manager -- (Approve Room Maintenance)
   Manager -- (Approve Equipment Maintenance)
 
-  Manager --  (Add Room) 
   Manager -- (Close Room) 
 
   Manager --  (Add Staff) 
-  Manager --  (Remove Staff)
+  (Add Staff) <..  (Remove Staff) : <<extend>>
 
   Admin -- (Admin Login)
   (Admin Login) ..> (Verify Admin ID) : <<include>>
@@ -88,9 +83,15 @@ rectangle "Booking System" {
   Admin -- (Manage Pricing)
 
   Admin -- (Add Coupon) 
-  Admin -- (Remove Coupon)
-  Admin -- (Set Expiry Date) 
+  (Add Coupon) ..> (Set Expiredate) : <<include>>
+  (Add Coupon) <.. (Remove Coupon) : <<extend>>
+
+  Admin --  (Add Room) 
 
   Admin --  (Add Branch)
+<<<<<<< Updated upstream
   Admin -- (Remove Branch)
 }
+=======
+  (Add Branch) <.. (Remove Branch) : <<extend>>
+>>>>>>> Stashed changes
