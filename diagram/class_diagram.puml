@@ -12,6 +12,9 @@ class ReserveSystem{
     +create_reservation()
     +notify_user()
     +update_room_status()
+    +make_customer_id() : str
+    +make_branch_id(name) : str
+    
 }
 
 class Branch{
@@ -51,7 +54,6 @@ class Time_slot{
     -start_time : str
     -end_time : str
     -status : str
-    +set_status(status) : void
 }
 
 
@@ -160,7 +162,9 @@ class BranchManager{
     +add_staff()
     +remove_staff()
     +get_report()
-    + approve_maintenance_request()
+    +approve_maintenance_request()
+    +set_status(room_id, status) : void
+
 }
 
 class FrontDesk{
@@ -178,6 +182,8 @@ class SystemAdmin{
     +Manage_membership_level()
     +Manage_booking_rules_and_penalties()
     +Mansge_Pricing()
+    +make_equipment_id(branch_id, type_)
+    +make_room_id(branch_id, size)
 }
 
 class Customer{
