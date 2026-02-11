@@ -6,7 +6,8 @@ participant Room as R
 participant Booking as B
 
 
-C -> Rs: booking_room(room _id, duration)
+
+C -> Rs: booking_room(room _id)
 activate Rs
 loop [for each room in branch]
     Rs -> Br: get_room(room_id)
@@ -18,7 +19,7 @@ R -> Br: room instance
 deactivate R
 Br -> Rs: room instance
 deactivate Br
-Rs -> B: create booking(room)
+Rs -> B: create booking(customer_id, room_id)
 activate B
 B --> Rs:booking instance
 deactivate B

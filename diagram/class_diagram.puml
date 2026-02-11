@@ -7,6 +7,9 @@ class ReserveSystem{
 }
 
 class Branch{
+    -name : str
+    -id : str
+    -max_room : str
     -room_list : list
     -officer_list : list
     -equipment_list : list
@@ -15,8 +18,9 @@ class Branch{
 
 class Room {
     -room_id : str
-    -time_slot : class
-    -price : int
+    -time_slot : list
+    -rate : int
+    -eq_quota : int
 
 }
 
@@ -41,7 +45,7 @@ class LargeRoom{
 }
 
 class ExtralargeRoom{
-
+    
 }
 
 class Equipment{
