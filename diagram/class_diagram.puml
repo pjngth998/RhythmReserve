@@ -3,6 +3,7 @@
 class ReserveSystem{
     -branch_list : list
     -policy : class
+    -process_cancellation()
     
 }
 
@@ -30,6 +31,7 @@ class Time_slot{
     -start_time : datetime
     -end_time : datetime
     -status : str
+    -set-status()
 }
 
 class SmallRoom{
@@ -116,6 +118,7 @@ class Payment{
     -refund : class
     -payment_channel : class
     -payment_status : class
+    -payment_refund()
 
 }
 
@@ -123,6 +126,7 @@ class Transaction{
     -timestamp : datetime
     -order : class
     -type : str
+    -check_cancel_rule()
 
 }
 
@@ -131,6 +135,7 @@ class User{
     -user_id
     -user_name
     -password
+    -get_transection()
 
 }
 
@@ -170,6 +175,7 @@ class Policy{
     +cancel : void
     +refund : void
     +fine : void
+    -check_cancel_rule()
 
 }
 

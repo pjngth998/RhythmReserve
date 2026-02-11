@@ -11,7 +11,7 @@ def sanity_check():
     return "Hello World!"
 
 @app.post("/create_customer")
-def creat_customer(username, password):
+def create_customer(username, password):
     return store.create_customer(username, password).id
 
 @app.post("/create_branch")
