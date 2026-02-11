@@ -3,8 +3,15 @@
 
 class ReserveSystem{
     -branch_list : list
-    +process_cancellation() : void
-    +create_booking(customer_id, room_id, branch_id, equipment_list)
+    -user_list : list
+    -policy : class
+    +add_user()
+    +search_user()
+    +get_transaction()
+    +process_cancellation()
+    +create_reservation()
+    +notify_user()
+    +update_room_status()
 }
 
 class Branch{
@@ -13,22 +20,23 @@ class Branch{
     -room_list : list
     -officer_list : list
     -equipment_list : list
-    +id(): str
-    +name() : str
-    +room() : list
-    +room(new_room) : void
-    +equipment() : list
-    +equipment(new_equipment) : void
-    +get_available_slot(size, date) : list
-    
+
 }
 
+class RoomStatus <<enumeration>>{
+    AVAILABLE
+    RESERVED
+    OCCUPIED
+    MAINTENANCE
+}
 class Room {
     -room_id : str
     -time_slot : list
     -size : str
     -rate : float
     -eq_quota : int
+    -size : str
+    -room_status : enum
 }
 
 
@@ -67,15 +75,18 @@ class Order{
 }
 
 class PaymentChannel{
-
+    +process() : bool
 }
 
 class QrScan{
-
+    -qr_image : str
+    +generate_qr()
 }
 
 class CreditCard{
-
+    -card_number : str
+    -cvv : str
+    +validate_card()
 }
 
 class Payment{
@@ -84,52 +95,92 @@ class Payment{
     -fine : class
     -refund : class
     -payment_channel : class
-    -payment_status : class
-    -payment_refund()
+    -payment_status : str
+    -amount : float
+    +process_payment()
+    +payment_refund()
 
 }
-
+class TransStatus <<enumeration>> {
+    PENDING
+    CHECK_IN
+    COMPLETED
+    CANCELLED
+    FAILED
+}
 class Transaction{
+    -transaction_id : str
     -timestamp : datetime
     -order : class
     -type : str
-    -check_cancel_rule()
+    +check_cancel_rule()
 
+    -status : enum
+    +check_cancel_rule()
+    +do_checkin()
+    +do_checkout()
+    +get_reserve_detail()
 }
 
 
 class User{
-    -user_id
-    -user_name
-    -password
-    -get_transection()
+    -user_id : str
+    -username : str
+    -password : str
+    -name : str
+    -email : str
+    -phone : str
+    -age : int
+    -transaction_ls : list
+    -role : enum
+    +log_in()
+    +log_out()
+    +verify_password()
+    +update_profile()
+    +change_password()
+    +add_transaction()
+    +search_transaction()
 
 }
 
 class Officer{
-
+    -brance_id : str
+    -history_working : list
 }
 
 class BranchManager{
-
+    -All_staff : list
+    +add_staff()
+    +remove_staff()
+    +get_report()
+    + approve_maintenance_request()
 }
 
 class FrontDesk{
-
+    -daily_report : list
+    +add_equipment()
+    +add_Daily_report()
+    +customer_check_in()
+    +customer_check_out()
 }
 
 class SystemAdmin{
-
+    +add_coupon()
+    +add_Room()
+    +add_Branch()
+    +Manage_membership_level()
+    +Manage_booking_rules_and_penalties()
+    +Mansge_Pricing()
 }
 
 class Customer{
-    -transaction_list : list
-    -notification : list
-    -coupon_list : list
-    +id() : str
-    +notification() : class
-    +notification(new_notification) : void
-    +booking(branch, room_size, date) : 
+    -current_points : int
+    -booking_history : list
+    -my_coupon : list
+    +redeem_point()
+    +Booking_room()
+    +Report_room()
+    +view_membership_and_privileges()
 }
 
 class Standard{
@@ -160,6 +211,7 @@ class Notification{
 
 
 class Coupon{
+    -All_coupon : list
     -expired_date : datetime
     -discount : float
 
