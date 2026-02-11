@@ -285,10 +285,22 @@ class Policy{
     + is_refundable() : bool
 }
 
+class NotiStatus <<enumeration>>{
+    PENDING
+    SENT
+    FAILED
+}
 class Notification{
-    -user : class
+    -notification_id: str
+    -user : str
     -order : class
-
+    -message: str
+    -is_read: bool
+    -status : enum
+    +send()
+    +format_massage()
+    +mark_as_read()
+    +retry_send()
 }
 
 
