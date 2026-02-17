@@ -1,0 +1,17 @@
+@startuml
+
+actor "Front Desk Staff" as Staff
+participant "RhythmReserve" as System
+participant Policy
+
+Staff -> System : add_penalty(date, amount, reason)
+activate System
+
+System -> Policy : add_penalty(penalty)
+activate Policy
+Policy --> System : penaltyAdded
+deactivate Policy
+
+System --> Staff : success
+deactivate System
+@enduml
