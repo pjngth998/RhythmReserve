@@ -1,0 +1,13 @@
+@startuml
+
+actor "Front Desk Staff" as Staff
+participant "RhythmReserve" as System
+
+Staff -> System : requestDailyRevenue(date)
+activate System
+
+System -> System : get_daily_revenue(date)
+System --> Staff : totalRevenue
+
+deactivate System
+@enduml

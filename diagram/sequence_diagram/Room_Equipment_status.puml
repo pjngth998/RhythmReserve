@@ -1,0 +1,13 @@
+@startuml
+
+actor "Front Desk Staff" as Staff
+participant "RhythmReserve" as System
+
+Staff -> System : requestRoomStatus(date)
+activate System
+
+System -> System : get_room_status_by_date(date)
+System --> Staff : listOfRoomStatus
+
+deactivate System
+@enduml
