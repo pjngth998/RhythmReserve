@@ -1,5 +1,5 @@
 from typing import Union, Optional
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException
 from datetime import datetime, timedelta
 import uvicorn
 
@@ -31,6 +31,9 @@ class User:
 
     def get_transaction(self):
         return self.current_transaction
+    
+    def clear_transaction(self):
+        self.current_transaction = None
 
 class Payment:
     def payment_refund(self, amount):
@@ -52,7 +55,6 @@ class TimeSlot:
                 slot["status"] = new_status
                 print(f" TimeSlot '{slot_id}' changed from '{old_status}' to '{new_status}'")
                 return {"success": True}
-        print(f" Error: Slot ID {slot_id} not found.")
         return {"success": False}
 
 class ReserveSystem:
@@ -70,6 +72,9 @@ class ReserveSystem:
             raise ValueError("User not found")
 
         transaction = user.get_transaction()
+        if not transaction:
+            raise ValueError("No active booking to cancel")
+
         current_time = datetime.now()
         rule_result = transaction.check_cancel_rule(current_time)
 
@@ -77,33 +82,35 @@ class ReserveSystem:
         refund_amount = rule_result["refund"]
 
         if not is_allowed:
-            raise ValueError("Cancellation not allowed ")
+            raise ValueError("Cancellation not allowed")
 
         refund_status = "No refund"
         if refund_amount > 0:
             self.payment_service.payment_refund(refund_amount)
-            refund_status = f"Refunded {refund_amount}"
+            refund_status = f"Refunded {refund_amount} THB"
 
         self.timeslot_service.set_status(transaction.slot_id, "available")
+        
+        cancelled_slot = transaction.slot_id
+        user.clear_transaction()
 
         return {
             "status": "success",
-            "message": "Reservation cancelled successfully",
+            "message": f"Reservation for '{cancelled_slot}' cancelled successfully",
             "detail": refund_status
         }
 
 app = FastAPI()
 system_controller = ReserveSystem()
 
-@app.post("/cancel_reservation")
-def cancel_reservation_api(user_id: str = Body(..., embed=True)):
+@app.post("/cancel_reservation/{user_id}", tags=["Booking Management"])
+def cancel_reservation_api(user_id: str):
     try:
-        result = system_controller.process_cancellation(user_id)
-        return result
+        return system_controller.process_cancellation(user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 if __name__ == "__main__":
-    uvicorn.run("cancel_booking:app", host="127.0.0.1", port=8000, log_level="info", reload=True)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
