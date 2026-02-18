@@ -357,7 +357,7 @@ Branch o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
 Customer o-- Service
-Service o-- Booking
+Service o-- BookingRoom
 Customer o-- Transaction
 Customer o-- Notification
 Service <-- Payment
