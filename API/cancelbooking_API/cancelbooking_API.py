@@ -50,6 +50,7 @@ class Diamond(Customer):
         return 6
 
 class Policy:
+    
     def check_cancel_rule(self, booking_timestamp, current_timestamp, customer: Customer):
         full_price = 500.0
         time_diff = booking_timestamp - current_timestamp
