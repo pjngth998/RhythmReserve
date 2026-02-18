@@ -72,7 +72,7 @@ class BookingStatus <<enumeration>> {
     CANCELLED
 }
 
-class Booking {
+class BookingRoom {
     -booking_id : str
     -customer : class
     -time_slot : class
@@ -145,7 +145,7 @@ class TransStatus <<enumeration>> {
 class Transaction{
     -transaction_id : str
     -timestamp : datetime
-    -order : class
+    -sevice : Service
     -type : str
     -status : enum
     +check_cancel_rule()
@@ -299,6 +299,10 @@ class Coupon{
 
 }
 
+class Order{
+    
+}
+
 class SnackNDrinks{
     -stock : Stock
 }
@@ -357,10 +361,12 @@ Service o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
 Service <-- Payment
-Booking o-- Room
-Booking o-- Equipment
-Booking o-- SnackNDrinks
+BookingRoom <-- Room
+BookingRoom o-- Equipment
+BookingRoom o-- SnackNDrinks
 Branch o-- SnackNDrinks
 Service o-- Penalty
 SnackNDrinks <-- Stock
+Service o-- Order
+Order o-- SnackNDrinks
 @enduml
