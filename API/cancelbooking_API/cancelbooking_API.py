@@ -1,31 +1,8 @@
 from typing import Union, Optional
 from fastapi import FastAPI, HTTPException
 from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
 import uvicorn
-
-class Policy:
-    def check_cancel_rule(self, booking_timestamp, current_timestamp):
-        full_price = 500.0
-        time_diff = booking_timestamp - current_timestamp
-
-        if time_diff > timedelta(hours=24):
-            return {"isAllowed": True, "refund": full_price * 0.7}
-        
-        return {"isAllowed": True, "refund": 0.0}
-
-class Service:
-    def __init__(self, service_id, booking_timestamp, slot_id):
-        self.service_id = service_id
-        self.booking_timestamp = booking_timestamp
-        self.slot_id = slot_id 
-        self.policy = Policy()
-        self.status = "BOOKED" 
-
-    def check_cancel_rule(self, current_timestamp):
-        return self.policy.check_cancel_rule(self.booking_timestamp, current_timestamp)
-
-    def change_status(self, status):
-        self.status = status
 
 class User:
     def __init__(self, user_id, name):
@@ -39,6 +16,64 @@ class User:
     def clear_service(self):
         self.service_ls.clear()
 
+class Customer(User, ABC): 
+    def __init__(self, user_id, name, current_points=0):
+        super().__init__(user_id, name)
+        self.current_points = current_points
+
+    @abstractmethod 
+    def get_cancellation_limit_hours(self) -> int:
+        pass
+
+class Standard(Customer):
+    def __init__(self, user_id, name):
+        super().__init__(user_id, name)
+        self.recive_point_per_hr = 3
+
+    def get_cancellation_limit_hours(self) -> int:
+        return 24
+
+class Premium(Customer):
+    def __init__(self, user_id, name):
+        super().__init__(user_id, name)
+        self.recive_point_per_hr = 5
+
+    def get_cancellation_limit_hours(self) -> int:
+        return 12
+
+class Diamond(Customer):
+    def __init__(self, user_id, name):
+        super().__init__(user_id, name)
+        self.recive_point_per_hr = 8
+
+    def get_cancellation_limit_hours(self) -> int:
+        return 6
+
+class Policy:
+    def check_cancel_rule(self, booking_timestamp, current_timestamp, customer: Customer):
+        full_price = 500.0
+        time_diff = booking_timestamp - current_timestamp
+        limit_hours = customer.get_cancellation_limit_hours() 
+
+        if time_diff > timedelta(hours=limit_hours):
+            return {"isAllowed": True, "refund": full_price * 0.7}
+        
+        return {"isAllowed": True, "refund": 0.0}
+
+class Service:
+    def __init__(self, service_id, booking_timestamp, slot_id):
+        self.service_id = service_id
+        self.booking_timestamp = booking_timestamp
+        self.slot_id = slot_id 
+        self.policy = Policy()
+        self.status = "BOOKED" 
+
+    def check_cancel_rule(self, current_timestamp, customer):
+        return self.policy.check_cancel_rule(self.booking_timestamp, current_timestamp, customer)
+
+    def change_status(self, status):
+        self.status = status
+
 class Payment:
     def payment_refund(self, amount):
         print(f"Give money back {amount} THB ")
@@ -47,16 +82,16 @@ class Payment:
 class TimeSlot:
     def __init__(self):
         self.db_slots = [
-            {"id": "slot_01", "time": "09:00", "status": "booked"},
-            {"id": "slot_02", "time": "10:00", "status": "booked"},
-            {"id": "slot_03", "time": "11:00", "status": "booked"}
+            ["slot_01", "09:00", "booked"],
+            ["slot_02", "10:00", "booked"],
+            ["slot_03", "11:00", "booked"]
         ]
 
     def set_status(self, slot_id, new_status):
         for slot in self.db_slots:
-            if slot["id"] == slot_id:
-                old_status = slot["status"]
-                slot["status"] = new_status
+            if slot[0] == slot_id:
+                old_status = slot[2]
+                slot[2] = new_status
                 print(f"Time {slot_id} change from {old_status} to {new_status}")
                 return {"success": True}
         return {"success": False}
@@ -66,8 +101,9 @@ class ReserveSystem:
         self.payment_service = Payment()
         self.timeslot_service = TimeSlot()
         self.mock_user_db = {
-            "u101": User("u101", "Somchai"),
-            "u102": User("u102", "Somsri")
+            "u101": Standard("u101", "Somchai Standard"),
+            "u102": Premium("u102", "Somsri Premium"),
+            "u103": Diamond("u103", "Somsak Diamond")
         }
 
     def process_cancellation(self, user_id: str):
@@ -80,7 +116,7 @@ class ReserveSystem:
             raise ValueError("No have service for cancel")
 
         current_time = datetime.now()
-        rule_result = service.check_cancel_rule(current_time)
+        rule_result = service.check_cancel_rule(current_time, user)
 
         is_allowed = rule_result["isAllowed"]
         refund_amount = rule_result["refund"]
@@ -102,6 +138,7 @@ class ReserveSystem:
         return {
             "status": "success finish",
             "message": f"Cancel {cancelled_slot} is success",
+            "user_type": type(user).__name__,
             "detail": refund_status
         }
 
