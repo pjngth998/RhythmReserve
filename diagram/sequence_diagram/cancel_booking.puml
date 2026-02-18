@@ -1,8 +1,8 @@
 @startuml cancel_booking
 autonumber
-actor Customer as C
+actor "Client (API)" as C
 participant ReserveSystem as RS
-participant User as U
+participant "User (Customer)" as U
 participant Service as S
 participant Policy as Pol
 participant Payment as Pay
@@ -11,20 +11,32 @@ participant TimeSlot as TS
 C->RS : process_cancellation(user_id)
 activate RS
 
+' 1. หา User และ Service
 RS -> U: get_service()
 activate U
 U --> RS: return Service object
 deactivate U
 
-RS -> S: check_cancel_rule(current_time)
+' 2. เช็คเงื่อนไข (ส่ง user เข้าไปใน Chain)
+RS -> S: check_cancel_rule(current_time, user)
 activate S
-S -> Pol: check_cancel_rule(booking_time, current_time)
+
+S -> Pol: check_cancel_rule(booking_time, current_time, customer)
 activate Pol
+
+' [POINT OF CHANGE] Policy ถาม User กลับว่ามี limit กี่ชั่วโมง
+Pol -> U : get_cancellation_limit_hours()
+activate U
+U --> Pol : return hours (e.g., 6, 12, 24)
+deactivate U
+
 Pol --> S : return {isAllowed, refund}
 deactivate Pol
+
 S --> RS : return {isAllowed, refund}
 deactivate S
 
+' 3. ดำเนินการตามผลลัพธ์
 alt isAllowed == False
     RS --> C: raise ValueError("You cannot cancel this")
 
@@ -50,7 +62,7 @@ else isAllowed == True
     activate U
     deactivate U
 
-    RS --> C : return {status: "success"}
+    RS --> C : return {status: "success", detail: ...}
 end
 deactivate RS
 @enduml
