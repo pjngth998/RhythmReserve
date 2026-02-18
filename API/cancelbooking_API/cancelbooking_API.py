@@ -13,31 +13,35 @@ class Policy:
         
         return {"isAllowed": True, "refund": 0.0}
 
-class Transaction:
-    def __init__(self, transaction_id, booking_timestamp, slot_id):
-        self.transaction_id = transaction_id
+class Service:
+    def __init__(self, service_id, booking_timestamp, slot_id):
+        self.service_id = service_id
         self.booking_timestamp = booking_timestamp
-        self.slot_id = slot_id
+        self.slot_id = slot_id 
         self.policy = Policy()
+        self.status = "BOOKED" 
 
     def check_cancel_rule(self, current_timestamp):
         return self.policy.check_cancel_rule(self.booking_timestamp, current_timestamp)
+
+    def change_status(self, status):
+        self.status = status
 
 class User:
     def __init__(self, user_id, name):
         self.user_id = user_id
         self.name = name
-        self.current_transaction = Transaction("TXN-999", datetime.now() + timedelta(hours=48), "slot_01")
+        self.service_ls = [Service("SRV-999", datetime.now() + timedelta(hours=48), "slot_01")]
 
-    def get_transaction(self):
-        return self.current_transaction
+    def get_service(self):
+        return self.service_ls[0] if self.service_ls else None
     
-    def clear_transaction(self):
-        self.current_transaction = None
+    def clear_service(self):
+        self.service_ls.clear()
 
 class Payment:
     def payment_refund(self, amount):
-        print(f" Refunding {amount} THB ")
+        print(f"Give money back {amount} THB ")
         return {"success": True}
 
 class TimeSlot:
@@ -53,7 +57,7 @@ class TimeSlot:
             if slot["id"] == slot_id:
                 old_status = slot["status"]
                 slot["status"] = new_status
-                print(f" TimeSlot '{slot_id}' changed from '{old_status}' to '{new_status}'")
+                print(f"Time {slot_id} change from {old_status} to {new_status}")
                 return {"success": True}
         return {"success": False}
 
@@ -69,34 +73,35 @@ class ReserveSystem:
     def process_cancellation(self, user_id: str):
         user = self.mock_user_db.get(user_id)
         if not user:
-            raise ValueError("User not found")
+            raise ValueError("No have this user")
 
-        transaction = user.get_transaction()
-        if not transaction:
-            raise ValueError("No active booking to cancel")
+        service = user.get_service()
+        if not service:
+            raise ValueError("No have service for cancel")
 
         current_time = datetime.now()
-        rule_result = transaction.check_cancel_rule(current_time)
+        rule_result = service.check_cancel_rule(current_time)
 
         is_allowed = rule_result["isAllowed"]
         refund_amount = rule_result["refund"]
 
         if not is_allowed:
-            raise ValueError("Cancellation not allowed")
+            raise ValueError("You cannot cancel this")
 
-        refund_status = "No refund"
+        refund_status = "No refund money"
         if refund_amount > 0:
             self.payment_service.payment_refund(refund_amount)
-            refund_status = f"Refunded {refund_amount} THB"
+            refund_status = f"Give back money {refund_amount} THB"
 
-        self.timeslot_service.set_status(transaction.slot_id, "available")
+        self.timeslot_service.set_status(service.slot_id, "available")
         
-        cancelled_slot = transaction.slot_id
-        user.clear_transaction()
+        cancelled_slot = service.slot_id
+        service.change_status("CANCELLED") 
+        user.clear_service()
 
         return {
-            "status": "success",
-            "message": f"Reservation for '{cancelled_slot}' cancelled successfully",
+            "status": "success finish",
+            "message": f"Cancel {cancelled_slot} is success",
             "detail": refund_status
         }
 
@@ -110,7 +115,7 @@ def cancel_reservation_api(user_id: str):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception:
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail="Server broken have problem")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
