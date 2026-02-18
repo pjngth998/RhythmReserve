@@ -8,7 +8,7 @@ class User:
     def __init__(self, user_id, name):
         self.user_id = user_id
         self.name = name
-        self.service_ls = [Service("SRV-999", datetime.now() + timedelta(hours=48), "slot_02")]
+        self.service_ls = [Service("SRV-999", datetime.now() + timedelta(hours=48), "slot_01")]
 
     def get_service(self):
         return self.service_ls[0] if self.service_ls else None
@@ -22,7 +22,7 @@ class Customer(User, ABC):
         self.current_points = current_points
 
     @abstractmethod 
-    def get_cancellation_limit_hours(self) :
+    def get_cancellation_limit_hours(self) -> int:
         pass
 
 class Standard(Customer):
@@ -30,7 +30,7 @@ class Standard(Customer):
         super().__init__(user_id, name)
         self.recive_point_per_hr = 3
 
-    def get_cancellation_limit_hours(self) :
+    def get_cancellation_limit_hours(self) -> int:
         return 24
 
 class Premium(Customer):
@@ -38,7 +38,7 @@ class Premium(Customer):
         super().__init__(user_id, name)
         self.recive_point_per_hr = 5
 
-    def get_cancellation_limit_hours(self) :
+    def get_cancellation_limit_hours(self) -> int:
         return 12
 
 class Diamond(Customer):
@@ -46,11 +46,10 @@ class Diamond(Customer):
         super().__init__(user_id, name)
         self.recive_point_per_hr = 8
 
-    def get_cancellation_limit_hours(self) :
+    def get_cancellation_limit_hours(self) -> int:
         return 6
 
 class Policy:
-    
     def check_cancel_rule(self, booking_timestamp, current_timestamp, customer: Customer):
         full_price = 500.0
         time_diff = booking_timestamp - current_timestamp
@@ -83,16 +82,16 @@ class Payment:
 class TimeSlot:
     def __init__(self):
         self.db_slots = [
-            {"id": "slot_01", "time": "09:00", "status": "booked"},
-            {"id": "slot_02", "time": "10:00", "status": "booked"},
-            {"id": "slot_03", "time": "11:00", "status": "booked"}
+            ["slot_01", "09:00", "booked"],
+            ["slot_02", "10:00", "booked"],
+            ["slot_03", "11:00", "booked"]
         ]
 
     def set_status(self, slot_id, new_status):
         for slot in self.db_slots:
-            if slot["id"] == slot_id:
-                old_status = slot["status"]
-                slot["status"] = new_status
+            if slot[0] == slot_id:
+                old_status = slot[2]
+                slot[2] = new_status
                 print(f"Time {slot_id} change from {old_status} to {new_status}")
                 return {"success": True}
         return {"success": False}
@@ -102,9 +101,9 @@ class ReserveSystem:
         self.payment_service = Payment()
         self.timeslot_service = TimeSlot()
         self.mock_user_db = {
-            "u101": Standard("u_std", "Somchai Standard"),
-            "u102": Premium("u_prm", "Somsri Premium"),
-            "u103": Diamond("u_dia", "Somsak Diamond")
+            "u101": Standard("u101", "Somchai Standard"),
+            "u102": Premium("u102", "Somsri Premium"),
+            "u103": Diamond("u103", "Somsak Diamond")
         }
 
     def process_cancellation(self, user_id: str):
