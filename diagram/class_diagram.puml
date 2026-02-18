@@ -96,18 +96,13 @@ class OrderStatus <<enumeration>> {
     REFUNDED
 }
 
-class Order{
+class Service{
     -customer : class
     -booking_list : list
     -total_price : float
-    -coupon : Coupon
-
     +add_booking() : void
     +remove_booking() : void
-
     +calculate_total() : float
-    +apply_coupon() : void
-
     +change_status() : void
 }
 
@@ -129,12 +124,13 @@ class CreditCard{
 
 class Payment{
     -order : class
-    -coupon : class
+    -coupon : Coupon
     -fine : class
     -refund : class
     -payment_channel : class
     -payment_status : str
     -amount : float
+    +apply_coupon() : void
     +process_payment()
     +payment_refund()
 
@@ -151,20 +147,15 @@ class Transaction{
     -timestamp : datetime
     -order : class
     -type : str
-    +check_cancel_rule()
-
     -status : enum
+    +check_cancel_rule()
     +check_cancel_rule()
     +do_checkin()
     +do_checkout()
     +get_reserve_detail()
 }
 
-class UserRole <<enumeration>> {
-    ADMIN
-    STAFF
-    CUSTOMER
-}
+
 
 class User{
     -user_id : str
@@ -186,30 +177,19 @@ class User{
 
 }
 
-class Officer{
+class Staff{
     -brance_id : str
     -history_working : list
-}
-
-class BranchManager{
-    -All_staff : list
+    -daily_report : list
     +add_staff()
     +remove_staff()
     +get_report()
     +approve_maintenance_request()
     +set_status(room_id, status) : void
-
-}
-
-class FrontDesk{
-    -daily_report : list
     +add_equipment()
     +add_Daily_report()
     +customer_check_in()
     +customer_check_out()
-}
-
-class SystemAdmin{
     +add_coupon()
     +add_Room()
     +add_Branch()
@@ -219,6 +199,7 @@ class SystemAdmin{
     +make_equipment_id(branch_id, type_)
     +make_room_id(branch_id, size)
 }
+
 
 class Customer{
     -current_points : int
@@ -318,6 +299,16 @@ class Coupon{
 
 }
 
+class SnackNDrinks{
+    -stock : Stock
+}
+
+class Stock{
+    -amount : int
+
+}
+
+
 class RoomType <<enumeration>>{
     S
     M
@@ -334,18 +325,23 @@ class EquipmentType <<enumeration>> {
     KEYBOARD
 }
 
+class SnackNDrinkType <<enumeration>> {
+    WATER
+    COFFEE
+    SODA
+    CHOCOPIE
+    CRISP
+}
 
 
 
 
-User <|-- Officer
+ReserveSystem o-- User
+User <|-- Staff
 User <|-- Customer
 Customer <|-- Standard
 Customer <|-- Premium
 Customer <|-- Diamond
-Officer <|-- BranchManager
-Officer <|-- FrontDesk
-Officer <|-- SystemAdmin
 Payment <|-- PaymentChannel 
 PaymentChannel <|-- QrScan
 PaymentChannel <|-- CreditCard
@@ -356,9 +352,15 @@ Branch o-- Room
 Branch o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
-Customer o-- Order
-Order o-- Booking
+Customer o-- Service
+Service o-- Booking
 Customer o-- Transaction
 Customer o-- Notification
-Order <-- Payment
+Service <-- Payment
+Booking o-- Room
+Booking o-- Equipment
+Booking o-- SnackNDrinks
+Branch o-- SnackNDrinks
+Service o-- Penalty
+SnackNDrinks <-- Stock
 @enduml
