@@ -3,37 +3,54 @@ autonumber
 actor Customer as C
 participant ReserveSystem as RS
 participant User as U
-participant Transaction as T
+participant Service as S
 participant Policy as Pol
 participant Payment as Pay
-participant Time_slot as TS
+participant TimeSlot as TS
 
-C->RS : Cancel_Reservation(user_id)
+C->RS : process_cancellation(user_id)
 activate RS
-RS -> U: searching_user(user_id)
+
+RS -> U: get_service()
 activate U
-U -> T: get_transaction()
+U --> RS: return Service object
 deactivate U
-activate T
-T -> Pol: check_cancel_rule(timestamp,current)
-deactivate T
+
+RS -> S: check_cancel_rule(current_time)
+activate S
+S -> Pol: check_cancel_rule(booking_time, current_time)
 activate Pol
-Pol -> RS : return {isAllowed,refund}
+Pol --> S : return {isAllowed, refund}
 deactivate Pol
+S --> RS : return {isAllowed, refund}
+deactivate S
 
 alt isAllowed == False
-    RS -> C: return error{cannot cancel}
+    RS --> C: raise ValueError("You cannot cancel this")
 
 else isAllowed == True
+
     opt refund > 0
-        RS -> Pay : paymentrefund(refund)
+        RS -> Pay : payment_refund(refund_amount)
         activate Pay
-        Pay -> RS: return{success}
+        Pay --> RS: return {success: True}
         deactivate Pay
     end
-    RS -> TS: set_status(availble)
+
+    RS -> TS: set_status(slot_id, "available")
     activate TS
-    TS -> C : return{success}
+    TS --> RS : return {success: True}
     deactivate TS
+
+    RS -> S : change_status("CANCELLED")
+    activate S
+    deactivate S
+
+    RS -> U : clear_service()
+    activate U
+    deactivate U
+
+    RS --> C : return {status: "success"}
 end
+deactivate RS
 @enduml
