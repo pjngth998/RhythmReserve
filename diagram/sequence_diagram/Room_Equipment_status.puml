@@ -2,12 +2,18 @@
 
 actor "Front Desk Staff" as Staff
 participant "RhythmReserve" as System
+participant Room
 
 Staff -> System : requestRoomStatus(date)
 activate System
 
 System -> System : get_room_status_by_date(date)
-System --> Staff : listOfRoomStatus
 
+loop each booked room
+    System -> Room : get_equipment_status()
+    Room --> System : equipmentStatus
+end
+
+System --> Staff : roomStatusWithEquipment
 deactivate System
 @enduml
