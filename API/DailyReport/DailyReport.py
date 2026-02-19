@@ -16,6 +16,14 @@ class Room():
     @property
     def rate(self):
         return self.__rate
+    
+class Equipment():
+    def __init__(self,id):
+        self.__id =id
+    
+    @property
+    def id(self):
+        return self.__id
 
 
 class Customer():
@@ -29,11 +37,12 @@ class Customer():
 
 
 class Booking():
-    def __init__(self, id, room, customer, date):
+    def __init__(self, id, room,equipment_list,customer, date):
         self.__id = id
         self.__room = room
         self.__customer = customer
         self.__date = date
+        self.__equipment_list = equipment_list
 
     @property
     def date(self):
@@ -42,9 +51,13 @@ class Booking():
     @property
     def room(self):
         return self.__room
+    
+    @property
+    def equipment_list(self):
+        return self.__equipment_list
 
 
-class Transaction():
+class Service():
     def __init__(self, id, date, amount, type):
         self.__id = id
         self.__date = date
@@ -97,22 +110,39 @@ class RhythmReserve():
         self.__transaction_list = []
         self.__policy = Policy(make_id("Po"))
 
-    def create_booking(self, room, customer, date):
-        booking = Booking(make_id("Bk"), room, customer, date)
+    def create_booking(self, room, equipment, customer, date):
+
+        if not isinstance(equipment, list):
+            equipment = [equipment]
+
+        booking = Booking(make_id("Bk"), room, equipment, customer, date)
         self.__booking_list.append(booking)
 
-        tx = Transaction(make_id("Tx"), date, room.rate, "PAYMENT")
+        tx = Service(make_id("Tx"), date, room.rate, "PAYMENT")
         self.__transaction_list.append(tx)
 
         return booking
+
 
     def add_penalty(self, date, amount, reason):
         penalty = Penalty(date, amount, reason)
         self.__policy.add_penalty(penalty)
 
-        tx = Transaction(make_id("Tx"), date, amount, "PENALTY")
+        tx = Service(make_id("Tx"), date, amount, "PENALTY")
         self.__transaction_list.append(tx)
 
+    def get_equip_status_by_date(self, date):
+        return [
+            {
+                "equipment_id": eq.id,
+                "status": "BOOKED"
+            }
+            for b in self.__booking_list
+            if b.date == date
+            for eq in b.equipment_list
+        ]
+
+            
     def get_room_status_by_date(self, date):
         return [
             {
@@ -130,13 +160,6 @@ class RhythmReserve():
             if tx.date == date and tx.type == "PAYMENT"
         )
 
-    def add_penalty(self, date, amount, reason):
-        penalty = Penalty(date, amount, reason)
-        self.__policy.add_penalty(penalty)
-
-        tx = Transaction(make_id("Tx"), date, amount, "PENALTY")
-        self.__transaction_list.append(tx)
-
     def get_daily_report(self, date):
         daily_bookings = [b for b in self.__booking_list if b.date == date]
         penalties = self.__policy.get_all_penalty(date)
@@ -145,7 +168,8 @@ class RhythmReserve():
             "date": date,
             "total_booking": len(daily_bookings),
             "total_revenue": self.get_daily_revenue(date),
-            "room_status": self.get_room_status_by_date(date)
+            "room_status": self.get_room_status_by_date(date),
+            "equipment_status": self.get_equip_status_by_date (date)
         }
 
         # opt Penalty 

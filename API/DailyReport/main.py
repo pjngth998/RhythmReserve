@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import uvicorn
 
-from DailyReport import RhythmReserve,Room,Customer
+from DailyReport import RhythmReserve,Room,Customer,Equipment
 
 app = FastAPI()
 
@@ -14,10 +14,20 @@ def sanity_check():
 
 
 @app.post("/booking")
-def create_booking(room_id:str ,room_rate:float,customer_id:str,customer_name:str,date:str):
+def create_booking(
+    room_id: str,
+    room_rate: float,
+    equipment_id: str,
+    customer_id: str,
+    customer_name: str,
+    date: str
+):
     room = Room(room_id, room_rate)
     customer = Customer(customer_id, customer_name)
-    store.create_booking(room, customer, date)
+    equipment = Equipment(equipment_id)
+
+    store.create_booking(room, [equipment], customer, date)
+
     return {"status": "success"}
 
 @app.post("/penalty")
