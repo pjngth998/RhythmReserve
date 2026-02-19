@@ -89,9 +89,4 @@ rectangle "Booking System" {
   Admin --  (Add Room) 
 
   Admin --  (Add Branch)
-<<<<<<< Updated upstream
-  Admin -- (Remove Branch)
-}
-=======
   (Add Branch) <.. (Remove Branch) : <<extend>>
->>>>>>> Stashed changes

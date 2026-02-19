@@ -104,10 +104,12 @@ class Order{
 
     +add_booking() : void
     +remove_booking() : void
-
+    +check_cancel_rule()
     +calculate_total() : float
     +apply_coupon() : void
-
+    +do_checkin()
+    +do_checkout()
+    +get_reserve_detail()
     +change_status() : void
 }
 
@@ -277,7 +279,7 @@ class Penalty {
 class Policy{
     - policy_id : str
     - name : str
-    - penalty_list : list
+    -penalty_list : list
     - description : str
     - cancel_before_hours : int
     - refund_rate : float
