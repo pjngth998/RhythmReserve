@@ -1,0 +1,67 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "Staff" as staff
+participant "ReserveSystem" as system
+participant "Customer" as customer
+participant "Service_IN" as sv_in
+participant "Booking" as booking
+participant "Room" as room
+participant "Equipment" as eq
+participant "TimeSlot" as timeslot
+
+
+staff -> system :Checkin(customer_id, reserve_id)
+activate system
+
+activate customer
+loop search_customer(customer_id)
+    system -> customer :get_customer(customer_id)
+    customer --> system : return Customer (instance)
+end
+
+system -> customer : get_checkin(reserve_id)
+loop search_reserve(reserve_id)
+    customer -> sv_in :get_reserve(reserve_id)
+    
+    sv_in --> customer : Reserve (instance)
+end
+
+customer -> sv_in : get_reserve_detail()
+activate sv_in
+loop for booking in reserve_list
+    sv_in -> booking : get_booking_detail()
+    activate booking
+
+    booking -> room : get_room_reserve_detail()
+    activate room
+    room -> timeslot : update_status(time_booking)
+    activate timeslot
+    timeslot --> room : update status "OCCUPIED" success
+    deactivate timeslot
+    room --> booking : room_info
+    deactivate room
+
+    loop for eq in equipment_list
+        booking -> eq: get_equipment_reserve_detail()
+        activate eq
+        eq -> timeslot : update_status(time_booking)
+        activate timeslot
+        timeslot --> eq : update status "OCCUPIED" success
+        deactivate timeslot
+        eq --> booking : eq_info()
+        deactivate eq
+    end
+    booking --> sv_in : booking_info
+    deactivate booking
+end
+sv_in --> customer : reserve_info
+deactivate sv_in
+customer --> system : Check-In Success
+deactivate customer
+system --> staff : CHECKIN SUCCESSFULLY!
+deactivate system
+
+
