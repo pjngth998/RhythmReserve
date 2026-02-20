@@ -1,16 +1,15 @@
 @startuml
-skinparam style strictuml
 autoactivate on
 
-participant "Program / Test Script" as Program
+actor "Customer" as Program
 participant "ReserveSystem\n(Controller)" as System
-participant "Customer\n(Entity)" as Customer
-participant "Booking\n(Entity)" as Booking
-participant "Policy\n(Entity)" as Policy
-participant "Room\n(Entity)" as Room
-participant "Equipment\n(Entity)" as Equipment
-participant "Payment\n(Entity)" as Payment
-participant "PaymentChannel\n(Entity)" as Channel
+participant "Customer" as Customer
+participant "Booking" as Booking
+participant "Policy" as Policy
+participant "Room" as Room
+participant "Equipment" as Equipment
+participant "Payment" as Payment
+participant "PaymentChannel" as Channel
 
 title Cancellation Process
 
@@ -18,49 +17,55 @@ Program -> System : process_cancellation(customer_id, booking_id)
 
     loop [in self.customer_list]
         System -> Customer : get_id()
-        return id
+        Customer --> System : return {customer_id : str}
     end
 
     alt [Customer Match Found]
         
         System -> Customer : get_transaction_list()
-        return transaction_list
+        Customer --> System : return {booking_list : List<Booking>}
 
-        loop [in transaction_list]
+        loop [in booking_list]
             System -> Booking : get_booking_id()
-            return id
+            Booking --> System : return {fetched_booking_id : str}
         end
 
         alt [Booking Match Found]
             
-            System -> Policy : check_cancel_rule(Booking Object)
-            return isAllowed, refund_amount
+            System -> Policy : check_cancel_rule(currenttime,starttime,member)
+            Policy -> Customer : get_cancellation_limit_hours()
+            Customer --> Policy : return {cancellation_limit_hours(6,12,24)}
+            Policy --> System : return {isAllowed: bool, refund_amount: float}
 
             alt [isAllowed == true]
                 
                 System -> Booking : change_booking_status(CANCELLED)
-                return void
+                Booking --> System : retuem {status_updated : bool}
 
+                loop
                 System -> Booking : get_room()
-                return Room Object
-                
+                Booking --> System : return {target_room : Room}
+                end
+
                 System -> Room : update_room_status(AVAILABLE)
-                return void
+                Room --> System : return {void}
 
+                loop
                 System -> Booking : get_equipment_list()
-                return equipment_list
+                Booking --> System : return {eq_list : List<Equipment>}
+                end
 
-                loop [in equipment_list]
+                loop [in eq_list]
                     System -> Equipment : set_status(AVAILABLE)
                     return void
                 end
 
-                System -> Payment : process_payment(refund_amount)
-                    Payment -> Channel : process(refund_amount)
-                    return success
-                return refund_completed
+                System -> Payment : process_payment(refund_amount,payment_channel)
+                    Payment -> Channel : process(refund_amount,payment_channel)
+                    return process_status : bool
+                return payment_success : bool
                 
-                System --> Program : return "Success"
+                System --> Program : return {cancellation_success : bool}
 
             else [isAllowed == false]
                 System --> Program : return "Error: Policy Violation"
