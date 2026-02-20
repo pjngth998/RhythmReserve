@@ -2,96 +2,146 @@
 left to right direction
 skinparam packageStyle rectangle
 
-actor Customer
-actor "Front Desk Staff" as Staff
-actor "Branch Manager" as Manager
-actor "System Admin" as Admin
-actor "Payment System" as Payment
-' actor "OTP System" as OTP
+actor Customer as C
+actor Staff as S
+actor "Payment System" as Pay
 
-rectangle "Booking System" {
+rectangle "RhythmReserve System" {
 
-  Customer -- (Register)
-  (Register) ..> (Provide Personal Info) : <<include>>
-  ' (Register) ..> (Verify OTP) : <<include>>
-  ' (Verify OTP) ..> OTP : <<include>>
+  package "Account & Profile" {
+    C -- (Register)
+    (Register) ..> (Provide Personal Info) : <<include>>
 
-  Customer -- (Login)
-  (Login) ..> (Verify Password) : <<include>>
+    C -- (Login)
+    (Login) ..> (Verify Password) : <<include>>
 
-  Customer -- (Manage Profile)
-  Customer -- (View Membership & Privileges)
-  Customer -- (View Booking & Payment History)
+    C -- (Manage Profile)
+    C -- (Change Password)
 
-  Customer -- (Book Practice Room)
-  (Book Practice Room) ..> (Check Room Availability) : <<include>>
-  (Book Practice Room) ..> (Check Payment) : <<include>>
-  (Check Payment) ..> Payment : <<include>>
+    C -- (View Membership and Points)
+    (Redeem Points) ..> (View Membership and Points) : <<extend>>
 
-  (Book Practice Room) <.. (Book Equipment) : <<extend>>
-  (Book Equipment) ..> (Check Available Equipment) : <<include>>
+    C -- (View Booking History)
+    C -- (View Notifications)
+    (View Notifications) ..> (Mark Notification as Read) : <<include>>
+  }
 
-  (Book Practice Room) <.. (Edit Booking) : <<extend>>
-  (Book Practice Room) <.. (Cancel Booking) : <<extend>>
-  (Cancel Booking) ..> (Return Equipment) : <<include>>
+  package "Service_IN - Room Reservation (Pay at Booking)" {
 
-  Customer -- (Report Room/Equipment Issue)
+    C -- (Search Available Rooms)
+    (Search Available Rooms) ..> (Select Date and Time Range) : <<include>>
+    (Search Available Rooms) ..> (Select Room Size) : <<include>>
+    (Search Available Rooms) ..> (Check Room TimeSlot Conflicts) : <<include>>
+    (Check Room TimeSlot Conflicts) ..> (Detect Overlap) : <<include>>
+    (Search Available Rooms) ..> (Show Available Rooms and Time Slots) : <<include>>
 
-  Staff -- (Staff Login)
-  (Staff Login) ..> (Verify Staff ID) : <<include>>
-  (Staff Login) ..> (Verify Password) : <<include>>
+    C -- (Start Service_IN Cart)
 
-  Staff -- (View Daily Booking List)
+    C -- (View Service_IN Summary)
+    (View Service_IN Summary) ..> (Calculate Service_IN Total) : <<include>>
+    (Apply Coupon) ..> (View Service_IN Summary) : <<extend>>
 
-  Staff -- (Customer Check-in) 
-  (Customer Check-in) ..> (Set Room Status In Use) : <<include>>
-  (Customer Check-in) <.. (Set Equipment Borrowed) : <<extend>>
+    C -- (Add Booking Room+Equipment to Service_IN)
+    (Add Booking Room+Equipment to Service_IN) ..> (Select Room) : <<include>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Select Date and Time Range) : <<include>>
 
-  Staff -- (Customer Check-out)
-  (Customer Check-out) ..> (Room Available) : <<include>>
-  (Customer Check-out) ..> (Room Maintenance) : <<include>>
-  (Customer Check-out)  <.. (Equipment Available) : <<extend>>
-  (Customer Check-out) <.. (Equipment Maintenance) : <<extend>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Select Equipment for This Room) : <<include>>
+    (Select Equipment for This Room) ..> (Validate Equipment Quota eq_quota) : <<include>>
+    (Select Equipment for This Room) ..> (Check Equipment TimeSlot Conflicts) : <<include>>
+    (Check Equipment TimeSlot Conflicts) ..> (Detect Overlap) : <<include>>
 
-  Staff -- (Add Equipment)
-  (Add Equipment) <.. (Remove Equipment) : <<eextend>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Lock Room Time_slot) : <<include>>
+    (Lock Room Time_slot) ..> (Create Room Time_slot RESERVED) : <<include>>
 
-  Staff -- (Daily Report)
-  (Daily Report) ..> (Room & Equipment Status Report) : <<include>>
-  (Daily Report) ..> (Daily Revenue Report) : <<include>>
-  (Daily Report) <.. (Penalty & Notes) : <<extend>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Lock Equipment Time_slot) : <<include>>
+    (Lock Equipment Time_slot) ..> (Create Equipment Time_slot RESERVED) : <<include>>
 
-  Manager -- (Manager Login)
-  (Manager Login) ..> (Verify Branch ID) : <<include>>
-  (Manager Login) ..> (Verify Password) : <<include>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Create Booking) : <<include>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Add Booking into Service_IN) : <<include>>
+    (Add Booking Room+Equipment to Service_IN) ..> (Calculate Booking Price) : <<include>>
 
-  Manager -- (Read Reports)
-  Manager -- (Approve Room Maintenance)
-  Manager -- (Approve Equipment Maintenance)
+    C -- (Remove Booking from Service_IN)
+    (Remove Booking from Service_IN) ..> (Release Room and Equipment Time_slot) : <<include>>
 
-  Manager -- (Close Room) 
+    C -- (Cancel Booking)
+    (Cancel Booking) ..> (Check Cancellation Policy) : <<include>>
+    (Cancel Booking) ..> (Update Time_slot to AVAILABLE) : <<include>>
+    (Refund if Allowed) ..> (Cancel Booking) : <<extend>>
+    (Refund if Allowed) ..> Pay : <<include>>
 
-  Manager --  (Add Staff) 
-  (Add Staff) <..  (Remove Staff) : <<extend>>
+    C -- (Checkout Service_IN)
+    (Checkout Service_IN) ..> (Process Payment for Service_IN Total) : <<include>>
+    (Process Payment for Service_IN Total) ..> Pay : <<include>>
+    (Checkout Service_IN) ..> (Confirm All Bookings) : <<include>>
+    (Checkout Service_IN) ..> (Send Notification) : <<include>>
+  }
 
-  Admin -- (Admin Login)
-  (Admin Login) ..> (Verify Admin ID) : <<include>>
-  (Admin Login) ..> (Verify Password) : <<include>>
+  package "Service_OUT - Snacks/Drinks and Penalties (Pay Later)" {
 
-  Admin -- (Manage Membership Levels)
-  Admin -- (Manage Booking Rules & Penalties)
-  Admin -- (Manage Pricing)
+    C -- (Browse Stock)
+    (Browse Stock) ..> (View Product List) : <<include>>
 
-  Admin -- (Add Coupon) 
-  (Add Coupon) ..> (Set Expiredate) : <<include>>
-  (Add Coupon) <.. (Remove Coupon) : <<extend>>
+    C -- (Buy Snacks and Drinks)
+    (Buy Snacks and Drinks) ..> (Select Items) : <<include>>
+    (Buy Snacks and Drinks) ..> (Create Service_OUT Order) : <<include>>
+    (Buy Snacks and Drinks) ..> (Calculate Service_OUT Total) : <<include>>
+    (Buy Snacks and Drinks) ..> (Process Payment - Service_OUT) : <<include>>
+    (Process Payment - Service_OUT) ..> Pay : <<include>>
+    (Buy Snacks and Drinks) ..> (Send Notification) : <<include>>
 
-  Admin --  (Add Room) 
+    C -- (View Penalties)
+    C -- (Pay Penalty or Damage Charge)
+    (Pay Penalty or Damage Charge) ..> (View Penalties) : <<include>>
+    (Pay Penalty or Damage Charge) ..> (Process Payment - Service_OUT) : <<include>>
+  }
 
-  Admin --  (Add Branch)
-<<<<<<< Updated upstream
-  Admin -- (Remove Branch)
+  package "Issue and Support" {
+    C -- (Report Room or Equipment Issue)
+  }
+
+  package "Staff Operations" {
+
+    S -- (Staff Login)
+    (Staff Login) ..> (Verify Password) : <<include>>
+
+    S -- (View Daily Booking List)
+
+    S -- (Customer Check-in)
+    (Customer Check-in) ..> (Verify Booking) : <<include>>
+    (Customer Check-in) ..> (Update Time_slot to OCCUPIED) : <<include>>
+    (Customer Check-in) ..> (Update Room Status) : <<include>>
+    (Update Equipment Status) ..> (Customer Check-in) : <<extend>>
+
+    S -- (Customer Check-out)
+    (Customer Check-out) ..> (Update Time_slot to AVAILABLE) : <<include>>
+    (Customer Check-out) ..> (Update Room Status) : <<include>>
+    (Update Equipment Status) ..> (Customer Check-out) : <<extend>>
+    (Record Damage or Issue) ..> (Customer Check-out) : <<extend>>
+    (Record Damage or Issue) ..> (Create Penalty) : <<include>>
+    (Create Penalty) ..> (Send Notification) : <<include>>
+
+    S -- (Manage Rooms)
+    (Manage Rooms) ..> (Add Room) : <<include>>
+    (Manage Rooms) ..> (Set Room Maintenance) : <<include>>
+
+    S -- (Manage Equipment)
+    (Manage Equipment) ..> (Add Equipment) : <<include>>
+    (Manage Equipment) ..> (Set Equipment Maintenance) : <<include>>
+
+    S -- (Manage Stock)
+    (Manage Stock) ..> (Add Product) : <<include>>
+    (Manage Stock) ..> (Remove Product) : <<include>>
+
+    S -- (Manage Policy)
+    (Manage Policy) ..> (Manage Cancellation Rules) : <<include>>
+    (Manage Policy) ..> (Manage Penalty Rules) : <<include>>
+
+    S -- (Manage Pricing)
+
+    S -- (Manage Coupons)
+    (Manage Coupons) ..> (Add Coupon) : <<include>>
+    (Manage Coupons) ..> (Remove Coupon) : <<include>>
+    (Add Coupon) ..> (Set Expire Date) : <<include>>
+  }
 }
-=======
-  (Add Branch) <.. (Remove Branch) : <<extend>>
->>>>>>> Stashed changes
+@enduml
