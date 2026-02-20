@@ -79,8 +79,10 @@ class BookingStatus <<enumeration>> {
 
 class Booking {
     -booking_id : str
+    -time_booking : datetime
     -customer : class
-    -time_slot : class
+    ' -time_slot : class
+    -room_id : str
     -equipment_list : list
     -created_at : datetime
     -status : Enum
@@ -94,14 +96,16 @@ class Booking {
     +change_booking_status() : void
 }
 
-class OrderStatus <<enumeration>> {
+class ServiceStatus <<enumeration>> {
     PENDING_PAYMENT
     PAID
     CANCELLED
     REFUNDED
 }
 
+' คือ ที่เก็บของการจองใน 1 ครั้งว่ามีห้องอะไรบ้าง
 class Service_IN{
+    -reserve_id : str
     -customer : class
     -booking_list : list
     -total_price : float
@@ -189,9 +193,9 @@ class Staff{
 
 class Customer{
     -current_points : int
-    -booking_history : list
+    ' -booking_history : list
     -coupon_list : list
-    -transaction_list : list 
+    -reserve_list : list 
     -membership 
     +redeem_point()
     +Booking_room()
