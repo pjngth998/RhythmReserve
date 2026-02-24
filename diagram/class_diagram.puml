@@ -1,14 +1,14 @@
 @startuml
 
-
 class ReserveSystem{
     -branch_list : list
     -customer_list : list
     -staff_list : list
     -policy : list
-    +add_user()
-    +search_user()
+    +add_customer()
+    +search_customer()
     +get_transaction()
+    +check_in()
     +process_cancellation()
     +create_reservation()
     +notify_user()
@@ -34,7 +34,6 @@ class Branch{
     +equipment() : list
     +equipment(new_equipment) : void
     +get_available_slot(size, date) : list
-    
 }
 
 class RoomEquipmentStatus <<enumeration>>{
@@ -64,7 +63,7 @@ class Time_slot{
 
 class Equipment{
     -eq_id : str
-    -time_slot : class
+    -time_slot : list
     -size : int
     +id() : str
 }

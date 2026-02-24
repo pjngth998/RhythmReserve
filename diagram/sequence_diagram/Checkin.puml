@@ -16,22 +16,30 @@ participant "TimeSlot" as timeslot
 staff -> system :Checkin(customer_id, reserve_id)
 activate system
 
-activate customer
 loop search_customer(customer_id)
     system -> customer :get_customer(customer_id)
-    customer --> system : return Customer (instance)
+    activate customer
+    alt found
+        customer --> system : return Customer (instance)
+    else not found
+        customer --> system : "Not found Customer in System"
+    end
 end
 
-system -> customer : get_checkin(reserve_id)
+system -> customer : get_reserve_detail(reserve_id)
 loop search_reserve(reserve_id)
     customer -> sv_in :get_reserve(reserve_id)
-    
-    sv_in --> customer : Reserve (instance)
+   alt found 
+        sv_in --> customer : Reserve (instance)
+    else not found
+        sv_in --> customer : "Not Found Reserve"
+    end
 end
+customer --> system : reserve_info
 
-customer -> sv_in : get_reserve_detail()
+system -> sv_in : get_checkin()
 activate sv_in
-loop for booking in reserve_list
+loop for booking in booking_list
     sv_in -> booking : get_booking_detail()
     activate booking
 
@@ -57,9 +65,8 @@ loop for booking in reserve_list
     booking --> sv_in : booking_info
     deactivate booking
 end
-sv_in --> customer : reserve_info
+sv_in --> system : check-in success
 deactivate sv_in
-customer --> system : Check-In Success
 deactivate customer
 system --> staff : CHECKIN SUCCESSFULLY!
 deactivate system
