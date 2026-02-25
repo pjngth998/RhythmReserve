@@ -1,6 +1,6 @@
 @startuml
 
-actor "Front Desk Staff" as Staff
+actor Staff
 participant "RhythmReserve" as System
 participant Room
 

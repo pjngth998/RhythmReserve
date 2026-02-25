@@ -21,11 +21,16 @@ class EquipmentType(Enum):
     BASS = "BS"
     KEYBOARD = "KB"
 
-class Status(Enum):
+class RoomEquipmentStatus(Enum):
     AVAILABLE = "Available"
     BOOKED = "Booked"
     CLEANING = "Cleaning"
     MAINTENANCE = "Maintenance"
+
+class BookingStatus(Enum):
+    ORDERED = "Ordered"
+    CONFIRM = "Confirmed"
+    CANCEL =  "Canceled"
 
 #Class
 class Customer() :
@@ -52,10 +57,9 @@ class Customer() :
 
 class Branch():
 
-    def __init__(self, id, name, max_room):
+    def __init__(self, id, name):
         self.__id: str = id
         self.__name: str = name
-        self.__max_room = max_room
         self.__room_list = []
         self.__eqipment_list = []
         self.__officer_list = []
@@ -88,21 +92,27 @@ class TimeSlot():
     def __init__(self, start, end, status):
         self.__start: datetime = start
         self.__end: datetime = end
-        self.__status: Status = status
+        self.__status: RoomEquipmentStatus = status
+
+    
 
 class Room():
-    def __init__(self, id, rate):
+    def __init__(self, id, size, rate):
         self.__id: str = id
-        self.__time_slot = None
+        self.__size: RoomType = size
+        self.__rate: float = rate
+        self.__time_slot : TimeSlot = None
         self.__rate: float = None
+        self.__equipment_quota : int = None
 
     @property
     def id(self):
         return self.__id
     
 class Equipment():
-    def __init__(self, id):
+    def __init__(self, id, type_ : EquipmentType):
         self.__id = id
+        self.__type = type_
 
     @property
     def id(self):
@@ -110,10 +120,11 @@ class Equipment():
     
 
 class Booking():
-    def __init__(self, id, room, customer):
+    def __init__(self, id, room, customer, status):
         self.__id: str = id
         self.__room: Room = room
         self.__customer: Customer = customer
+        self.__status : BookingStatus = status
 
 class Notification():
     def __init__(self, type, info):
@@ -142,19 +153,18 @@ class RhythmReserve():
         branch = self.get_branch_by_id(branch_id)
         return f"RM-{branch.name}-{size}-{uuid.uuid4()}"
 
-
     def add_customer(self, username, password):
         customer = Customer(self.make_customer_id(), username, password)
         self.__customer_list.append(customer)
         return customer
     
-    def add_branch(self, name, max_room):
-        branch = Branch(self.make_branch_id(name), name, max_room)
+    def add_branch(self, name):
+        branch = Branch(self.make_branch_id(name), name)
         self.__branch_list.append(branch)
         return branch
     
-    def add_room(self, branch_id, rate):
-        room = Room(make_id("Rm"), rate)
+    def add_room(self, branch_id, size):
+        room = Room(self.make_room_id)
         for _,item in enumerate(self.__branch_list):
             if branch_id == item.id:
                 item.room = room

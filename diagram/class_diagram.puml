@@ -3,8 +3,9 @@
 
 class ReserveSystem{
     -branch_list : list
-    -user_list : list
-    -policy : class
+    -customer_list : list
+    -staff_list : list
+    -policy : list
     +add_user()
     +search_user()
     +get_transaction()
@@ -14,7 +15,10 @@ class ReserveSystem{
     +update_room_status()
     +make_customer_id() : str
     +make_branch_id(name) : str
-    
+    +add_staff()
+    +remove_staff()
+    +add_penalty()
+    +add_transaction()
 }
 
 class Branch{
@@ -51,8 +55,9 @@ class Room {
 
 
 class Time_slot{
-    -start_time : str
-    -end_time : str
+    -date : datetime
+    -start_time : datetime
+    -end_time : datetime
     -status : str
 }
 
@@ -96,18 +101,13 @@ class OrderStatus <<enumeration>> {
     REFUNDED
 }
 
-class Order{
+class Service_IN{
     -customer : class
     -booking_list : list
     -total_price : float
-    -coupon : Coupon
-
     +add_booking() : void
     +remove_booking() : void
-
     +calculate_total() : float
-    +apply_coupon() : void
-
     +change_status() : void
 }
 
@@ -128,16 +128,16 @@ class CreditCard{
 }
 
 class Payment{
-    -order : class
+    -Service : class
     -coupon : class
-    -fine : class
-    -refund : class
+    -fine : float
+    -refund : float
     -payment_channel : class
-    -payment_status : str
-    -amount : float
+    -payment_status : Enum
+    -total_price : float 
     +process_payment()
     +payment_refund()
-
+    +calculate_total()
 }
 class TransStatus <<enumeration>> {
     PENDING
@@ -146,25 +146,19 @@ class TransStatus <<enumeration>> {
     CANCELLED
     FAILED
 }
-class Transaction{
-    -transaction_id : str
-    -timestamp : datetime
-    -order : class
-    -type : str
-    +check_cancel_rule()
 
-    -status : enum
-    +check_cancel_rule()
-    +do_checkin()
-    +do_checkout()
-    +get_reserve_detail()
-}
+' class Transaction{
+'     -transaction_id : str
+'     -timestamp : datetime
+'     -type : str
+'     -status : enum
+'     +check_cancel_rule()
+'     +check_cancel_rule()
+'     +do_checkin()
+'     +do_checkout()
+'     +get_reserve_detail()
+' }
 
-class UserRole <<enumeration>> {
-    ADMIN
-    STAFF
-    CUSTOMER
-}
 
 class User{
     -user_id : str
@@ -173,77 +167,51 @@ class User{
     -name : str
     -email : str
     -phone : str
-    -age : int
-    -transaction_ls : list
-    -role : enum
+    -birthday : datetime
     +log_in()
     +log_out()
     +verify_password()
     +update_profile()
     +change_password()
-    +add_transaction()
     +search_transaction()
-
 }
 
-class Officer{
-    -brance_id : str
-    -history_working : list
-}
-
-class BranchManager{
-    -All_staff : list
-    +add_staff()
-    +remove_staff()
-    +get_report()
-    +approve_maintenance_request()
-    +set_status(room_id, status) : void
-
-}
-
-class FrontDesk{
+class Staff{
+    -branch_id : str
     -daily_report : list
-    +add_equipment()
+    +get_report()
+    +set_status() 
     +add_Daily_report()
     +customer_check_in()
     +customer_check_out()
 }
 
-class SystemAdmin{
-    +add_coupon()
-    +add_Room()
-    +add_Branch()
-    +Manage_membership_level()
-    +Manage_booking_rules_and_penalties()
-    +Mansge_Pricing()
-    +make_equipment_id(branch_id, type_)
-    +make_room_id(branch_id, size)
-}
 
 class Customer{
     -current_points : int
     -booking_history : list
-    -my_coupon : list
+    -coupon_list : list
+    -transaction_list : list 
+    -membership 
     +redeem_point()
     +Booking_room()
     +Report_room()
-    +view_membership_and_privileges()
 }
 
 class Standard{
-    -recive_point_per_hr : int (3)
+    -receive_point_per_hr : int (3)
     +redeem_point()
     +get_cancellation_limit_hours() : int { return 24 }
 }
 
 class Premium{
-    -recive_point_per_hr : int (5)
+    -receive_point_per_hr : int (5)
     +redeem_point()
     +get_cancellation_limit_hours() : int { return 12 }
 }
 
 class Diamond{
-    -recive_point_per_hr : int (8)
+    -receive_point_per_hr : int (8)
     +redeem_point()
     +get_cancellation_limit_hours() : int { return 6 }
 }
@@ -256,18 +224,15 @@ class PenaltyType <<enumeration>> {
 
 class PenaltyStatus <<enumeration>> {
     PENDING      
-    APPLIED      
-    WAIVED       
+    APPLIED          
 }
 
 class Penalty {
     -date :str
-    -amount :float
     -reason :str
     - penalty_id : str
     - type : Enum 
-    - rate : float 
-    - fixed_amount : float
+    - amount : float
     - created_at : datetime
     - status : Enum 
     - booking : Booking
@@ -277,17 +242,11 @@ class Penalty {
 class Policy{
     - policy_id : str
     - name : str
-    - penalty_list : list
     - description : str
     - cancel_before_hours : int
-    - refund_rate : float
-    - no_show_rate : float
+    - rate : float
     - active : bool
     +check_cancel_rule() : void
-    +get_all_penalty() : void
-    +add_penalty() : void
-    + calculate_penalty() : class
-    + calculate_refund() : float
     + is_refundable() : bool
 }
 
@@ -296,6 +255,7 @@ class NotiStatus <<enumeration>>{
     SENT
     FAILED
 }
+
 class Notification{
     -notification_id: str
     -user : str
@@ -309,14 +269,31 @@ class Notification{
     +retry_send()
 }
 
+class Service_OUT {
+    -product_list : list
+    -penalty_list : list
+    -total_price : float
+    +calculate_total_price()
+}
+
 
 class Coupon{
-    -All_coupon : list
     -expired_date : datetime
     -discount : float
-    +create_coupon()
-
 }
+
+'to service_out
+class SnackNDrinks{ 
+    -name
+    -price
+}
+
+class Stock{
+    -product_list
+    +add_product
+    +remove_product
+}
+
 
 class RoomType <<enumeration>>{
     S
@@ -334,18 +311,32 @@ class EquipmentType <<enumeration>> {
     KEYBOARD
 }
 
+class SnackNDrinkType <<enumeration>> {
+    WATER
+    COFFEE
+    COKE
+    CHOCOPIE
+    LAY
+    TARO
+}
+
+class MemberShip <<enumeration>> {
+    STANDARD
+    PREMIUM
+    DIAMOND
+}
 
 
 
 
-User <|-- Officer
+ReserveSystem o-- User
+ReserveSystem o-- Stock
+Stock o-- SnackNDrinks
+User <|-- Staff
 User <|-- Customer
 Customer <|-- Standard
 Customer <|-- Premium
 Customer <|-- Diamond
-Officer <|-- BranchManager
-Officer <|-- FrontDesk
-Officer <|-- SystemAdmin
 Payment <|-- PaymentChannel 
 PaymentChannel <|-- QrScan
 PaymentChannel <|-- CreditCard
@@ -356,9 +347,16 @@ Branch o-- Room
 Branch o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
-Customer o-- Order
-Order o-- Booking
-Customer o-- Transaction
+Service_IN o-- Booking
+' Customer o-- Transaction
 Customer o-- Notification
-Order <-- Payment
+Service_IN <-- Payment
+Booking <-- Room
+Booking o-- Equipment
+Booking o-- SnackNDrinks
+Branch o-- SnackNDrinks
+Service_OUT o-- Penalty
+Customer o-- Service_OUT
+Customer o-- Service_IN
+SnackNDrinks <-- Stock
 @enduml

@@ -19,8 +19,8 @@ def creat_customer(username, password):
     return store.add_customer(username, password).id
 
 @app.post("/add_branch")
-def create_branch(name, max_room):
-    return store.add_branch(name, max_room).id
+def create_branch(name):
+    return store.add_branch(name).id
 
 @app.post("/add_room")
 def create_room(branch_id, rate):

@@ -1,6 +1,6 @@
 @startuml
 
-actor "Front Desk Staff" as Staff
+actor "Staff" as Staff
 participant "RhythmReserve" as System
 
 Staff -> System : requestDailyRevenue(date)

@@ -1,0 +1,64 @@
+@startuml cancel_booking
+autonumber
+actor "Client (API)" as C
+participant ReserveSystem as RS
+participant "User (Customer)" as U
+participant Service as S
+participant Policy as Pol
+participant Payment as Pay
+participant TimeSlot as TS
+
+C->RS : process_cancellation(user_id)
+activate RS
+
+RS -> U: get_service()
+activate U
+U --> RS: return Service object
+deactivate U
+
+RS -> S: check_cancel_rule(current_time, user)
+activate S
+
+S -> Pol: check_cancel_rule(booking_time, current_time, customer)
+activate Pol
+
+Pol -> U : get_cancellation_limit_hours()
+activate U
+U --> Pol : return hours (e.g., 6, 12, 24)
+deactivate U
+
+Pol --> S : return {isAllowed, refund}
+deactivate Pol
+
+S --> RS : return {isAllowed, refund}
+deactivate S
+
+alt isAllowed == False
+    RS --> C: raise ValueError("You cannot cancel this")
+
+else isAllowed == True
+
+    opt refund > 0
+        RS -> Pay : payment_refund(refund_amount)
+        activate Pay
+        Pay --> RS: return {success: True}
+        deactivate Pay
+    end
+
+    RS -> TS: set_status(slot_id, "available")
+    activate TS
+    TS --> RS : return {success: True}
+    deactivate TS
+
+    RS -> S : change_status("CANCELLED")
+    activate S
+    deactivate S
+
+    RS -> U : clear_service()
+    activate U
+    deactivate U
+
+    RS --> C : return {status: "success", detail: ...}
+end
+deactivate RS
+@enduml
