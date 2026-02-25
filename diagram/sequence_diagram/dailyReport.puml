@@ -1,60 +1,72 @@
 @startuml
 title Daily Report
 
-actor "Front Desk Staff" as Staff
-actor "Manager" as Manager
-participant "BookingSystem" as System
-participant "User" as User
-participant "Transaction" as Transaction
-participant "BookingStatus" as BookingRoomDB
-participant "Equipment" as EquipmentDB
-participant Policy as Policy
+actor Staff as Staff
+participant ReserveSystem as System
+participant Customer as Customer 
+participant Transaction as Service
+participant Room as RoomDB
+participant Equipment as EquipmentDB
+participant Service_OUT as Service_OUT
 
 
 Staff -> System : requestDailyReport(date)
 activate System
-System -> System : find_user_id()
-System -> User 
-activate User
-User -> Transaction : user_transaction
-activate Transaction
-Transaction -> BookingRoomDB : getRoomStatus(date)
-activate BookingRoomDB
-BookingRoomDB --> Transaction 
-Transaction --> User
-User --> System : statusData
-deactivate BookingRoomDB
+loop [for id in Customer_list]
+    System -> Customer : find_Customer_id()
+    activate Customer
+    Customer --> System : return Customer (instant)
+    end
 
-User -> Transaction : getDailyRevenue(date)
-Transaction --> User
-User --> System  : revenueData
-deactivate User
+System -> Customer : getDailyRevenueData
+Customer -> Service : getDailyRevenue(date)
+activate Service
+Service --> Customer
 
+Customer --> System  : revenueData
+System -> Customer: get_transaction
+Customer -> Service : get_transaction_info
+loop [for room in room_list]
+Service -> RoomDB : getRoomStatus(date)
+    activate RoomDB
+    RoomDB --> Service 
+    ' Service --> Customer
+    ' Customer --> System : statusData
+    deactivate RoomDB
+    end
 
-Transaction  -> EquipmentDB : getEquipmentStatus(date)
-activate EquipmentDB
+' Customer -> Service : getDailyRevenue(date)
+' Service --> Customer
+' Customer --> System  : revenueData
+' deactivate Customer
 
-EquipmentDB --> Transaction
-Transaction --> User
-activate User
-User --> System : statusData
-deactivate User
-deactivate EquipmentDB
+loop [for eq in equipment_list]
+    Service  -> EquipmentDB : getEquipmentStatus(date)
+    activate EquipmentDB
+    EquipmentDB --> Service
+    deactivate EquipmentDB
+    end
+' Service --> Customer
+' activate Customer
+' Customer --> System : statusData
+' deactivate Customer
 
-opt Penalty & Notes
-    Transaction -> Policy : getAllPenalties(date)
-    activate Policy
-    Policy --> Transaction 
-    Transaction --> User
-    activate User
-    User --> System : penaltyList
-    deactivate Policy
-    deactivate Transaction
-    deactivate User
-end
-
+' opt Penalty & Notes
+loop [for p in penalty_list]
+    Service -> Service_OUT : getAllPenalties(date)
+    activate Service_OUT
+    Service_OUT --> Service 
+    deactivate Service_OUT
+    end
+    ' activate Customer
+    ' deactivate Customer
+' end
+Service --> Customer : return transaction_info
+deactivate Service
+Customer --> System : return transaction
+deactivate Customer
 System -> System : generateDailyReport()
-System --> Manager : dailyReport
+System --> Staff : dailyReport
 deactivate System
 
 @enduml

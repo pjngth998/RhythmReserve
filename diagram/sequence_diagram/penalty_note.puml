@@ -1,17 +1,44 @@
 @startuml
 
-actor "Front Desk Staff" as Staff
-participant "RhythmReserve" as System
-participant Policy
+actor Staff
+participant RhythmReserve as System
+participant Customer
+participant Policy 
 
-Staff -> System : add_penalty(date, amount, reason)
+Staff -> System : request add_penalty
 activate System
 
-System -> Policy : add_penalty(penalty)
-activate Policy
-Policy --> System : penaltyAdded
-deactivate Policy
+loop [for id in Customer_id]
+    System -> Customer :find_customer_id
+    activate Customer
+    Customer --> System
+    deactivate Customer
+    end
 
-System --> Staff : success
+System -> Customer : check_penalty
+activate Customer
+
+Customer -> Policy : check_cancel_rule()
+activate Policy 
+alt #LightCyan
+    Policy --> Customer : no_penalty
+    Customer --> System 
+    System --> Staff : return "No Penalty"
+    else #LightPink
+    Policy --> Customer : have_penalty
+    deactivate Policy
+    Customer --> System : add_penalty_list
+    deactivate Customer
+    System --> Staff : return "Success"
+    deactivate System
+    end
+
+
+' System -> Policy : add_penalty(penalty)
+' activate Policy
+' Policy --> System : penaltyAdded
+' deactivate Policy
+
+' System --> Staff : success
 deactivate System
 @enduml
