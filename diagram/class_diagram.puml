@@ -23,7 +23,7 @@ class ReserveSystem{
 
 class Branch{
     -name : str
-    -id : str
+    -branch_id : str
     -room_list : list
     -officer_list : list
     -equipment_list : list
@@ -48,8 +48,8 @@ class Room {
     -size : str
     -rate : float
     -eq_quota : int
-    -size : str
-    -room_status : enum
+    ' -size : str
+    ' -room_status : enum
 }
 
 

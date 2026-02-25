@@ -1,0 +1,68 @@
+@startuml
+
+skinparam style strictuml
+skinparam sequenceMessageAlign center
+
+actor "Customer" as actor
+participant "ReserveSystem" as system
+participant "Branch" as branch
+participant "Customer" as customer
+participant "Room" as room
+participant "Equipment" as eq
+participant "Booking" as booking
+' participant "Service_IN" as sv_in
+' participant "TimeSlot" as timeslot
+
+actor -> system : select_eq(customer_id,branch_id,room_id,eq_list,booking_id,date,start_t,end_t)
+activate system
+loop search_customer(customer_id)
+    system -> customer : get_customer_info(customer_id)    
+    activate customer
+    customer --> system : customer
+    deactivate customer
+end
+
+loop search_branch(branch_id)
+    system -> branch : get_branch_info()
+    activate branch
+    loop search_room(room_id)
+        branch -> room : get_eq_quota(room_id)
+        activate room
+        room --> branch : eq_quota
+        deactivate room
+    end
+    loop for eq in eq_list
+        system -> branch : check_stock_eq()
+        alt stock enough
+            branch --> system : Enough for Reserve
+            loop for eq in eq_list 
+            system -> eq : get_size()
+            activate eq
+            eq --> system : size
+            system -> eq : calculate_quota(size,qty)
+            eq --> system : total_size
+            deactivate eq
+            system -> system : total_requested_size += total_size
+            end
+        else stock not enough
+            branch --> system : Not Enough for Reserve
+        end
+        deactivate branch
+    end
+end
+
+alt total_requested_size <= quota_eq_max
+    system -> system : create_reservation(booking_id,date, start_t, end_t, customer, room, created_at, status, price, eq_list)
+    activate booking
+    system -> booking : <<create>> Booking(booking_id, date, start_t, end_t, customer, room, created_at, status, price, eq_list)
+    system -> booking : add_eq_list(customer,eq_list)
+    booking --> system : add to booking
+    deactivate booking
+    system --> actor : Can Reserve Equipment - Add to Booking Successfully
+else total_requested_size > quota_eq_max
+    system --> actor : Exceed Room Quota Limit
+end
+
+deactivate system
+
+@enduml
