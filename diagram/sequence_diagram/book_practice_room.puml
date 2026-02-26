@@ -3,30 +3,60 @@ actor Customer as C
 participant ReserveSystem as Rs
 participant Branch as Br
 participant Room as R
+participant Equipment as E
+participant TimeSlot as T
 participant Booking as B
 
 
 
-C -> Rs: booking_room(room _id)
+C -> Rs: booking(branch_id, room_id, equipment_list, date, start, end)
 activate Rs
 loop [for each room in branch]
     Rs -> Br: get_room(room_id)
     activate Br
     Br -> R:find_room
     activate R
+    R -> Br: room instance
+    deactivate R
+    Br -> Rs: room instance
+    deactivate Br
     end
-R -> Br: room instance
+Rs -> R : set_status(date, start_time, end_time, status)
+activate R
+R -> T : create_timeslot()
+activate T
+T -> R : append_timeslot
+deactivate T
+R -> Rs : set status complete
 deactivate R
-Br -> Rs: room instance
-deactivate Br
+loop [for each equipment in list]
+    Rs -> Rs: get_eq(equipment_list)
+    loop [for each equipment in branch]
+        Rs -> Br: get_eq(equipment_id)
+        activate Br
+        Br -> E: find_eq
+        activate E
+        E -> Br: eq instance
+        deactivate E
+        Br -> Rs: eq instance
+        deactivate Br
+        Rs -> E: set_status(date, start_time, end_time, status)
+        activate E
+        E -> T: create_timeslot
+        activate T
+        T -> E: append_timeslot
+        deactivate T
+        E -> Rs: set status complete
+        deactivate E
+        end
+        
+    end
 Rs -> B: create booking(customer_id, room_id)
 activate B
 B --> Rs:booking instance
 deactivate B
 Rs --> C: booking_complete
 deactivate Rs
-
-
 
 
 
