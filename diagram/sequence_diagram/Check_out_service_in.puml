@@ -1,0 +1,69 @@
+@startuml
+autoactivate on
+
+actor "Customer" as Program
+participant "ReserveSystem\n(Controller)" as System
+participant "Customer" as Customer
+participant "Service_IN" as ServiceIN
+participant "Booking" as Booking
+participant "Room" as Room
+participant "Equipment" as Equipment
+participant "Payment" as Payment
+participant "PaymentChannel" as Channel
+participant "Notification" as Notification
+
+title Checkout Process
+
+Program -> System : checkout_service_in(customer_id, service_in_id)
+
+    System -> Customer : get_service_in(service_in_id)
+
+        Customer -> ServiceIN : checkout()
+
+            ServiceIN -> ServiceIN : calculate_total()
+            ServiceIN --> ServiceIN : return {total_price: float}
+
+            ServiceIN -> Payment : process_payment()
+                Payment -> Channel : process()
+                Channel --> Payment : return {process_status: bool}
+            Payment --> ServiceIN : return {payment_success: bool}
+
+            alt [payment_success == true]
+
+                ServiceIN -> ServiceIN : change_status(PAID)
+
+                loop [for booking in booking_list]
+                    ServiceIN -> Booking : confirm()
+
+                        Booking -> Booking : change_booking_status(CONFIRMED)
+
+                        Booking -> Room : update_time_slot_status(RESERVED)
+                            Room --> Booking : done
+                        Booking -> Room : update_room_status()
+                            Room --> Booking : done
+
+                        loop [for eq in equipment_list]
+                            Booking -> Equipment : update_time_slot_status(RESERVED)
+                            Equipment --> Booking : done
+                        end
+
+                    Booking --> ServiceIN : booking_confirmed
+                end
+
+            ServiceIN --> Customer : return {checkout_success: bool}
+
+            else [payment_success == false]
+                ServiceIN -> ServiceIN : change_status(PENDING_PAYMENT)
+                ServiceIN --> Customer : return {checkout_success: false}
+            end
+
+        Customer -> Notification : send(message)
+            Notification -> Notification : format_message()
+            Notification --> Notification : return {message}
+        Notification --> Customer : return {notification_status}
+
+    Customer --> System : return {checkout_success: bool}
+
+System --> Program : return {checkout_success: bool}
+
+@enduml
