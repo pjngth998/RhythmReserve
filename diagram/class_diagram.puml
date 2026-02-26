@@ -114,6 +114,7 @@ class Service_IN{
 
 class PaymentChannel{
     +process() : bool
+    +
 }
 
 class QrScan{
@@ -198,23 +199,13 @@ class Customer{
     +Report_room()
 }
 
-class Standard{
+class Member{
     -receive_point_per_hr : int (3)
     +redeem_point()
     +get_cancellation_limit_hours() : int { return 24 }
 }
 
-class Premium{
-    -receive_point_per_hr : int (5)
-    +redeem_point()
-    +get_cancellation_limit_hours() : int { return 12 }
-}
 
-class Diamond{
-    -receive_point_per_hr : int (8)
-    +redeem_point()
-    +get_cancellation_limit_hours() : int { return 6 }
-}
 
 class PenaltyType <<enumeration>> {
     NO_SHOW
@@ -283,16 +274,20 @@ class Coupon{
 }
 
 'to service_out
-class SnackNDrinks{ 
+class Products{ 
     -name
     -price
 }
 
-class Stock{
-    -product_list
-    +add_product
-    +remove_product
+class Item{
+    -id
 }
+
+
+class Stock{
+    -item_list
+}
+
 
 
 class RoomType <<enumeration>>{
@@ -331,13 +326,10 @@ class MemberShip <<enumeration>> {
 
 ReserveSystem o-- User
 ReserveSystem o-- Stock
-Stock o-- SnackNDrinks
 User <|-- Staff
 User <|-- Customer
-Customer <|-- Standard
-Customer <|-- Premium
-Customer <|-- Diamond
-Payment <|-- PaymentChannel 
+Customer <|-- Member
+Payment o-- PaymentChannel 
 PaymentChannel <|-- QrScan
 PaymentChannel <|-- CreditCard
 ReserveSystem o-- Branch
@@ -348,15 +340,16 @@ Branch o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
 Service_IN o-- Booking
-' Customer o-- Transaction
 Customer o-- Notification
 Service_IN <-- Payment
-Booking <-- Room
+Service_OUT o-- Payment
+Booking --> Room
 Booking o-- Equipment
-Booking o-- SnackNDrinks
-Branch o-- SnackNDrinks
+Branch o-- Products
+Service_OUT o-- Products
 Service_OUT o-- Penalty
 Customer o-- Service_OUT
 Customer o-- Service_IN
-SnackNDrinks <-- Stock
+Products <|-- Item
+Stock o-- Item
 @enduml
