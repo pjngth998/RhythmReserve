@@ -8,13 +8,14 @@ participant "Service_IN" as ServiceIN
 participant "Booking" as Booking
 participant "Room" as Room
 participant "Equipment" as Equipment
+participant "Coupon" as Coupon
 participant "Payment" as Payment
 participant "PaymentChannel" as Channel
 participant "Notification" as Notification
 
 title Checkout Process
 
-Program -> System : checkout_service_in(customer_id, service_in_id)
+Program -> System : checkout_service_in(customer_id, service_in_id, coupon_id?)
 
     System -> Customer : get_service_in(service_in_id)
 
@@ -23,8 +24,40 @@ Program -> System : checkout_service_in(customer_id, service_in_id)
             ServiceIN -> ServiceIN : calculate_total()
             ServiceIN --> ServiceIN : return {total_price: float}
 
-            ServiceIN -> Payment : process_payment()
-                Payment -> Channel : process()
+            ServiceIN -> Customer : get_tier_discount()
+            Customer --> ServiceIN : return {tier_discount: float}
+
+            ServiceIN -> ServiceIN : apply_tier_discount(total_price, tier_discount)
+            ServiceIN --> ServiceIN : return {discounted_price: float}
+
+            alt [coupon_id provided]
+
+                ServiceIN -> Customer : get_coupon(coupon_id)
+                    Customer -> Customer : validate_coupon(coupon_id)
+                Customer --> ServiceIN : return {Coupon}
+
+                alt [Coupon valid]
+                    ServiceIN -> Coupon : get_discount()
+                    Coupon --> ServiceIN : return {coupon_discount: float}
+
+                    ServiceIN -> ServiceIN : apply_coupon_discount(discounted_price, coupon_discount)
+                    ServiceIN --> ServiceIN : return {final_price: float}
+
+                    ServiceIN -> Customer : remove_coupon(coupon_id)
+                    Customer --> ServiceIN : done
+
+                else [Coupon invalid / expired]
+                    ServiceIN --> Customer : return "Error: Coupon Invalid"
+                    Customer --> System : return "Error: Coupon Invalid"
+                    System --> Program : return "Error: Coupon Invalid"
+                end
+
+            else [no coupon_id]
+                ServiceIN -> ServiceIN : final_price = discounted_price
+            end
+
+            ServiceIN -> Payment : process_payment(final_price)
+                Payment -> Channel : process(final_price)
                 Channel --> Payment : return {process_status: bool}
             Payment --> ServiceIN : return {payment_success: bool}
 
@@ -38,23 +71,25 @@ Program -> System : checkout_service_in(customer_id, service_in_id)
                         Booking -> Booking : change_booking_status(CONFIRMED)
 
                         Booking -> Room : update_time_slot_status(RESERVED)
-                            Room --> Booking : done
-                        Booking -> Room : update_room_status()
-                            Room --> Booking : done
+                        Room --> Booking : done
+                        Booking -> Room : update_room_status(RESERVED)
+                        Room --> Booking : done
 
                         loop [for eq in equipment_list]
                             Booking -> Equipment : update_time_slot_status(RESERVED)
+                            Equipment --> Booking : done
+                            Booking -> Equipment : update_equipment_status(RESERVED)
                             Equipment --> Booking : done
                         end
 
                     Booking --> ServiceIN : booking_confirmed
                 end
 
-            ServiceIN --> Customer : return {checkout_success: bool}
+            ServiceIN --> Customer : return {checkout_servicein_success: true}
 
             else [payment_success == false]
                 ServiceIN -> ServiceIN : change_status(PENDING_PAYMENT)
-                ServiceIN --> Customer : return {checkout_success: false}
+                ServiceIN --> Customer : return {checkout_servicein_success: false}
             end
 
         Customer -> Notification : send(message)
@@ -62,8 +97,8 @@ Program -> System : checkout_service_in(customer_id, service_in_id)
             Notification --> Notification : return {message}
         Notification --> Customer : return {notification_status}
 
-    Customer --> System : return {checkout_success: bool}
+    Customer --> System : return {checkout_servicein_success: bool}
 
-System --> Program : return {checkout_success: bool}
+System --> Program : return {checkout_servicein_success: bool}
 
 @enduml
