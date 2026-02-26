@@ -33,6 +33,13 @@ class OrderStatus(Enum):
     CONFIRM = "Confirmed"
     CANCEL =  "Canceled"
 
+class ProductType(Enum):
+    WATER = "Water"
+    COFFEE = "Coffee"
+    COKE = "Coke"
+    CHOCOPIE = "Chocopie"
+    LAY = "Lay"
+    TARO = "Taro"
 
 
 
@@ -59,6 +66,19 @@ class Customer() :
     @notification.setter
     def notification(self, new_notification):
         self.__notification.append(new_notification)
+
+class Products():
+    def __init__(self, type_: ProductType, price, stock):
+        self.__type = type_
+        self.__price = price
+
+class Item():
+    def __init__(self, id):
+        self.__id = id
+        
+class Stock():
+    def __init__(self, type_: ProductType):
+        self.__type
 
     
 class Service_IN():

@@ -1,0 +1,64 @@
+@startuml
+actor Customer as C
+participant ReserveSystem as Rs
+participant Branch as Br
+participant Room as R
+participant Booking as B
+
+C -> Rs: search_rooms(branch_id, date, room_size)
+activate Rs
+
+Rs -> Br: get_rooms_by_size(room_size, date)
+activate Br
+Br --> Rs: rooms(list of room_id)
+deactivate Br
+
+loop for each room_id
+  Rs -> Br: get_room(room_id)
+  activate Br
+  Br -> R: find_room(room_id)
+  activate R
+
+  Rs -> R: is_slot_available(date)
+  R --> Rs: available / not
+  deactivate R
+  Br --> Rs: room instance
+  deactivate Br
+end
+
+Rs --> C: show_available_rooms(list of room_id)
+
+C -> Rs: book_selected_room(room_id, date, slot_index)
+
+Rs -> Br: get_room(room_id)
+activate Br
+Br -> R: find_room(room_id)
+activate R
+R --> Br: room instance
+deactivate R
+Br --> Rs: room instance
+deactivate Br
+
+Rs -> R: lock_slot(date, slot_index)  
+activate R
+R --> Rs: locked / failed
+deactivate R
+
+alt locked
+  Rs -> B: create(customer_id, room_id, date, slot_index)
+  activate B
+  B --> Rs: booking
+  deactivate B
+
+  Rs -> R: confirm_slot(date, slot_index, booking_id)
+  activate R
+  R --> Rs: ok
+  deactivate R
+
+  Rs --> C: booking_complete(booking_id)
+else failed
+  Rs --> C: booking_failed("someone just booked it")
+end
+
+deactivate Rs
+@enduml
