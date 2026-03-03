@@ -415,19 +415,17 @@ for cust_id, name, tier in [
 app = FastAPI(title="RhythmReserve - Checkout API")
 
 
-class CheckoutRequest(BaseModel):
-    customer_id: str
-    service_in_id: str
-    coupon_id: Optional[str] = None
-
-
 @app.post("/checkout", tags=["Booking Management"])
-def checkout_api(request: CheckoutRequest):
+def checkout_api(
+    customer_id: str,
+    service_in_id: str,
+    coupon_id: Optional[str] = None
+):
     try:
         return system_controller.checkout_service_in(
-            request.customer_id,
-            request.service_in_id,
-            request.coupon_id
+            customer_id,
+            service_in_id,
+            coupon_id
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

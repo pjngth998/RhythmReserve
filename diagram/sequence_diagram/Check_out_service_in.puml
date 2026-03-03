@@ -16,6 +16,7 @@ participant "Notification" as Notification
 title Checkout Process
 
 Program -> System : checkout_service_in(customer_id, service_in_id, coupon_id?)
+activate System
 
     System -> Customer : get_service_in(service_in_id)
 
@@ -100,5 +101,6 @@ Program -> System : checkout_service_in(customer_id, service_in_id, coupon_id?)
     Customer --> System : return {checkout_servicein_success: bool}
 
 System --> Program : return {checkout_servicein_success: bool}
+deactivate System
 
 @enduml
