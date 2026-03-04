@@ -1,7 +1,7 @@
-import uvicorn
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from datetime import datetime, timedelta
+import base64
+import re
+import uuid
+from datetime import datetime, timedelta, time, date
 from abc import ABC, abstractmethod
 from typing import Optional
 from enum import Enum
@@ -11,24 +11,41 @@ from enum import Enum
 # Enums
 # ──────────────────────────────────────────────
 
+class RoomType(Enum):
+    SMALL      = "S"
+    MEDIUM     = "M"
+    LARGE      = "L"
+    EXTRALARGE = "XL"
+
+class EquipmentType(Enum):
+    ELECTRICGUITAR = "EGTR"
+    ACOUSTICGUITAR = "AGTR"
+    DRUM           = "DM"
+    MICROPHONE     = "MC"
+    BASS           = "BS"
+    KEYBOARD       = "KB"
+
+class RoomEquipmentStatus(Enum):
+    AVAILABLE   = "Available"
+    PENDING     = "Pending"
+    RESERVED    = "Reserved"
+    OCCUPIED    = "Occupied"
+    MAINTENANCE = "Maintenance"
+
 class ServiceStatus(Enum):
     PENDING_PAYMENT = "PENDING_PAYMENT"
-    PAID = "PAID"
-    CANCELLED = "CANCELLED"
+    PAID            = "PAID"
+    CANCELLED       = "CANCELLED"
 
 class BookingStatus(Enum):
-    ORDERED = "ORDERED"
+    ORDERED   = "ORDERED"
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
 
-class RoomEquipmentStatus(Enum):
-    AVAILABLE = "AVAILABLE"
-    RESERVED = "RESERVED"
-
 class NotiStatus(Enum):
     PENDING = "PENDING"
-    SENT = "SENT"
-    FAILED = "FAILED"
+    SENT    = "SENT"
+    FAILED  = "FAILED"
 
 
 # ──────────────────────────────────────────────
@@ -38,10 +55,10 @@ class NotiStatus(Enum):
 class Notification:
     def __init__(self, notification_id: str, user_name: str):
         self.notification_id = notification_id
-        self.user_name = user_name
-        self.message = ""
-        self.is_read = False
-        self.status = NotiStatus.PENDING
+        self.user_name       = user_name
+        self.message         = ""
+        self.is_read         = False
+        self.status          = NotiStatus.PENDING
 
     def format_message(self, raw_message: str) -> str:
         self.message = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Dear {self.user_name}: {raw_message}"
@@ -58,25 +75,81 @@ class Notification:
 
 
 # ──────────────────────────────────────────────
+# TimeSlot
+# ──────────────────────────────────────────────
+
+class TimeSlot:
+    def __init__(self, day: date, start: time, end: time, status: RoomEquipmentStatus):
+        self.__date   = day
+        self.__start  = start
+        self.__end    = end
+        self.__status = status
+
+    @property
+    def day(self) -> date:
+        return self.__date
+
+    @property
+    def start(self) -> time:
+        return self.__start
+
+    @property
+    def end(self) -> time:
+        return self.__end
+
+    @property
+    def status(self) -> RoomEquipmentStatus:
+        return self.__status
+
+    @status.setter
+    def status(self, new_status: RoomEquipmentStatus):
+        self.__status = new_status
+
+
+# ──────────────────────────────────────────────
 # Equipment
 # ──────────────────────────────────────────────
 
 class Equipment:
-    def __init__(self, eq_id: str):
-        self.eq_id = eq_id
+    def __init__(self, eq_id: str, type_: EquipmentType, quota: int, price: float):
+        self.__id             = eq_id
+        self.__type           = type_
+        self.__quota          = quota
+        self.__price          = price
+        self.__time_slot_list: list[TimeSlot] = []
         self.time_slot_status = RoomEquipmentStatus.AVAILABLE
         self.equipment_status = RoomEquipmentStatus.AVAILABLE
 
-    def get_eq_id(self) -> str:
-        return self.eq_id
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
+    def type_(self) -> str:
+        return self.__type.value
+
+    @property
+    def quota(self) -> int:
+        return self.__quota
+
+    @property
+    def price(self) -> float:
+        return self.__price
+
+    @property
+    def time_slot_list(self) -> list:
+        return self.__time_slot_list
+
+    def add_timeslot(self, timeslot: TimeSlot):
+        self.__time_slot_list.append(timeslot)
 
     def update_time_slot_status(self, status: RoomEquipmentStatus):
         self.time_slot_status = status
-        print(f"  [Equipment] {self.eq_id} time_slot → {status.value}")
+        print(f"  [Equipment] {self.__id} time_slot → {status.value}")
 
     def update_equipment_status(self, status: RoomEquipmentStatus):
         self.equipment_status = status
-        print(f"  [Equipment] {self.eq_id} equipment_status → {status.value}")
+        print(f"  [Equipment] {self.__id} equipment_status → {status.value}")
 
 
 # ──────────────────────────────────────────────
@@ -84,21 +157,49 @@ class Equipment:
 # ──────────────────────────────────────────────
 
 class Room:
-    def __init__(self, room_id: str):
-        self.room_id = room_id
+    def __init__(self, room_id: str, size: RoomType, rate: float, eq_quota: int):
+        self.__id             = room_id
+        self.__size           = size
+        self.__rate           = rate
+        self.__eq_quota       = eq_quota
+        self.__time_slot_list: list[TimeSlot] = []
         self.time_slot_status = RoomEquipmentStatus.AVAILABLE
-        self.room_status = RoomEquipmentStatus.AVAILABLE
+        self.room_status      = RoomEquipmentStatus.AVAILABLE
 
-    def get_room_id(self) -> str:
-        return self.room_id
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
+    def size(self) -> str:
+        return self.__size.value
+
+    @property
+    def size_enum(self) -> RoomType:
+        return self.__size
+
+    @property
+    def rate(self) -> float:
+        return self.__rate
+
+    @property
+    def eq_quota(self) -> int:
+        return self.__eq_quota
+
+    @property
+    def time_slot_list(self) -> list:
+        return self.__time_slot_list
+
+    def add_timeslot(self, timeslot: TimeSlot):
+        self.__time_slot_list.append(timeslot)
 
     def update_time_slot_status(self, status: RoomEquipmentStatus):
         self.time_slot_status = status
-        print(f"  [Room] {self.room_id} time_slot → {status.value}")
+        print(f"  [Room] {self.__id} time_slot → {status.value}")
 
     def update_room_status(self, status: RoomEquipmentStatus):
         self.room_status = status
-        print(f"  [Room] {self.room_id} room_status → {status.value}")
+        print(f"  [Room] {self.__id} room_status → {status.value}")
 
 
 # ──────────────────────────────────────────────
@@ -107,8 +208,8 @@ class Room:
 
 class Coupon:
     def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
-        self.coupon_id = coupon_id
-        self.discount = discount
+        self.coupon_id    = coupon_id
+        self.discount     = discount
         self.expired_date = expired_date
 
     def get_discount(self) -> float:
@@ -123,49 +224,159 @@ class Coupon:
 # ──────────────────────────────────────────────
 
 class Booking:
-    def __init__(self, booking_id: str, room: Room, equipment_list: list[Equipment], price: float = 500.0):
-        self.booking_id = booking_id
-        self.room = room
-        self.equipment_list = equipment_list
-        self.status = BookingStatus.ORDERED
-        self.price = price
+    def __init__(
+        self,
+        booking_id: str,
+        room: Room,
+        eq_list: list[Equipment],
+        customer: "Customer",
+        timeslot: TimeSlot,
+    ):
+        self.__id       = booking_id
+        self.__room     = room
+        self.__eq_list  = eq_list
+        self.__customer = customer
+        self.__timeslot = timeslot
+        self.status     = BookingStatus.ORDERED
+
+    @property
+    def id(self) -> str:
+        return self.__id
+
+    @property
+    def room(self) -> Room:
+        return self.__room
+
+    @property
+    def eq_list(self) -> list[Equipment]:
+        return self.__eq_list
+
+    @property
+    def customer(self) -> "Customer":
+        return self.__customer
+
+    @property
+    def day(self) -> date:
+        return self.__timeslot.day
+
+    @property
+    def start(self) -> time:
+        return self.__timeslot.start
+
+    @property
+    def end(self) -> time:
+        return self.__timeslot.end
+
+    @property
+    def price(self) -> float:
+        return self.__room.rate
 
     def change_booking_status(self, status: BookingStatus):
         self.status = status
-        print(f"[Booking] {self.booking_id} status → {status.value}")
+        print(f"[Booking] {self.__id} status → {status.value}")
 
     def confirm(self):
         self.change_booking_status(BookingStatus.CONFIRMED)
+        self.__timeslot.status = RoomEquipmentStatus.RESERVED
 
-        self.room.update_time_slot_status(RoomEquipmentStatus.RESERVED)
-        self.room.update_room_status(RoomEquipmentStatus.RESERVED)
+        self.__room.update_time_slot_status(RoomEquipmentStatus.RESERVED)
+        self.__room.update_room_status(RoomEquipmentStatus.RESERVED)
 
-        for eq in self.equipment_list:
+        for eq in self.__eq_list:
             eq.update_time_slot_status(RoomEquipmentStatus.RESERVED)
             eq.update_equipment_status(RoomEquipmentStatus.RESERVED)
 
-        print(f"[Booking] {self.booking_id} confirmed → Room & Equipment reserved")
+        print(f"[Booking] {self.__id} confirmed → Room & Equipment reserved")
 
 
 # ──────────────────────────────────────────────
-# PaymentChannel & Payment
+# PaymentChannel (Abstract)
 # ──────────────────────────────────────────────
 
-class PaymentChannel:
-    def process(self, amount: float) -> bool:
-        print(f"[PaymentChannel] Processing payment {amount} THB... Success!")
+class PaymentChannel(ABC):
+    @abstractmethod
+    def process(self, amount: float, ref: str = "TXN") -> bool:
+        pass
+
+
+class QrScan(PaymentChannel):
+    def __init__(self):
+        self.qr_image: Optional[str] = None
+
+    def generate_qr(self, amount: float, ref: str) -> str:
+        payload = (
+            f"PROMPTPAY|REF:{ref}|AMT:{amount:.2f}|"
+            f"TS:{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        )
+        self.qr_image = base64.b64encode(payload.encode()).decode()
+        print(f"[QrScan] QR generated → {self.qr_image[:40]}...")
+        return self.qr_image
+
+    def process(self, amount: float, ref: str = "TXN") -> bool:
+        self.generate_qr(amount, ref)
+        print(f"[QrScan] Waiting for scan... Payment {amount} THB confirmed!")
         return True
 
 
+class CreditCard(PaymentChannel):
+    def __init__(self, card_number: str, cvv: str, expiry: str):
+        self.__card_number = card_number
+        self.__cvv         = cvv
+        self.__expiry      = expiry
+
+    def validate_card(self) -> bool:
+        if not self._luhn_check(self.__card_number):
+            print("[CreditCard] Invalid card number (Luhn check failed)")
+            return False
+        if not re.fullmatch(r"\d{3,4}", self.__cvv):
+            print("[CreditCard] Invalid CVV")
+            return False
+        if not self._check_expiry(self.__expiry):
+            print("[CreditCard] Card expired")
+            return False
+        print(f"[CreditCard] Card *{self.__card_number[-4:]} validated ✓")
+        return True
+
+    @staticmethod
+    def _luhn_check(number: str) -> bool:
+        digits = [int(d) for d in number if d.isdigit()]
+        if len(digits) < 13:
+            return False
+        total = 0
+        for i, d in enumerate(reversed(digits)):
+            total += d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
+        return total % 10 == 0
+
+    @staticmethod
+    def _check_expiry(expiry: str) -> bool:
+        try:
+            month, year = expiry.split("/")
+            exp = datetime(2000 + int(year), int(month), 1)
+            return exp >= datetime.now().replace(day=1)
+        except Exception:
+            return False
+
+    def process(self, amount: float, ref: str = "TXN") -> bool:
+        if not self.validate_card():
+            print("[CreditCard] Payment rejected: invalid card")
+            return False
+        print(f"[CreditCard] Charging {amount} THB to *{self.__card_number[-4:]}... Success!")
+        return True
+
+
+# ──────────────────────────────────────────────
+# Payment
+# ──────────────────────────────────────────────
+
 class Payment:
-    def __init__(self, service_in, total_price: float):
-        self.service_in = service_in
-        self.total_price = total_price
-        self.is_success = False
+    def __init__(self, service_in_id: str, total_price: float, channel: PaymentChannel):
+        self.service_in_id = service_in_id
+        self.total_price   = total_price
+        self.channel       = channel
+        self.is_success    = False
 
     def process_payment(self, final_price: float) -> bool:
-        channel = PaymentChannel()
-        self.is_success = channel.process(final_price)
+        self.is_success = self.channel.process(final_price, ref=self.service_in_id)
         print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price} THB")
         return self.is_success
 
@@ -175,13 +386,19 @@ class Payment:
 # ──────────────────────────────────────────────
 
 class Service_IN:
-    def __init__(self, service_in_id: str, booking_list: list[Booking], payment: "Payment"):
+    def __init__(self, service_in_id: str, booking_list: list[Booking], payment: Payment):
         self.service_in_id = service_in_id
-        self.booking_list = booking_list
-        self.payment = payment
-        self.status = ServiceStatus.PENDING_PAYMENT
-        self.total_price = 0.0
-        self.final_price = 0.0
+        self.booking_list  = booking_list
+        self.payment       = payment
+        self.status        = ServiceStatus.PENDING_PAYMENT
+        self.total_price   = 0.0
+        self.final_price   = 0.0
+
+    def get_id(self) -> str:
+        return self.service_in_id
+
+    def add_booking(self, booking: Booking):
+        self.booking_list.append(booking)
 
     def calculate_total(self) -> float:
         self.total_price = sum(b.price for b in self.booking_list)
@@ -203,28 +420,20 @@ class Service_IN:
         print(f"[Service_IN] {self.service_in_id} status → {status.value}")
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
-        # 1. calculate total
-        total_price = self.calculate_total()
-
-        # 2. apply tier discount
-        tier_discount = customer.get_tier_discount()
+        total_price      = self.calculate_total()
+        tier_discount    = customer.get_tier_discount()
         discounted_price = self.apply_tier_discount(total_price, tier_discount)
 
-        # 3. apply coupon discount (compound)
         final_price = discounted_price
         if coupon_id:
             coupon = customer.get_coupon(coupon_id)
             if coupon is None:
                 raise ValueError("Coupon Invalid or Expired")
-
-            coupon_discount = coupon.get_discount()
-            final_price = self.apply_coupon_discount(discounted_price, coupon_discount)
+            final_price = self.apply_coupon_discount(discounted_price, coupon.get_discount())
             customer.remove_coupon(coupon_id)
 
         self.final_price = final_price
-
-        # 4. process payment
-        payment_success = self.payment.process_payment(final_price)
+        payment_success  = self.payment.process_payment(final_price)
 
         if payment_success:
             self.change_status(ServiceStatus.PAID)
@@ -241,20 +450,24 @@ class Service_IN:
 # ──────────────────────────────────────────────
 
 class Customer(ABC):
-    def __init__(self, customer_id: str, name: str):
-        self.customer_id = customer_id
-        self.name = name
+    def __init__(self, customer_id: str, name: str, password: str):
+        self.customer_id    = customer_id
+        self.name           = name
+        self.__password     = password
         self.current_points = 0
-        self.coupon_list: dict[str, Coupon] = {}
-        self.service_list: list[Service_IN] = []
-        self.notification = Notification(f"NOTI-{customer_id}", name)
+        self.coupon_list:   dict[str, Coupon] = {}
+        self.service_list:  list[Service_IN]  = []
+        self.notification   = Notification(f"NOTI-{customer_id}", name)
 
     def get_id(self) -> str:
         return self.customer_id
 
+    def verify_password(self, password: str) -> bool:
+        return self.__password == password
+
     def get_service_in(self, service_in_id: str) -> Optional[Service_IN]:
         for service in self.service_list:
-            if service.service_in_id == service_in_id:
+            if service.get_id() == service_in_id:
                 return service
         return None
 
@@ -266,10 +479,6 @@ class Customer(ABC):
         if coupon and not coupon.is_expired():
             return coupon
         return None
-
-    def validate_coupon(self, coupon_id: str) -> bool:
-        coupon = self.coupon_list.get(coupon_id)
-        return coupon is not None and not coupon.is_expired()
 
     def remove_coupon(self, coupon_id: str):
         if coupon_id in self.coupon_list:
@@ -291,13 +500,9 @@ class Customer(ABC):
         pass
 
 
-# ──────────────────────────────────────────────
-# Customer Tiers
-# ──────────────────────────────────────────────
-
 class Standard(Customer):
-    def __init__(self, customer_id: str, name: str):
-        super().__init__(customer_id, name)
+    def __init__(self, customer_id: str, name: str, password: str):
+        super().__init__(customer_id, name, password)
         self.receive_point_per_hr = 3
 
     def get_cancellation_limit_hours(self) -> int:
@@ -308,8 +513,8 @@ class Standard(Customer):
 
 
 class Premium(Customer):
-    def __init__(self, customer_id: str, name: str):
-        super().__init__(customer_id, name)
+    def __init__(self, customer_id: str, name: str, password: str):
+        super().__init__(customer_id, name, password)
         self.receive_point_per_hr = 5
 
     def get_cancellation_limit_hours(self) -> int:
@@ -320,8 +525,8 @@ class Premium(Customer):
 
 
 class Diamond(Customer):
-    def __init__(self, customer_id: str, name: str):
-        super().__init__(customer_id, name)
+    def __init__(self, customer_id: str, name: str, password: str):
+        super().__init__(customer_id, name, password)
         self.receive_point_per_hr = 8
 
     def get_cancellation_limit_hours(self) -> int:
@@ -343,96 +548,106 @@ class ReserveSystem:
         self.customers[customer.customer_id] = customer
 
     def search_customer(self, customer_id: str) -> Optional[Customer]:
-        return self.customers.get(customer_id)
+        for customer in self.customers.values():
+            if customer.get_id() == customer_id:
+                return customer
+        return None
 
-    def checkout_service_in(self, customer_id: str, service_in_id: str, coupon_id: Optional[str] = None) -> dict:
-        print(f"\n--- Starting Checkout: Customer={customer_id}, Service={service_in_id} ---")
+    def checkout_service_in(
+        self,
+        customer_id: str,
+        service_in_id: str,
+        coupon_id: Optional[str] = None
+    ) -> dict:
+        print(f"\n{'='*60}")
+        print(f"[ReserveSystem] checkout(customer={customer_id}, service={service_in_id})")
+        print(f"{'='*60}")
 
         customer = self.search_customer(customer_id)
         if not customer:
-            raise ValueError(f"Customer {customer_id} not found")
+            raise ValueError(f"Customer Not Found: '{customer_id}'")
 
         service = customer.get_service_in(service_in_id)
         if not service:
-            raise ValueError(f"Service_IN {service_in_id} not found")
+            raise ValueError(f"Service_IN Not Found: '{service_in_id}'")
 
         checkout_success = service.checkout(customer, coupon_id)
 
         message = (
-            f"Booking {service_in_id} confirmed! Total: {service.final_price} THB"
+            f"Booking {service_in_id} confirmed! Total: {service.final_price:.2f} THB"
             if checkout_success
             else f"Payment failed for {service_in_id}. Please try again."
         )
         customer.notify(message)
 
         return {
-            "status": "success" if checkout_success else "failed",
-            "service_in_id": service_in_id,
-            "final_price": service.final_price,
-            "checkout_success": checkout_success
+            "status":           "success" if checkout_success else "failed",
+            "service_in_id":    service_in_id,
+            "final_price":      service.final_price,
+            "checkout_success": checkout_success,
         }
 
 
 # ──────────────────────────────────────────────
-# Mock Data
+# Demo
 # ──────────────────────────────────────────────
-
-system_controller = ReserveSystem()
-
-for cust_id, name, tier in [
-    ("CUST-001", "Somchai Standard", Standard),
-    ("CUST-002", "Somsri Premium", Premium),
-    ("CUST-003", "Somsak Diamond", Diamond),
-]:
-    customer = tier(cust_id, name)
-
-    room = Room(f"R-{cust_id}")
-    eq1 = Equipment(f"EQ-Guitar-{cust_id}")
-    eq2 = Equipment(f"EQ-Drum-{cust_id}")
-    booking = Booking(f"BK-{cust_id}", room, [eq1, eq2], price=500.0)
-
-    service = Service_IN(
-        service_in_id=f"SRV-{cust_id}",
-        booking_list=[booking],
-        payment=Payment(None, booking.price)
-    )
-
-    # mock coupon สำหรับแต่ละ tier
-    coupon = Coupon(
-        coupon_id=f"CPN-{cust_id}",
-        discount=0.10,
-        expired_date=datetime.now() + timedelta(days=30)
-    )
-    customer.add_coupon(coupon)
-    customer.add_service_in(service)
-    system_controller.add_customer(customer)
-
-
-# ──────────────────────────────────────────────
-# FastAPI
-# ──────────────────────────────────────────────
-
-app = FastAPI(title="RhythmReserve - Checkout API")
-
-
-@app.post("/checkout", tags=["Booking Management"])
-def checkout_api(
-    customer_id: str,
-    service_in_id: str,
-    coupon_id: Optional[str] = None
-):
-    try:
-        return system_controller.checkout_service_in(
-            customer_id,
-            service_in_id,
-            coupon_id
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 
 if __name__ == "__main__":
-    print("Docs: http://127.0.0.1:8000/docs")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    system = ReserveSystem()
+
+    slot_day   = date(2026, 4, 1)
+    slot_start = time(14, 0)
+    slot_end   = time(16, 0)
+
+    customers_data = [
+        ("CUST-001", "Somchai Standard", "pass1", Standard),
+        ("CUST-002", "Somsri Premium",   "pass2", Premium),
+        ("CUST-003", "Somsak Diamond",   "pass3", Diamond),
+    ]
+
+    for cust_id, name, pwd, tier in customers_data:
+        customer = tier(cust_id, name, pwd)
+        coupon   = Coupon(f"CPN-{cust_id}", 0.10, datetime.now() + timedelta(days=30))
+        customer.add_coupon(coupon)
+        system.add_customer(customer)
+
+    # ── QR Scan (Standard, no coupon) ──
+    print("\n===== QrScan checkout (Standard, no coupon) =====")
+    cust1    = system.search_customer("CUST-001")
+    room1    = Room("R-001", RoomType.SMALL, 500.0, 5)
+    eq1      = Equipment("EQ-001", EquipmentType.ELECTRICGUITAR, 1, 5000.0)
+    ts1      = TimeSlot(slot_day, slot_start, slot_end, RoomEquipmentStatus.PENDING)
+    room1.add_timeslot(ts1)
+    eq1.add_timeslot(ts1)
+    bk1      = Booking("BK-001", room1, [eq1], cust1, ts1)
+    svc1     = Service_IN("SRV-001", [bk1], Payment("SRV-001", room1.rate, QrScan()))
+    cust1.add_service_in(svc1)
+    print(system.checkout_service_in("CUST-001", "SRV-001"))
+
+    # ── CreditCard valid (Premium, with coupon) ──
+    print("\n===== CreditCard checkout (Premium, with coupon) =====")
+    cust2    = system.search_customer("CUST-002")
+    room2    = Room("R-002", RoomType.MEDIUM, 800.0, 8)
+    eq2      = Equipment("EQ-002", EquipmentType.DRUM, 2, 10000.0)
+    ts2      = TimeSlot(slot_day, slot_start, slot_end, RoomEquipmentStatus.PENDING)
+    room2.add_timeslot(ts2)
+    eq2.add_timeslot(ts2)
+    bk2      = Booking("BK-002", room2, [eq2], cust2, ts2)
+    card     = CreditCard("4532015112830366", "123", "12/30")
+    svc2     = Service_IN("SRV-002", [bk2], Payment("SRV-002", room2.rate, card))
+    cust2.add_service_in(svc2)
+    print(system.checkout_service_in("CUST-002", "SRV-002", coupon_id="CPN-CUST-002"))
+
+    # ── CreditCard invalid (Diamond) ──
+    print("\n===== CreditCard checkout (invalid card) =====")
+    cust3    = system.search_customer("CUST-003")
+    room3    = Room("R-003", RoomType.LARGE, 1500.0, 15)
+    eq3      = Equipment("EQ-003", EquipmentType.KEYBOARD, 2, 20000.0)
+    ts3      = TimeSlot(slot_day, slot_start, slot_end, RoomEquipmentStatus.PENDING)
+    room3.add_timeslot(ts3)
+    eq3.add_timeslot(ts3)
+    bk3      = Booking("BK-003", room3, [eq3], cust3, ts3)
+    bad_card = CreditCard("1234567890123456", "99", "01/20")
+    svc3     = Service_IN("SRV-003", [bk3], Payment("SRV-003", room3.rate, bad_card))
+    cust3.add_service_in(svc3)
+    print(system.checkout_service_in("CUST-003", "SRV-003"))

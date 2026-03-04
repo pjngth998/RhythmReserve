@@ -1,0 +1,80 @@
+@startuml
+autoactivate on
+
+actor "Customer" as Program
+participant "ReserveSystem\n(Controller)" as System
+participant "Customer\n(Standard / Premium / Diamond)" as Customer
+participant "Coupon" as Coupon
+participant "Notification" as Notification
+
+title Redeem Points (Tier-based Rules)
+
+Program -> System : redeem_points(customer_id, points_to_redeem)
+activate System
+
+    loop [search customer_id]
+        System -> Customer : get_id()
+        Customer --> System : return {customer_id}
+    end
+
+    alt [Customer Match Found]
+
+        System -> Customer : redeem_point(points_to_redeem)
+
+            Customer -> Customer : get_redeem_table()
+            Customer --> Customer : return {redeem_table: dict}
+            note right
+                Each tier has its own redeem_table:
+                Standard  → {20: 0.05}
+                Premium   → {20: 0.10, 30: 0.15}
+                Diamond   → {20: 0.10, 30: 0.15, 40: 0.20}
+            end note
+
+            Customer -> Customer : validate_redeem(points_to_redeem, redeem_table)
+            Customer --> Customer : return {is_valid: bool}
+
+            alt [points_to_redeem not in redeem_table]
+                Customer --> System : return "Error: Invalid points amount for this tier"
+                System --> Program : return "Error: Invalid points amount for this tier"
+            end
+
+            alt [points_to_redeem > current_points]
+                Customer --> System : return "Error: Insufficient points"
+                System --> Program : return "Error: Insufficient points"
+            end
+
+            Customer -> Customer : deduct_points(points_to_redeem)
+            Customer --> Customer : return {remaining_points: int}
+
+            Customer -> Coupon : create_coupon(discount)
+            note right
+                Customer หา discount จาก redeem_table แล้วส่งให้ Coupon
+                Coupon รับผิดชอบ set_expired_date() ของตัวเอง
+            end note
+
+                Coupon -> Coupon : set_expired_date()
+                Coupon --> Coupon : return {expired_date: datetime}
+
+            Coupon --> Customer : return {Coupon}
+
+            Customer -> Customer : add_coupon(coupon)
+            Customer --> Customer : done
+
+        Customer --> System : return {Coupon}
+
+        System -> Customer : notify_user("Redeem points successful")
+            Customer -> Notification : send("Redeem points successful")
+                Notification -> Notification : format_message()
+                Notification --> Notification : return {message}
+            Notification --> Customer : return {notification_status}
+        Customer --> System : return {notification_status}
+
+        System --> Program : return {coupon_id, discount, expired_date, remaining_points}
+
+    else [Customer Not Found]
+        System --> Program : return "Error: Customer Not Found"
+    end
+
+deactivate System
+
+@enduml

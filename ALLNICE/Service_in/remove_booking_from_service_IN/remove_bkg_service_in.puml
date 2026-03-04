@@ -1,0 +1,78 @@
+@startuml
+autoactivate on
+
+actor "Customer" as Program
+participant "ReserveSystem\n(Controller)" as System
+participant "Customer" as Customer
+participant "Service_IN" as ServiceIN
+participant "Booking" as Booking
+participant "Room" as Room
+participant "Equipment" as Equipment
+title Remove Booking from Service_IN
+
+Program -> System : remove_booking_from_service_in(customer_id, service_in_id, booking_id)
+
+    loop [search customer_id]
+        System -> Customer : get_id()
+        Customer --> System : return {customer_id}
+    end
+
+    alt [Customer Match Found]
+
+        loop [search service_in_id]
+            System -> Customer : get_service_in(service_in_id)
+            Customer -> ServiceIN : get_service_in(service_in_id)
+            ServiceIN --> Customer : return {Service_IN}
+            Customer --> System : return {Service_IN}
+        end
+
+        alt [Service_IN Match Found]
+
+            System -> ServiceIN : remove_booking(booking_id)
+
+                loop [search booking_id in booking_list]
+                    ServiceIN -> Booking : get_id()
+                    Booking --> ServiceIN : return {booking_id}
+                end
+
+                alt [Booking Match Found]
+
+                    ServiceIN -> Booking : release()
+
+                        Booking -> Booking : change_booking_status(CANCELLED)
+
+                        Booking -> Room : update_time_slot_status(AVAILABLE)
+                        Room --> Booking : done
+                        Booking -> Room : update_room_status(AVAILABLE)
+                        Room --> Booking : done
+
+                        loop [for eq in equipment_list]
+                            Booking -> Equipment : update_time_slot_status(AVAILABLE)
+                            Equipment --> Booking : done
+                            Booking -> Equipment : update_equipment_status(AVAILABLE)
+                            Equipment --> Booking : done
+                        end
+
+                    Booking --> ServiceIN : done
+
+                    ServiceIN -> ServiceIN : remove_booking_from_list(booking_id)
+                    ServiceIN --> ServiceIN : done
+
+                ServiceIN --> System : return {remove_success: bool}
+
+                else [Booking Not Found]
+                    ServiceIN --> System : return "Error: Booking Not Found"
+                    System --> Program : return "Error: Booking Not Found"
+                end
+
+            System --> Program : return {remove_success: bool}
+
+        else [Service_IN Not Found]
+            System --> Program : return "Error: Service_IN Not Found"
+        end
+
+    else [Customer Not Found]
+        System --> Program : return "Error: Customer Not Found"
+    end
+
+@enduml
