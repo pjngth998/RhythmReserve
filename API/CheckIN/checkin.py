@@ -21,6 +21,7 @@ system.add_branch(mock_branch)
 mock_stock = mock_branch.stock
 
 mock_room = Room("A101", "Medium", 500.0, 10)
+mock_branch.add_room(mock_room)
 mock_room.add_time_slot(mock_ts)
 
 mock_res = Service_IN("A111",mock_cust)

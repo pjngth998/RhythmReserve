@@ -44,10 +44,14 @@ class ReserveSystem():
         customer_info = customer.get_customer_info(customer_id)
         
         branch = self.search_branch(branch_id)
+        if not branch:
+            return "Branch Not Found"
 
-        eq_quota_max = branch.get_room_quota(room_id)
+        max_quota = branch.get_room_quota(room_id)
         room = branch.search_room(room_id)
-        max_quota = room.get_eq_quota(room_id)
+        if not room: 
+            return "Room Not Found"
+        # max_quota = room.get_eq_quota(room_id)
 
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
@@ -108,6 +112,8 @@ class Branch():
     
     def get_room_quota(self,room_id):
         room = self.search_room(room_id)
+        if not room:
+            return "Room Not Found"
         return room.get_eq_quota(room_id)
     
 class User():
@@ -264,7 +270,7 @@ class StockEquipment:
     
     def add_eq(self,eq):
         self.__equipment_ls.append(eq)
-        
+
     def get_size_eq(self,eq_id):
         for eq in self.__equipment_ls:
             if eq.eq_id == eq_id:
