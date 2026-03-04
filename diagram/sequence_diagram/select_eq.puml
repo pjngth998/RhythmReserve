@@ -8,56 +8,75 @@ participant "ReserveSystem" as system
 participant "Branch" as branch
 participant "Customer" as customer
 participant "Room" as room
+participant "StockEquipment" as stock
 participant "Equipment" as eq
-participant "Booking" as booking
+' participant "Booking" as booking
 ' participant "Service_IN" as sv_in
 ' participant "TimeSlot" as timeslot
 
-actor -> system : select_eq(customer_id,branch_id,room_id,eq_list,booking_id,date,start_t,end_t)
+actor -> system : select_eq(customer_id,branch_id,room_id,eq_list)
 activate system
 loop search_customer(customer_id)
     system -> customer : get_customer_info(customer_id)    
     activate customer
-    customer --> system : customer
+    customer --> system : Customer
     deactivate customer
 end
-
 loop search_branch(branch_id)
-    system -> branch : get_branch_info()
+    system -> branch : get_room_quota(room_id)
     activate branch
     loop search_room(room_id)
-        branch -> room : get_eq_quota(room_id)
-        activate room
-        room --> branch : eq_quota
-        deactivate room
+                branch -> room : get_eq_quota(room_id)
+                activate room
+                room --> branch : eq_quota_max
+                deactivate room
     end
-    loop for eq in eq_list
-        system -> branch : check_stock_eq()
-        alt stock enough
-            branch --> system : Enough for Reserve
-            loop for eq in eq_list 
-            system -> eq : get_size()
-            activate eq
-            eq --> system : size
-            system -> eq : calculate_quota(size,qty)
-            eq --> system : total_size
-            deactivate eq
-            system -> system : total_requested_size += total_size
+    branch --> system : eq_quota_max
+end
+deactivate branch
+loop for eq_id in eq_list
+    system -> branch : check_stock_eq(eq_id)
+    activate branch
+    branch -> stock : check_eq(eq_id)
+    activate stock
+
+    ' stock -> eq : get_eq(eq_id)
+    ' activate eq
+    ' eq --> stock : Equipment
+    ' deactivate eq
+    
+    alt have in stock
+        stock --> branch : Have Equipment in Stock
+        ' deactivate stock
+        branch --> system : Can Reserve
+        loop for eq_id in eq_list
+            ' system -> branch : calculate_quota
+            system -> stock : get_size_eq(eq_id)
+            ' activate stock
+            loop for eq in equipment_list
+                stock -> eq : verify_eq(eq_id)
+                alt eq.eq_id == self.eq_id
+                    eq --> stock : MATCH
+                    stock -> eq : get_size(eq_id)
+                    eq --> stock : size
+                else
+                    eq --> stock : NOT MACH
+                end
             end
-        else stock not enough
-            branch --> system : Not Enough for Reserve
+            activate eq
+            deactivate eq
+            stock --> system : size
         end
-        deactivate branch
+        system -> system : total_requested_size += size
+    else stock not enough
+        stock --> branch : Don't have Equipment in Stock
+        deactivate stock
+        branch --> system : Not Enough for Reserve
     end
+    deactivate branch
 end
 
 alt total_requested_size <= quota_eq_max
-    system -> system : create_reservation(booking_id,date, start_t, end_t, customer, room, created_at, status, price, eq_list)
-    activate booking
-    system -> booking : <<create>> Booking(booking_id, date, start_t, end_t, customer, room, created_at, status, price, eq_list)
-    system -> booking : add_eq_list(customer,eq_list)
-    booking --> system : add to booking
-    deactivate booking
     system --> actor : Can Reserve Equipment - Add to Booking Successfully
 else total_requested_size > quota_eq_max
     system --> actor : Exceed Room Quota Limit

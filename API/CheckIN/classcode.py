@@ -32,7 +32,6 @@ class ReserveSystem():
         success = reserve.get_checkin()
         if success:
             return "CHECK-IN SUCCESSFULLY!"
-        
 
     def search_branch(self,branch_id):
         for branch in self.__branch_list:
@@ -40,65 +39,60 @@ class ReserveSystem():
                 return branch
         return None
 
-    def create_booking(self,booking_id,date,start_tBooking,end_tBooking,customer,room,created_at, status, price, eq_list):
-        return Booking( booking_id, date, start_tBooking, end_tBooking, customer, room, created_at, status, price, eq_list)
-    
-    def select_eq(self,customer_id,branch_id,room_id,eq_list,booking_id,date,start_t,end_t):
-        branch = self.search_branch(branch_id)
-        
+    def select_eq(self,customer_id,branch_id,room_id,eq_list):
         customer = self.search_customer(customer_id)
-        customer.get_customer_info(customer_id)
+        customer_info = customer.get_customer_info(customer_id)
+        
+        branch = self.search_branch(branch_id)
 
+        eq_quota_max = branch.get_room_quota(room_id)
         room = branch.search_room(room_id)
         max_quota = room.get_eq_quota(room_id)
 
-        total_requested_size = 0
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
         status = "PENDING"
         price = room.rate
 
-        for eq in eq_list:
-            if not branch.check_stock_eq(eq.id, eq.quantity):
-                return "Not Enough for Reserve"
+        for eq_id in eq_list:
+            check_stock = branch.check_stock_eq(eq_id)
+            if not check_stock:
+                return "Don't have Equipment in Stock"
             
-            size = eq.get_size()
+        total_requested_size = 0
+        for eq_id in eq_list:
+            stock =  branch.stock
+            size = stock.get_size_eq(eq_id)
 
-            total_size = eq.calculate_quota(eq.quantity)
-            total_requested_size += total_size
+            total_requested_size += size
 
         if total_requested_size <= max_quota:
-            c_booking = self.create_booking(booking_id,date, start_t, end_t, customer, room, created_at, status,price,eq_list)
-            # c_booking.add_eq_list(customer, eq_list)
-            customer
             return "Can Reserve Equipment - Add to Booking Successfully"
         else:
             return "Exceed Room Quota Limit"
         
+        
 class Branch():
-    def __init__(self,name,id):
+    def __init__(self,name,id,stock_id):
         self.__name = name
         self.__branch_id = id
+        self.__stock = StockEquipment(stock_id)
         self.__room_list = []
-        self.__equipment_list = [] 
 
     @property
     def branch_id(self):
         return self.__branch_id
     
     @property
+    def stock(self):
+        return self.__stock
+    
+    @property
     def room_list(self):
         return self.__room_list
     
-    @property
-    def equipment_list(self):
-        return self.__equipment_list
-    
     def add_room(self,room):
         self.__room_list.append(room)
-
-    def add_equipment(self,eq):
-        self.__equipment_list.append(eq)
 
     def get_branch_info(self):
         return self.__name, self.__room_list, self.__equipment_list
@@ -109,12 +103,12 @@ class Branch():
                 return room
         return None
 
-
-    def check_stock_eq(self,eq_id,requested_qty):
-        for eq in self.__equipment_list:
-            if eq.eq_id == eq_id: # เช็คจาก ID
-                return eq.stock_qty >= requested_qty # คืนค่า True/False
-        return False
+    def check_stock_eq(self,eq_id):
+        return self.__stock.check_eq(eq_id) 
+    
+    def get_room_quota(self,room_id):
+        room = self.search_room(room_id)
+        return room.get_eq_quota(room_id)
     
 class User():
     def __init__(self,name,id):
@@ -128,8 +122,6 @@ class User():
     @property
     def user_id(self):
         return self.__user_id
-    
-
     
 
 class Customer(User):
@@ -253,22 +245,50 @@ class Room:
         if self.__room_id == room_id:
             return self.__eq_quota
         return None
+
+class StockEquipment:
+    def __init__(self,id):
+        self.__stock_id = id
+        self.__equipment_ls = []   
     
+    @property
+    def stock_id(self):
+        return self.__stock_id
+    
+    def check_eq(self,eq_id):
+        for eq in self.__equipment_ls:
+            if eq.eq_id == eq_id:
+                return True
+            
+        return False
+    
+    def add_eq(self,eq):
+        self.__equipment_ls.append(eq)
+        
+    def get_size_eq(self,eq_id):
+        for eq in self.__equipment_ls:
+            if eq.eq_id == eq_id:
+                verify = eq.verify_eq(eq_id)
+                if verify :
+                    size = eq.get_size(eq_id)
+                    return  size
+        return 0
+
 class Equipment:
     def __init__(self,id,size,stock):
         self.__eq_id = id
         self.__size = size
-        self.__stock_qty= stock
-        self.__time_slot = []
+        self.__stock = stock
         self.__quantity =  0
+        self.__time_slot = []
     
     @property
     def eq_id(self):
         return self.__eq_id
     
     @property
-    def stock_qty(self):
-        return self.__stock_qty
+    def stock(self):
+        return self.__stock
     
     @property
     def quantity(self):
@@ -291,10 +311,15 @@ class Equipment:
                 return "update status 'OCCUPIED' success"
         return False
     
-    def get_size(self):
-        return self.__size
-    
+    def verify_eq(self,eq_id):
+        return self.__eq_id == eq_id
 
+    def get_size(self,eq_id):
+        if self.__eq_id == eq_id:
+            return self.__size
+        return None
+    
+    
 
 class TimeSlotStatus(Enum):
     AVAILABLE = "Available"
@@ -343,3 +368,5 @@ class TimeSlot:
             self.__status = TimeSlotStatus.MAINTENANCE
             return True
         return False
+    
+
