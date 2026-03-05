@@ -168,20 +168,23 @@ class Diamond(Customer):
 
 class ReserveSystem:
     def __init__(self):
-        self.customer_list: dict[str, Customer] = {}
+        # เปลี่ยนจาก Dict เป็น List
+        self.customer_list: list[Customer] = []
 
     def add_customer(self, customer: Customer):
-        self.customer_list[customer.customer_id] = customer
+        # เปลี่ยนเป็น .append()
+        self.customer_list.append(customer)
 
     def search_customer(self, customer_id: str) -> Optional[Customer]:
-        for customer in self.customer_list.values():
+        # วนลูป List โดยตรงแทนการใช้ .values()
+        for customer in self.customer_list:
             if customer.get_id() == customer_id:
                 return customer
         return None
 
     def remove_booking_from_service_in(
         self, customer_id: str, service_in_id: str, booking_id: str
-    ) -> dict:
+    ) -> list:
         print(f"\n{'='*60}")
         print(f"[ReserveSystem] remove_booking(customer={customer_id}, service={service_in_id}, booking={booking_id})")
         print(f"{'='*60}")
@@ -196,13 +199,14 @@ class ReserveSystem:
 
         remove_success = service.remove_booking(booking_id)
 
-        return {
-            "status":         "success",
-            "customer_id":    customer_id,
-            "service_in_id":  service_in_id,
-            "booking_id":     booking_id,
-            "remove_success": remove_success,
-        }
+        # เปลี่ยนจาก Dict เป็น 1D List วางคีย์-ค่าสลับกัน
+        return [
+            "status",         "success",
+            "customer_id",    customer_id,
+            "service_in_id",  service_in_id,
+            "booking_id",     booking_id,
+            "remove_success", remove_success
+        ]
 
 
 if __name__ == "__main__":
