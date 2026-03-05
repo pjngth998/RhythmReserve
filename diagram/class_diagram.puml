@@ -210,6 +210,7 @@ class Member{
 
 
 
+
 class PenaltyType <<enumeration>> {
     NO_SHOW
     CANCEL_LATE
@@ -335,7 +336,7 @@ class DailyReport {
 
 
 ReserveSystem o-- User
-ReserveSystem o-- Stock
+Branch o-- Stock
 User <|-- Staff
 User <|-- Customer
 Customer <|-- Member
@@ -346,7 +347,7 @@ ReserveSystem o-- Branch
 ReserveSystem o-- Policy
 Customer o-- Coupon
 Branch o-- Room
-Branch o-- Equipment
+Stock o-- Equipment
 Room o-- Time_slot
 Equipment o-- Time_slot
 Service_IN o-- Booking
@@ -362,4 +363,5 @@ Customer o-- Service_OUT
 Customer o-- Service_IN
 Products <|-- Item
 Stock o-- Item
+Member <|-- Standard
 @enduml

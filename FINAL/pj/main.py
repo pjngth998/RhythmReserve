@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import uvicorn
-from buy_snackNdrink import *
+from code_pj import *
 from datetime import time, date
 
 app = FastAPI()
@@ -46,6 +46,6 @@ def booking(customer_id:str, branch_id:str, room_id:str, day:date, start:time, e
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run("buy_snackNdrinkAPI:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
 
 
