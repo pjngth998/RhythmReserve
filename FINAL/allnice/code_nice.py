@@ -345,7 +345,6 @@ class QrScan(PaymentChannel):
         self.qr_image: Optional[str] = None
 
     def generate_qr(self, amount: float, ref: str) -> str:
-        # URL ที่พอสแกนแล้วเปิด browser ขึ้นหน้า Payment completed
         payload = f"Payment completed | REF:{ref} | AMT:{amount:.2f} THB"
         
         qr = qrcode.make(payload)
@@ -471,6 +470,7 @@ class Payment:
         print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price:.2f} THB")
         return self.is_success
 
+    #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
         refunded_ids = {r.ref_txn_id for r in self.transaction_history if r.txn_type == "REFUND"}
 
@@ -574,7 +574,7 @@ class Service_IN:
         self.booking_list.append(booking)
 
     def remove_booking(self, booking_id: str) -> bool:
-        """ลบ Booking ออกจาก Service_IN และ release room/equipment (file4)"""
+
         print(f"\n[Service_IN] remove_booking({booking_id})")
 
         target = None
@@ -612,7 +612,6 @@ class Service_IN:
         print(f"[Service_IN] {self.service_in_id} status → {status.value}")
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
-        """คำนวณราคา ลดราคา และชำระเงิน (file3)"""
         total_price      = self.calculate_total()
         tier_discount    = customer.get_tier_discount()
         discounted_price = self.apply_tier_discount(total_price, tier_discount)
@@ -638,7 +637,6 @@ class Service_IN:
         return payment_success
 
     def cancel(self, refund_amount: float, original_txn_id: Optional[str] = None) -> bool:
-        """ยกเลิก Service_IN พร้อม refund (file2)"""
         if self.status == ServiceStatus.CANCELLED:
             print(f"[Service_IN] {self.service_in_id} already cancelled")
             return False
