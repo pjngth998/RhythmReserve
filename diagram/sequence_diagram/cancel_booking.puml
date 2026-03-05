@@ -4,75 +4,80 @@ autoactivate on
 actor "Customer" as Program
 participant "ReserveSystem\n(Controller)" as System
 participant "Customer" as Customer
+participant "Service_IN" as ServiceIN
 participant "Booking" as Booking
 participant "Policy" as Policy
 participant "Room" as Room
 participant "Equipment" as Equipment
 participant "Payment" as Payment
 participant "PaymentChannel" as Channel
+participant "Notification" as Notification
 
 title Cancellation Process
 
-Program -> System : process_cancellation(customer_id, booking_id)
+Program -> System : process_cancellation(customer_id, service_in_id)
 
-    loop [in self.customer_list]
-        System -> Customer : get_id()
-        Customer --> System : return {customer_id : str}
+    loop [search customer_id]
+        System -> Customer : get_id(customer_id)
+        Customer --> System : return {Customer}
     end
 
     alt [Customer Match Found]
-        
-        System -> Customer : get_transaction_list()
-        Customer --> System : return {booking_list : List<Booking>}
 
-        loop [in booking_list]
-            System -> Booking : get_booking_id()
-            Booking --> System : return {fetched_booking_id : str}
+        loop [search service_in_id]
+            System -> Customer : get_service_in(service_in_id)
+            Customer -> ServiceIN : get_service_in(service_in_id)
+            ServiceIN --> Customer : return {Service_IN}
+            Customer --> System : return {Service_IN}
         end
 
-        alt [Booking Match Found]
-            
-            System -> Policy : check_cancel_rule(currenttime,starttime,member)
-            Policy -> Customer : get_cancellation_limit_hours()
-            Customer --> Policy : return {cancellation_limit_hours(6,12,24)}
-            Policy --> System : return {isAllowed: bool, refund_amount: float}
+        alt [Service_IN Match Found]
 
-            alt [isAllowed == true]
-                
-                System -> Booking : change_booking_status(CANCELLED)
-                Booking --> System : retuem {status_updated : bool}
+            System -> Policy : check_cancel_rule(current_time, start_time, customer)
+                Policy -> Customer : get_cancellation_limit_hours()
+                Customer --> Policy : return {cancellation_limit_hours}
+            Policy --> System : return {refund_amount: float}
 
-                loop
-                System -> Booking : get_room()
-                Booking --> System : return {target_room : Room}
+            System -> ServiceIN : change_status(CANCELLED, refund_amount)
+
+                loop [for booking in booking_list]
+                    ServiceIN -> Booking : cancel()
+
+                        Booking -> Booking : change_booking_status(CANCELLED)
+
+                        Booking -> Room : update_time_slot_status(AVAILABLE)
+                        Room --> Booking : done
+                        Booking -> Room : update_room_status(AVAILABLE)
+                        Room --> Booking : done
+
+                        loop [for eq in equipment_list]
+                            Booking -> Equipment : update_time_slot_status(AVAILABLE)
+                            Equipment --> Booking : done
+                            Booking -> Equipment : update_equipment_status(AVAILABLE)
+                            Equipment --> Booking : done
+                        end
+
+                    Booking --> ServiceIN : booking_cancelled
                 end
 
-                System -> Room : update_room_status(AVAILABLE)
-                Room --> System : return {void}
+                ServiceIN -> Payment : payment_refund(refund_amount)
+                    Payment -> Channel : process(refund_amount)
+                    Channel --> Payment : return {process_status: bool}
+                Payment --> ServiceIN : return {refund_success: bool}
 
-                loop
-                System -> Booking : get_equipment_list()
-                Booking --> System : return {eq_list : List<Equipment>}
-                end
+            ServiceIN --> System : return {cancellation_success: bool}
 
-                loop [in eq_list]
-                    System -> Equipment : set_status(AVAILABLE)
-                    return void
-                end
+            System -> Customer : notify_user("Cancellation successful")
+    Customer -> Notification : send("Cancellation successful")
+        Notification -> Notification : format_message()
+        Notification --> Notification : return {message}
+    Notification --> Customer : return {notification_status}
+Customer --> System : return {notification_status}
 
-                System -> Payment : process_payment(refund_amount,payment_channel)
-                    Payment -> Channel : process(refund_amount,payment_channel)
-                    return process_status : bool
-                return payment_success : bool
-                
-                System --> Program : return {cancellation_success : bool}
+            System --> Program : return {cancellation_success: bool}
 
-            else [isAllowed == false]
-                System --> Program : return "Error: Policy Violation"
-            end
-
-        else [Booking Not Found]
-            System --> Program : return "Error: Booking Not Found"
+        else [Service_IN Not Found]
+            System --> Program : return "Error: Service_IN Not Found"
         end
 
     else [Customer Not Found]

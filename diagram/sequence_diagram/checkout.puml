@@ -13,7 +13,7 @@ participant "Equipment" as eq
 participant "TimeSlot" as timeslot
 
 
-staff -> system :CheckIn(customer_id, reserve_id)
+staff -> system : CheckOut(customer_id, reserve_id)
 activate system
 
 loop search_customer(customer_id)
@@ -37,7 +37,7 @@ loop search_reserve(reserve_id)
 end
 customer --> system : reserve_info
 
-system -> sv_in : get_checkin()
+system -> sv_in : get_checkout()
 activate sv_in
 loop for booking in booking_list
     sv_in -> booking : get_booking_detail()
@@ -47,7 +47,13 @@ loop for booking in booking_list
     activate room
     room -> timeslot : update_status(time_booking)
     activate timeslot
-    timeslot --> room : update status "OCCUPIED" success
+
+    alt
+    timeslot --> room : update status "AVAILABLE" success
+    else
+    timeslot --> room : update status "MAINTENANCE" success
+    end
+
     deactivate timeslot
     room --> booking : room_info
     deactivate room
@@ -65,10 +71,10 @@ loop for booking in booking_list
     booking --> sv_in : booking_info
     deactivate booking
 end
-sv_in --> system : check-in success
+sv_in --> system : check-out success
 deactivate sv_in
 deactivate customer
-system --> staff : CHECKIN SUCCESSFULLY!
+system --> staff : CHECKOUT SUCCESSFULLY!
 deactivate system
 
 @enduml

@@ -1,0 +1,39 @@
+@startuml
+
+actor Customer as C
+participant ReserveSystem as Rs
+participant Branch as Br
+participant Item as Sn
+participant Stock as St
+participant Cart as Ct
+
+C -> Rs : view_snackNdrink(branch_id)
+activate Rs
+Rs -> Br : get_snackNdrink
+activate Br
+Br -> Sn : get_stocksnackNdrink
+activate Sn
+Sn -> Br : snackNdrink_list
+deactivate Sn
+Br -> Rs : snackNdrink_list
+deactivate Br
+Rs -> C : display_snackNdrink(snackNdrink_list)
+loop [for each selected item]
+    C -> Rs: add_item(product, quantity)
+    Rs -> Br: find_product(product)
+    activate Br
+    Br -> Sn: get_product
+    activate Sn
+    Sn -> Br: product
+    deactivate Sn
+    Br -> Rs: product
+    deactivate Br
+    Rs -> Ct: add_to_cart(product_id)
+    activate Ct
+    end
+Ct -> Rs: Cart
+deactivate Ct
+Rs --> C: Selection Complete
+
+
+@enduml
