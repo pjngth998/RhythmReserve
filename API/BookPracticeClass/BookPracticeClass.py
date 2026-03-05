@@ -140,9 +140,10 @@ class TimeSlot():
     
 
 class Room():
-    def __init__(self, id, size, rate, equipment_quota):
+    def __init__(self, size, rate, equipment_quota, branch):
         self.__id: str = id
         self.__size: RoomType = size
+        self.__branch = branch
         self.__rate: float = rate
         self.__time_slot : list = []
         self.__equipment_quota : int = equipment_quota
@@ -150,6 +151,10 @@ class Room():
     @property
     def id(self):
         return self.__id
+    
+    @id.setter
+    def id(self, id):
+        self.__id = id
     
     @property
     def size(self):
@@ -170,7 +175,7 @@ class Room():
     def is_slot_available(self, branch, day):
         scd = branch.get_or_create_schedule(self, day)
         return len(scd.available_slot_indexes()) > 0
-  
+   
     
 class Equipment():
     def __init__(self, id, type_ : EquipmentType, quota, price):
@@ -277,13 +282,14 @@ class RhythmReserve():
     def add_room(self, branch_id, size : RoomType):
         match size:
             case RoomType.SMALL:
-                room = Room(self.make_room_id(branch_id, size), RoomType.SMALL, 500, 5)
+                room = Room(RoomType.SMALL, 500, 5, branch_id)
             case RoomType.MEDIUM:
-                room = Room(self.make_room_id(branch_id, size), RoomType.MEDIUM, 800, 8)
+                room = Room(RoomType.MEDIUM, 800, 8, branch_id)
             case RoomType.LARGE:
-                room = Room(self.make_room_id(branch_id, size), RoomType.LARGE, 1500, 15)
+                room = Room(RoomType.LARGE, 1500, 15, branch_id)
             case RoomType.EXTRALARGE:
-                room = Room(self.make_room_id(branch_id, size), RoomType.EXTRALARGE, 3000, 30)
+                room = Room(RoomType.EXTRALARGE, 3000, 30, branch_id)
+        room.id = "succeed"
         #add room to branch
         for _,item in enumerate(self.__branch_list):
             if branch_id == item.id:
