@@ -324,7 +324,14 @@ class MemberShip <<enumeration>> {
     DIAMOND
 }
 
-
+class DailyReport {
+    date
+    total_booking
+    total_revenue
+    room_statuses : list
+    equipment_statuses : list
+    penalties : list
+}
 
 
 ReserveSystem o-- User
