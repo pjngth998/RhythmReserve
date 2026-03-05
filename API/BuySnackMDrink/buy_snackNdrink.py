@@ -41,48 +41,137 @@ class ProductType(Enum):
     LAY = "Lay"
     TARO = "Taro"
 
+class Membership(Enum):
+    STANDARD = "STD"
+    PREMIUM = "PRM"
+    DIAMOND = "DMN"
 
 
 #Class
-class Customer() :
-    def __init__(self, id, name, password):
-        self.__id: str = id
-        self.__user_name: str = name
-        self.__password: str  = password
-        self.__transaction_list = []
-        self.__notification = []
-        self.__coupon_list = []
-        self.__service_IN = []
 
+class User():
+    def __init__(self, username, password, name, email, phone, birthday):
+        self.__id:str = None
+        self.__username = username
+        self.__password = password
+        self.__name = name
+        self.__email = email
+        self.__phone = phone
+        self.__birthday:date = birthday
+
+    def log_in(self, username, password):
+        pass
+
+    def log_out(self):
+        pass
+
+    def edit_info(self):
+        pass
+
+    def change_password(self):
+        pass
+
+
+class Customer(User) :
+
+    def __init__(self, username, password, name, email, phone, birthday, memberhip):
+        super().__init__(username, password, name, email, phone, birthday)
+        self.__memberhip: Membership = memberhip
+        self.__points:int = None
+        self.__booking_history : Service_IN = None
+        self.__coupon_list = None
+        self.__notification_list = []
+   
+
+    @property
+    def notification(self):
+        return self.__notification_list
+    
+    @notification.setter
+    def notification(self, new_notification):
+        self.__notification_list.append(new_notification)
+
+
+    def make_customer_id(self):
+        super().__id = f"MB-{self.__memberhip.value}-{uuid.uuid4()}"
 
     @property
     def id(self):
         return self.__id
-    
-    @property
-    def notification(self):
-        return self.__notification
-    
-    @notification.setter
-    def notification(self, new_notification):
-        self.__notification.append(new_notification)
+
+    @abstractmethod
+    def recieve_point_per_hr(self):
+        pass
+
+    @abstractmethod
+    def redeem_point(self):
+        pass
+
+    @abstractmethod
+    def get_cancellation_limit_hours(self):
+        pass
+
+class Standard(Customer):
+    def __init__(self, username, password, name, email, phone, birthday, memberhip):
+        super().__init__(username, password, name, email, phone, birthday, memberhip)
+
+class Premium(Customer):
+    def __init__(self, username, password, name, email, phone, birthday, memberhip):
+        super().__init__(username, password, name, email, phone, birthday, memberhip)
+
+class Diamond(Customer):
+    def __init__(self, username, password, name, email, phone, birthday, memberhip):
+        super().__init__(username, password, name, email, phone, birthday, memberhip)
 
 class Products():
     def __init__(self, type_: ProductType, price, stock):
         self.__type = type_
         self.__price = price
 
-class Item():
-    def __init__(self, id):
-        self.__id = id
-        
+class Item(Products):
+    def __init__(self, type_, price, stock):
+        super().__init__(type_, price, stock)
+        self.__id = None
+
+    def make_item_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id = f"PR-{temp[1]}-{super().__type.value}-{uuid.uuid4()}"
+
+    @property
+    def id(self):
+        return self.__id
+    
 class Stock():
     def __init__(self, type_: ProductType):
-        self.__type
+        self.__type = type_
+        self.__item_list = []
+
+    @property
+    def stock(self):
+        return self.__item_list
+
+    def add_item(self, item):
+        self.__item_list.append(item)
+
+        
+class StockProduct(Stock):
+    def __init__(self, type_):
+        super().__init__(type_)
+    
+    def del_item(self, item_id):
+        for index, item in enumerate(self.__item_list):
+            if item.id == item_id:
+                self.__item_list.pop(index)
+
+class StockEquipment(Stock):
+    def __init__(self, type_):
+        super().__init__(type_)
+
+    
 
     
 class Service_IN():
-    def __init__(self, id, booking):
+    def __init__(self, booking):
         self.__id = id
         self.__booking_list = [booking]
 
@@ -94,11 +183,14 @@ class Service_IN():
     def add_booking(self, booking):
         self.__booking_list.append(booking)
 
+    def make_service_in_id(self, branch_id):
+        temp = branch_id.spilt("-")
+        self.__id =  f"SI-{temp[1]}-{uuid.uuid4()}"
+
 
 
 class Branch():
-    def __init__(self, id, name):
-        self.__id: str = id
+    def __init__(self,  name):
         self.__name: str = name
         self.__room_list = []
         self.__eqipment_list = []
@@ -127,6 +219,9 @@ class Branch():
     @equipment.setter
     def equipment(self, new_equipment):
         self.__eqipment_list.append(new_equipment)
+
+    def make_branch_id(self, name):
+        self.__id = f"BR-{name}-{uuid.uuid4()}"
 
    
     
@@ -160,9 +255,10 @@ class TimeSlot():
     
 
 class Room():
-    def __init__(self, id, size, rate, equipment_quota):
+    def __init__(self, size, rate, equipment_quota, branch_id):
         self.__id: str = id
         self.__size: RoomType = size
+        self.__branch_id = branch_id
         self.__rate: float = rate
         self.__time_slot : list = []
         self.__equipment_quota : int = equipment_quota
@@ -187,14 +283,14 @@ class Room():
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
     
-    def is_slot_available(self, branch, day):
-        scd = branch.get_or_create_schedule(self, day)
-        return len(scd.available_slot_indexes()) > 0
+    
+    def make_room_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id = f"RM-{temp[1]}-{self.__size.value}-{uuid.uuid4()}"
   
     
 class Equipment():
-    def __init__(self, id, type_ : EquipmentType, quota, price):
-        self.__id = id
+    def __init__(self, type_ : EquipmentType, quota, price):
         self.__type = type_
         self.__quota = quota
         self.__price = price
@@ -215,10 +311,15 @@ class Equipment():
     @time_slot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
+
+    
+    def make_equipment_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id =  f"EQ-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
     
 
 class Booking():
-    def __init__(self, id, room, eq_list, customer, timeslot):
+    def __init__(self, room, eq_list, customer, timeslot):
         self.__id = id
         self.__room = room
         self.__eq_list = eq_list
@@ -248,11 +349,22 @@ class Booking():
     @property
     def eq_list(self):
         return self.__eq_list
+    
+    def make_booking_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id =  f"BK-{temp[1]}-{uuid.uuid4()}"
 
 class Notification():
     def __init__(self, type, info):
         self.__type = type
         self.__info = info
+
+class Payment():
+    def __init__(self):
+        pass
+
+    def register_pay(self, membership):
+        pass
 
 class RhythmReserve():
 
@@ -262,48 +374,34 @@ class RhythmReserve():
         self.__branch_list = []
         self.__customer_list = []
 
-    def make_customer_id(self):
-        return f"MB-{uuid.uuid4()}"
+    def register(self, username, password, name, email, phone, birthday, membership) :
+        pass
         
-    def make_branch_id(self, name):
-        return f"BR-{name}-{uuid.uuid4()}"
-    
-    def make_equipment_id(self, branch_id, type_):
-        branch = self.get_branch_by_id(branch_id)
-        return f"EQ-{branch.name}-{type_.value}-{uuid.uuid4()}"
-    
-    def make_room_id(self, branch_id, size):
-        branch = self.get_branch_by_id(branch_id)
-        return f"RM-{branch.name}-{size.value}-{uuid.uuid4()}"
-    
-    def make_booking_id(self, branch_id):
-        branch = self.get_branch_by_id(branch_id)
-        return f"BK-{branch.name}-{uuid.uuid4()}"
-    
-    def make_service_in_id(self, branch_id):
-        branch = self.get_branch_by_id(branch_id)
-        return f"SI-{branch.name}-{uuid.uuid4()}"
+
 
     def add_customer(self, username, password):
-        customer = Customer(self.make_customer_id(), username, password)
+        customer = Customer(username, password)
+        customer.make_customer_id()
         self.__customer_list.append(customer)
         return customer
     
     def add_branch(self, name):
-        branch = Branch(self.make_branch_id(name), name)
+        branch = Branch(name)
+        branch.make_branch_id(name)
         self.__branch_list.append(branch)
         return branch
     
     def add_room(self, branch_id, size : RoomType):
         match size:
             case RoomType.SMALL:
-                room = Room(self.make_room_id(branch_id, size), RoomType.SMALL, 500, 5)
+                room = Room(RoomType.SMALL, 500, 5, branch_id)
             case RoomType.MEDIUM:
-                room = Room(self.make_room_id(branch_id, size), RoomType.MEDIUM, 800, 8)
+                room = Room(RoomType.MEDIUM, 800, 8, branch_id)
             case RoomType.LARGE:
-                room = Room(self.make_room_id(branch_id, size), RoomType.LARGE, 1500, 15)
+                room = Room(RoomType.LARGE, 1500, 15, branch_id)
             case RoomType.EXTRALARGE:
-                room = Room(self.make_room_id(branch_id, size), RoomType.EXTRALARGE, 3000, 30)
+                room = Room(RoomType.EXTRALARGE, 3000, 30, branch_id)
+        room.make_room_id(branch_id)
         #add room to branch
         for _,item in enumerate(self.__branch_list):
             if branch_id == item.id:
@@ -313,17 +411,18 @@ class RhythmReserve():
     def add_equipment(self, branch_id, type_: EquipmentType):
         match type_:
             case EquipmentType.ELECTRICGUITAR:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 1, 5000)
+                equipment = Equipment(type_, 1, 5000)
             case EquipmentType.ACOUSTICGUITAR:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 1, 3000)
+                equipment = Equipment(type_, 1, 3000)
             case EquipmentType.DRUM:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 2, 10000)
+                equipment = Equipment(type_, 2, 10000)
             case EquipmentType.MICROPHONE:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 1, 500)
+                equipment = Equipment(type_, 1, 500)
             case EquipmentType.KEYBOARD:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 2, 20000)
+                equipment = Equipment(type_, 2, 20000)
             case EquipmentType.BASS:
-                equipment = Equipment(self.make_equipment_id(branch_id, type_), type_, 1, 5000)
+                equipment = Equipment(type_, 1, 5000)
+        equipment.make_equipment_id(branch_id)
         #add equipment to branch
         for _,item in enumerate(self.__branch_list):
             if branch_id == item.id:
@@ -385,13 +484,15 @@ class RhythmReserve():
             eq.add_timeslot = timeslot
         
 
-        booking_id = self.make_booking_id(branch_id)
-        booking = Booking(booking_id, room, eq_list, customer, timeslot)
-        service_in = Service_IN(self.make_service_in_id(branch_id), booking)
+        booking = Booking(room, eq_list, customer, timeslot)
+        booking.make_booking_id(branch_id)
+        service_in = Service_IN(booking)
+        service_in.make_service_in_id(branch_id)
+
         service_in.add_booking = booking
 
         customer.notification = Notification("Booking", booking)
-        return f"booking_id :{booking_id} -> date:{booking.day}, size:{room.size}, equipment:{', '.join(eq.type_ for eq in booking.eq_list)}, duration:{booking.start}-{booking.end}"
+        return f"booking_id :{booking.id} -> date:{booking.day}, size:{room.size}, equipment:{', '.join(eq.type_ for eq in booking.eq_list)}, duration:{booking.start}-{booking.end}"
         
 
   
