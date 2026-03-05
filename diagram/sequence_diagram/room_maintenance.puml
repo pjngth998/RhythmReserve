@@ -1,0 +1,53 @@
+@startuml
+
+actor Staff
+participant RhythmReserve as System
+participant Customer
+participant Service_OUT
+participant Room
+participant Policy
+
+Staff -> System : request_check_room(room_id)
+activate System
+   loop [for id in Customer_list]
+    System -> Customer : find_customer_by_id(customer_id)
+    activate Customer
+    Customer --> System : return customer (instant)
+    deactivate Customer
+    end
+
+    
+    loop [for room in room_list]
+    System -> Room : check_room_status(room_id)
+    activate Room
+    Room --> System : room_status
+    deactivate Room
+    end
+
+alt #LightYellow room_not_damaged
+    System --> Staff : return "No Damage"
+else #LightSalmon room_damaged
+
+    System -> Policy : check_damage_policy()
+    activate Policy
+
+    
+    alt #LightCyan customer_responsible
+        Policy --> System : create_penalty
+
+        System -> Service_OUT : charge_customer
+        activate Service_OUT
+        Service_OUT --> System : charge_success
+        deactivate Service_OUT
+
+        System --> Staff : return "Charge Created"
+    else #LightPink Rhythm_responsible
+        Policy --> System : no_charge
+        deactivate Policy
+
+        System --> Staff : return "Rhythm Responsible"
+    end
+end
+
+deactivate System
+@enduml
