@@ -182,6 +182,9 @@ class Coupon:
         self.discount     = discount
         self.expired_date = expired_date
 
+    def get_coupon_id(self) -> str:     
+        return self.coupon_id
+
     def get_discount(self) -> float:
         return self.discount
 
@@ -200,6 +203,9 @@ class Booking:
 
     @property
     def id(self) -> str:
+        return self.__id
+
+    def get_id(self) -> str:  
         return self.__id
 
     @property
@@ -496,6 +502,9 @@ class Customer(ABC):
     def get_id(self) -> str:
         return self.customer_id
 
+    def get_name(self) -> str:     
+        return self.name
+
     def verify_password(self, password: str) -> bool:
         return self.__password == password
 
@@ -570,14 +579,14 @@ class Diamond(Customer):
 
 class ReserveSystem:
     def __init__(self):
-        self.customers: list[Customer] = []
+        self.customer_list: list[Customer] = []
         self.policy = Policy()
 
     def add_customer(self, customer: Customer):
-        self.customers.append(customer)
+        self.customer_list.append(customer)
 
     def search_customer(self, customer_id: str) -> Optional[Customer]:
-        for customer in self.customers:
+        for customer in self.customer_list:
             if customer.get_id() == customer_id:
                 return customer
         return None
@@ -619,6 +628,10 @@ class ReserveSystem:
             "cancel_success",  cancel_success,
             "transaction_history", [str(t) for t in service.payment.get_transaction_history()],
         ]
+
+
+#------------------MOCK DATA-----------------------------------------------
+
 
 system_controller = ReserveSystem()
 

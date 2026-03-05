@@ -14,35 +14,35 @@ class NotiStatus(Enum):
 
 class Notification:
     def __init__(self, notification_id: str, user_name: str):
-        self.__notification_id = notification_id
-        self.__user_name       = user_name
-        self.__message         = ""
-        self.__is_read         = False
-        self.__status          = NotiStatus.PENDING
+        self.notification_id = notification_id  
+        self.user_name       = user_name         
+        self.message         = ""
+        self.is_read         = False
+        self.status          = NotiStatus.PENDING
 
     def format_message(self, raw_message: str) -> str:
-        self.__message = (
+        self.message = (
             f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}]"
-            f" Dear {self.__user_name}: {raw_message}"
+            f" Dear {self.user_name}: {raw_message}"
         )
-        return self.__message
+        return self.message
 
     def send(self, raw_message: str) -> NotiStatus:
         print(f"[Notification] {self.format_message(raw_message)}")
-        self.__status = NotiStatus.SENT
-        return self.__status
+        self.status = NotiStatus.SENT
+        return self.status
 
     def mark_as_read(self):
-        self.__is_read = True
+        self.is_read = True
 
 
 class Coupon:
     EXPIRE_MONTHS = 1
 
     def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
-        self.__coupon_id    = coupon_id
-        self.__discount     = discount
-        self.__expired_date = expired_date
+        self.coupon_id    = coupon_id     
+        self.discount     = discount        
+        self.expired_date = expired_date     
 
     @classmethod
     def create_coupon(cls, discount: float) -> "Coupon":
@@ -51,32 +51,32 @@ class Coupon:
         print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
         return cls(coupon_id, discount, expired_date)
 
-    def get_coupon_id(self) -> str:
-        return self.__coupon_id
+    def get_coupon_id(self) -> str:   
+        return self.coupon_id
 
-    def get_discount(self) -> float:
-        return self.__discount
+    def get_discount(self) -> float:   
+        return self.discount
 
     def get_expired_date(self) -> datetime:
-        return self.__expired_date
+        return self.expired_date
 
     def is_expired(self) -> bool:
-        return datetime.now() > self.__expired_date
+        return datetime.now() > self.expired_date
 
 
 class Service_IN:
     def __init__(self, service_in_id: str):
-        self.__service_in_id = service_in_id
-        self.__booking_list: list = []
+        self.service_in_id = service_in_id  
+        self.booking_list: list = []
 
     def get_id(self) -> str:
-        return self.__service_in_id
+        return self.service_in_id
 
     def add_booking(self, booking):
-        self.__booking_list.append(booking)
+        self.booking_list.append(booking)
 
     def get_booking(self, booking_id: str):
-        for booking in self.__booking_list:
+        for booking in self.booking_list:
             if booking.get_id() == booking_id:
                 return booking
         return None
@@ -84,60 +84,59 @@ class Service_IN:
 
 class Customer(ABC):
     def __init__(self, customer_id: str, name: str, password: str):
-        self.__customer_id  = customer_id
-        self.__name         = name
+        self.customer_id    = customer_id   
+        self.name           = name            
         self.__password     = password
         self.current_points = 0
-        self.__coupon_list:  list[Coupon]    = []
-        self.__service_list: list[Service_IN] = []
-        self.__notification  = Notification(f"NOTI-{customer_id}", name)
+        self.coupon_list:  list[Coupon]     = []   
+        self.service_list: list[Service_IN] = []   
+        self.notification   = Notification(f"NOTI-{customer_id}", name)  
 
     def get_id(self) -> str:
-        return self.__customer_id
+        return self.customer_id
 
     def get_name(self) -> str:
-        return self.__name
+        return self.name
 
     def verify_password(self, password: str) -> bool:
         return self.__password == password
 
     def add_coupon(self, coupon: Coupon):
-        self.__coupon_list.append(coupon)
-        print(f"[Customer] {self.__customer_id} add_coupon({coupon.get_coupon_id()})")
+        self.coupon_list.append(coupon)
+        print(f"[Customer] {self.customer_id} add_coupon({coupon.get_coupon_id()})")
 
     def get_coupon(self, coupon_id: str) -> Optional[Coupon]:
-        for coupon in self.__coupon_list:
-            if coupon.get_coupon_id() == coupon_id and not coupon.is_expired():
+        for coupon in self.coupon_list:
+            if coupon.coupon_id == coupon_id and not coupon.is_expired():
                 return coupon
         return None
 
     def remove_coupon(self, coupon_id: str):
-        for coupon in self.__coupon_list:
-            if coupon.get_coupon_id() == coupon_id:
-                self.__coupon_list.remove(coupon)
+        for coupon in self.coupon_list:
+            if coupon.coupon_id == coupon_id:
+                self.coupon_list.remove(coupon)
                 print(f"[Customer] Coupon {coupon_id} removed")
                 return
 
     def add_service_in(self, service: Service_IN):
-        self.__service_list.append(service)
+        self.service_list.append(service)
 
     def get_service_in(self, service_in_id: str) -> Optional[Service_IN]:
-        for service in self.__service_list:
+        for service in self.service_list:
             if service.get_id() == service_in_id:
                 return service
         return None
 
     def __deduct_points(self, pts: int) -> int:
         self.current_points -= pts
-        print(f"[Customer] {self.__customer_id} deduct {pts} pts → remaining {self.current_points} pts")
+        print(f"[Customer] {self.customer_id} deduct {pts} pts → remaining {self.current_points} pts")
         return self.current_points
 
     def redeem_point(self, points_to_redeem: int) -> Coupon:
-        print(f"\n[Customer] {self.__customer_id} redeem_point({points_to_redeem} pts)")
+        print(f"\n[Customer] {self.customer_id} redeem_point({points_to_redeem} pts)")
 
         redeem_table = self.get_redeem_table()
-        
-        # ดึงคะแนนที่ถูกต้อง (Index คู่: 0, 2, 4, ...) จาก List มิติเดียว
+
         valid_points = []
         for i in range(0, len(redeem_table), 2):
             valid_points.append(redeem_table[i])
@@ -153,12 +152,11 @@ class Customer(ABC):
             )
 
         self.__deduct_points(points_to_redeem)
-        
-        # ค้นหา % ส่วนลดจากตำแหน่งถัดไป (Index คี่) ของคะแนนที่ตรงกัน
+
         discount_value = 0.0
         for i in range(0, len(redeem_table), 2):
             if redeem_table[i] == points_to_redeem:
-                discount_value = redeem_table[i+1]
+                discount_value = redeem_table[i + 1]
                 break
 
         coupon = Coupon.create_coupon(discount_value)
@@ -166,7 +164,7 @@ class Customer(ABC):
         return coupon
 
     def notify(self, message: str) -> NotiStatus:
-        return self.__notification.send(message)
+        return self.notification.send(message)
 
     @abstractmethod
     def get_redeem_table(self) -> list:
@@ -187,7 +185,7 @@ class Standard(Customer):
         self.receive_point_per_hr = 3
 
     def get_redeem_table(self) -> list:
-        #[แต้ม, ส่วนลด]
+        # [แต้ม, ส่วนลด]
         return [20, 0.05]
 
     def get_cancellation_limit_hours(self) -> int:
@@ -230,13 +228,13 @@ class Diamond(Customer):
 
 class ReserveSystem:
     def __init__(self):
-        self.__customer_list: list[Customer] = []
+        self.customer_list: list[Customer] = [] 
 
     def add_customer(self, customer: Customer):
-        self.__customer_list.append(customer)
+        self.customer_list.append(customer)
 
     def search_customer(self, customer_id: str) -> Optional[Customer]:
-        for customer in self.__customer_list:
+        for customer in self.customer_list:
             if customer.get_id() == customer_id:
                 return customer
         return None

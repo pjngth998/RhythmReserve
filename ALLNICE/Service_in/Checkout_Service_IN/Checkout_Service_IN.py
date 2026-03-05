@@ -182,6 +182,9 @@ class Coupon:
         self.discount     = discount
         self.expired_date = expired_date
 
+    def get_coupon_id(self) -> str:   
+        return self.coupon_id
+
     def get_discount(self) -> float:
         return self.discount
 
@@ -199,6 +202,9 @@ class Booking:
 
     @property
     def id(self) -> str:
+        return self.__id
+
+    def get_id(self) -> str:    
         return self.__id
 
     @property
@@ -263,7 +269,7 @@ class QrScan(PaymentChannel):
 
     def process(self, amount: float, ref: str = "TXN") -> bool:
         self.generate_qr(amount, ref)
-        print(f"[QrScan] Waiting for scan... Payment {amount} THB confirmed!")
+        print(f"[QrScan] Waiting for scan... Payment {amount:.2f} THB confirmed!") 
         return True
 
 class CreditCard(PaymentChannel):
@@ -308,7 +314,7 @@ class CreditCard(PaymentChannel):
         if not self.validate_card():
             print("[CreditCard] Payment rejected: invalid card")
             return False
-        print(f"[CreditCard] Charging {amount} THB to *{self.__card_number[-4:]}... Success!")
+        print(f"[CreditCard] Charging {amount:.2f} THB to *{self.__card_number[-4:]}... Success!")   
         return True
 
 class Payment:
@@ -323,7 +329,7 @@ class Payment:
         self.transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
         print(f"[Payment] Gen Transaction ID: {self.transaction_id}")
         self.is_success = self.channel.process(final_price, ref=self.transaction_id)
-        print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price} THB")
+        print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price:.2f} THB")   
         return self.is_success
 
 class Service_IN:
@@ -343,18 +349,17 @@ class Service_IN:
 
     def calculate_total(self) -> float:
         self.total_price = sum(b.price for b in self.booking_list)
-        print(f"[Service_IN] Total calculated: {self.total_price} THB")
+        print(f"[Service_IN] Total calculated: {self.total_price:.2f} THB")    
         return self.total_price
 
     def apply_tier_discount(self, total_price: float, tier_discount: float) -> float:
         discounted_price = total_price * (1 - tier_discount)
-        print(f"[Service_IN] After tier discount ({tier_discount*100}%): {discounted_price} THB")
+        print(f"[Service_IN] After tier discount ({tier_discount*100:.1f}%): {discounted_price:.2f} THB")   
         return discounted_price
 
     def apply_coupon_discount(self, discounted_price: float, coupon_discount: float) -> float:
         final_price = discounted_price * (1 - coupon_discount)
-        print(f"[Service_IN] After coupon discount ({coupon_discount*100}%): {final_price} THB")
-        return final_price
+        print(f"[Service_IN] After coupon discount ({coupon_discount*100:.1f}%): {final_price:.2f} THB")   
 
     def change_status(self, status: ServiceStatus):
         self.status = status
@@ -397,6 +402,9 @@ class Customer(ABC):
 
     def get_id(self) -> str:
         return self.customer_id
+
+    def get_name(self) -> str:      
+        return self.name
 
     def verify_password(self, password: str) -> bool:
         return self.__password == password
@@ -472,13 +480,13 @@ class Diamond(Customer):
 
 class ReserveSystem:
     def __init__(self):
-        self.customers: list[Customer] = []
+        self.customer_list: list[Customer] = []   
 
     def add_customer(self, customer: Customer):
-        self.customers.append(customer)
+        self.customer_list.append(customer)
 
     def search_customer(self, customer_id: str) -> Optional[Customer]:
-        for customer in self.customers:
+        for customer in self.customer_list:
             if customer.get_id() == customer_id:
                 return customer
         return None

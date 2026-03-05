@@ -7,6 +7,8 @@ from dateutil.relativedelta import relativedelta
 from abc import ABC, abstractmethod
 from typing import Optional
 from enum import Enum
+import qrcode
+import io
 
 
 # ===========================================================================
@@ -343,9 +345,16 @@ class QrScan(PaymentChannel):
         self.qr_image: Optional[str] = None
 
     def generate_qr(self, amount: float, ref: str) -> str:
-        payload = f"PROMPTPAY|REF:{ref}|AMT:{amount:.2f}|TS:{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        self.qr_image = base64.b64encode(payload.encode()).decode()
-        print(f"[QrScan] QR generated → {self.qr_image[:40]}...")
+        # URL ที่พอสแกนแล้วเปิด browser ขึ้นหน้า Payment completed
+        payload = f"Payment completed | REF:{ref} | AMT:{amount:.2f} THB"
+        
+        qr = qrcode.make(payload)
+        qr.save("qr_output.png")
+        print(f"[QrScan] QR saved → qr_output.png")
+
+        buffer = io.BytesIO()
+        qr.save(buffer, format="PNG")
+        self.qr_image = base64.b64encode(buffer.getvalue()).decode()
         return self.qr_image
 
     def process(self, amount: float, ref: str = "TXN") -> bool:
@@ -698,7 +707,6 @@ class Customer(ABC):
         return self.current_points
 
     def redeem_point(self, points_to_redeem: int) -> Coupon:
-        """แลกแต้มเป็น Coupon ตาม redeem_table ของ tier (file1)"""
         print(f"\n[Customer] {self.customer_id} redeem_point({points_to_redeem} pts)")
 
         redeem_table = self.get_redeem_table()
