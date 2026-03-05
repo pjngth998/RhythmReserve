@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 import uvicorn
-from buy_snackNdrink import *
+from code_pj import *
 from datetime import time, date
 
 app = FastAPI()
