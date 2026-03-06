@@ -127,10 +127,6 @@ class Products():
     def __init__(self, type_: ProductType, price, stock):
         self.__type = type_
         self.__price = price
-
-class Item(Products):
-    def __init__(self, type_, price, stock):
-        super().__init__(type_, price, stock)
         self.__id = None
 
     def make_item_id(self, branch_id):
@@ -140,6 +136,7 @@ class Item(Products):
     @property
     def id(self):
         return self.__id
+    
     
 class Stock():
     def __init__(self, type_: ProductType):
@@ -378,7 +375,6 @@ class RhythmReserve():
         pass
         
 
-
     def add_customer(self, username, password):
         customer = Customer(username, password)
         customer.make_customer_id()
@@ -427,7 +423,12 @@ class RhythmReserve():
         for _,item in enumerate(self.__branch_list):
             if branch_id == item.id:
                 item.equipment = equipment
-        return equipment
+        return equipment\
+        
+    def add_stock(self, branch_id, type_: ProductType, amount):
+        pass
+        
+
     
             
     def get_room_by_id(self, room_id):
