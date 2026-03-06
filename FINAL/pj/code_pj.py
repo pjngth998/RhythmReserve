@@ -224,8 +224,6 @@ class Branch():
         self.__id = f"BR-{name}-{uuid.uuid4()}"
 
    
-    
-    
 class TimeSlot():
     def __init__(self, day, start, end, status):
         self.__date: date = day
