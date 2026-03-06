@@ -410,6 +410,13 @@ class StockEquipment:
     def add_eq(self,eq):
         self.__equipment_ls.append(eq)
 
+    def reduce_eq(self,eq_id):
+        for eq in self.__equipment_ls:
+            if eq.eq_id ==eq_id:
+                self.__equipment_ls.remove(eq)
+                return True
+        return False
+
     def find_and_get_size(self,eq_id):
         for eq in self.__equipment_ls:
             if eq.eq_id == eq_id:
