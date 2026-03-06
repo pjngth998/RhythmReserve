@@ -12,12 +12,12 @@ participant "StockEquipment" as stock
 participant "Equipment" as eq
 ' participant "Booking" as booking
 ' participant "Service_IN" as sv_in
-' participant "TimeSlot" as timeslot
+participant "TimeSlot" as timeslot
 
-actor -> system : select_eq(customer_id,branch_id,room_id,eq_list)
+actor -> system : select_eq(customer_id,branch_id,room_id,eq_list,day,s_time,e_time)
 activate system
 loop search_customer(customer_id)
-    system -> customer : get_customer_info(customer_id)    
+    system -> customer : get_customer_info(customer_id)
     activate customer
     customer --> system : Customer
     deactivate customer
@@ -35,46 +35,54 @@ loop search_branch(branch_id)
 end
 deactivate branch
 loop for eq_id in eq_list
-    system -> branch : check_stock_eq(eq_id)
+    ' --- ขั้นตอนที่ 1: การตรวจสอบ (Check) ---
+    system -> branch : check_can_reserve(eq_id,day,s_time,e_time)
     activate branch
-    branch -> stock : check_eq(eq_id)
+    branch -> stock : verify_available(eq_id,day,s_time,e_time)
     activate stock
+    stock -> stock : get_eq(eq_id) :Equipment
+    ' stock --> stock : Equipment
+    ' eq--> stock : Equipment
+    stock -> eq : check_status(day,s_time,e_time)
+    activate eq
+    eq --> stock : status
+    deactivate eq
 
-    ' stock -> eq : get_eq(eq_id)
-    ' activate eq
-    ' eq --> stock : Equipment
-    ' deactivate eq
-    
-    alt have in stock
-        stock --> branch : Have Equipment in Stock
-        ' deactivate stock
+    alt status is "Available"
+        stock --> branch : Status Available
         branch --> system : Can Reserve
-        loop for eq_id in eq_list
-            ' system -> branch : calculate_quota
-            system -> stock : get_size_eq(eq_id)
-            ' activate stock
-            loop for eq in equipment_list
-                stock -> eq : verify_eq(eq_id)
-                alt eq.eq_id == self.eq_id
-                    eq --> stock : MATCH
-                    stock -> eq : get_size(eq_id)
-                    eq --> stock : size
-                else
-                    eq --> stock : NOT MACH
-                end
-            end
+        
+        ' --- ขั้นตอนที่ 2: การดึงข้อมูล (Get) เมื่อตรวจสอบผ่านแล้ว ---
+        system -> branch : get_size_eq(eq_id)
+        branch -> stock : find_and_get_size(eq_id)
+        
+        loop for eq in equipment_list
+            stock -> eq : verify_id(eq_id)
             activate eq
+            alt eq_id == eq.id
+                eq --> stock : MATCH
+                stock -> eq : get_size()
+                eq --> stock : size
+            else
+                eq --> stock : NOT MATCH
+            end
             deactivate eq
-            stock --> system : size
         end
+        
+        stock --> branch : size (or 0)
+        branch --> system : size
         system -> system : total_requested_size += size
-    else stock not enough
-        stock --> branch : Don't have Equipment in Stock
-        deactivate stock
-        branch --> system : Not Enough for Reserve
+        
+    else status not "Available"
+        stock --> branch : Not Ready
+        branch --> system : Cannot Reserve (Skip)
     end
+    
+    deactivate stock
     deactivate branch
 end
+activate branch
+
 
 alt total_requested_size <= quota_eq_max
     system --> actor : Can Reserve Equipment - Add to Booking Successfully

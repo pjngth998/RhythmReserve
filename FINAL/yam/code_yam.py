@@ -134,14 +134,13 @@ class ReserveSystem():
             return "Room Not Found"
         # max_quota = room.get_eq_quota(room_id)
 
-
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
         status = "PENDING"
         price = room.rate
 
         for eq_id in eq_list:
-            check_stock = branch.check_stock_eq(eq_id)
-            if not check_stock:
+            can_reserve = branch.check_can_reserve(eq_id)
+            if not can_reserve:
                 return "Don't have Equipment in Stock"
             
         total_requested_size = 0
@@ -188,9 +187,12 @@ class Branch():
                 return room
         return None
 
-    def check_stock_eq(self,eq_id):
-        return self.__stock.check_eq(eq_id) 
-    
+    # def check_stock_eq(self,eq_id):
+    #     return self.__stock.check_eq(eq_id) 
+
+    def check_can_reserve(self,eq_id,day,s_time,e_time):
+        verify = self.__stock.verify_available(eq_id,day,s_time,e_time)
+
     def get_room_quota(self,room_id):
         room = self.search_room(room_id)
         if not room:
@@ -406,6 +408,27 @@ class StockEquipment:
                     size = eq.get_size(eq_id)
                     return  size
         return 0
+    
+    def verify_available(self,eq_id,day,s_time,e_time):
+        eq = self.get_eq(eq_id)
+        status = eq.check_status(day,s_time,e_time)
+
+        if status == RoomEquipmentStatus.AVAILABLE:
+            return True
+        return False
+    
+    def get_eq(self,eq_id):
+        for eq in self.__equipment_ls:
+            if eq.eq_id == eq_id:
+                return eq
+        return None
+
+class RoomEquipmentStatus(Enum):
+    AVAILABLE = "Available"
+    PENDING = "Pending"
+    RESERVED = "Reserved"
+    OCCUPIED = "Occupied"
+    MAINTENANCE = "Maintenance"
 
 class Equipment:
     def __init__(self,id,size,stock):
@@ -452,6 +475,11 @@ class Equipment:
             return self.__size
         return None
     
+    def check_status(self,day,s_time,e_time):
+        for timeslot in self.__time_slot:
+            if timeslot.day == day and  timeslot.start_time  == s_time and timeslot.e_time == e_time:
+                return timeslot.status
+    
     
 
 class TimeSlotStatus(Enum):
@@ -491,6 +519,7 @@ class TimeSlot:
         if second_start < self.__end_time and self.__start_time < second_end:
             return True
         return False
+
     
 class Notification:
     def __init__(self, notification_id: str, user_name: str):
