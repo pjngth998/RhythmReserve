@@ -140,7 +140,9 @@ class ReserveSystem():
 
         for eq_id in eq_list:
             can_reserve = branch.check_can_reserve(eq_id)
-            if not can_reserve:
+            if can_reserve:
+                branch.get_size_eq(eq_id)
+            else:
                 return "Don't have Equipment in Stock"
             
         total_requested_size = 0
@@ -191,13 +193,21 @@ class Branch():
     #     return self.__stock.check_eq(eq_id) 
 
     def check_can_reserve(self,eq_id,day,s_time,e_time):
-        verify = self.__stock.verify_available(eq_id,day,s_time,e_time)
+        c_stock = self.__stock.check_stock(eq_id)
+        if c_stock:
+            verify = self.__stock.verify_available(eq_id,day,s_time,e_time)
+            if verify:
+                return True
+        return False
 
     def get_room_quota(self,room_id):
         room = self.search_room(room_id)
         if not room:
             return "Room Not Found"
         return room.get_eq_quota(room_id)
+    
+    def get_size_eq(self,eq_id):
+        size = self.__stock.get_size(eq_id)
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -390,7 +400,7 @@ class StockEquipment:
     def stock_id(self):
         return self.__stock_id
     
-    def check_eq(self,eq_id):
+    def check_stock(self,eq_id):
         for eq in self.__equipment_ls:
             if eq.eq_id == eq_id:
                 return True
@@ -400,7 +410,7 @@ class StockEquipment:
     def add_eq(self,eq):
         self.__equipment_ls.append(eq)
 
-    def get_size_eq(self,eq_id):
+    def find_and_get_size(self,eq_id):
         for eq in self.__equipment_ls:
             if eq.eq_id == eq_id:
                 verify = eq.verify_eq(eq_id)
@@ -422,6 +432,7 @@ class StockEquipment:
             if eq.eq_id == eq_id:
                 return eq
         return None
+
 
 class RoomEquipmentStatus(Enum):
     AVAILABLE = "Available"
@@ -478,8 +489,7 @@ class Equipment:
     def check_status(self,day,s_time,e_time):
         for timeslot in self.__time_slot:
             if timeslot.day == day and  timeslot.start_time  == s_time and timeslot.e_time == e_time:
-                return timeslot.status
-    
+                return timeslot.get_status()
     
 
 class TimeSlotStatus(Enum):
@@ -519,6 +529,9 @@ class TimeSlot:
         if second_start < self.__end_time and self.__start_time < second_end:
             return True
         return False
+
+    def get_status(self):
+        return self.__status
 
     
 class Notification:
