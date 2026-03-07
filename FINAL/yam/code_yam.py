@@ -539,29 +539,45 @@ class TimeSlot:
 
     def get_status(self):
         return self.__status
+    
+    def ready_reserve(self,target_date,s_time,e_time):
+        if self.__date == target_date and self.__status == "AVAILABLE":
+            if self.check_overlab(s_time,e_time):
+                return False
+            return True
+        return False
+
+class NotiStatus(Enum):
+    PENDING = "PENDING"
+    SENT    = "SENT"
+    FAILED  = "FAILED"
 
     
 class Notification:
-    def __init__(self, notification_id: str, user_name: str):
-        self.notification_id = notification_id
-        self.user_name       = user_name
-        self.message         = ""
-        self.is_read         = False
-        self.status          = NotiStatus.PENDING
+    def __init__(self, noti_id: str, username: str):
+        self.__noti_id = noti_id
+        self.__username       = username
+        self.__message         = ""
+        self.__is_read         = False
+        self.__status          = NotiStatus.PENDING
 
-    def format_message(self, raw_message: str) -> str:
-        self.message = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Dear {self.user_name}: {raw_message}"
-        return self.message
-
-    def send(self, raw_message: str) -> NotiStatus:
-        formatted = self.format_message(raw_message)
-        print(f"[Notification] {formatted}")
-        self.status = NotiStatus.SENT
-        return self.status
+    def format_message(self, message: str) -> str:
+        self.__message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+                        f"Dear {self.__username}: {message}")
+        return self.__message
+    
+    def set_status_noti(self, status : NotiStatus):
+        self.__status = status
 
     def mark_as_read(self):
-        self.is_read = True
+        self.__is_read = True
 
+    def noti_payment_success(self,message):
+        formatted = self.format_message(message)
+        print(f"[Email] Sending : \n" f"\t{formatted}")
+
+        self.set_status_noti(NotiStatus.SENT)
+        return True
 #  API  #
 app = FastAPI()
 system = ReserveSystem()

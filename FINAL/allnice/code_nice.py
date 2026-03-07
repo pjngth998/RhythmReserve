@@ -57,27 +57,31 @@ class NotiStatus(Enum):
 # ===========================================================================
 
 class Notification:
-    def __init__(self, notification_id: str, user_name: str):
-        self.notification_id = notification_id
-        self.user_name       = user_name
-        self.message         = ""
-        self.is_read         = False
-        self.status          = NotiStatus.PENDING
+    def __init__(self, noti_id: str, username: str):
+        self.__noti_id = noti_id
+        self.__username       = username
+        self.__message         = ""
+        self.__is_read         = False
+        self.__status          = NotiStatus.PENDING
 
-    def format_message(self, raw_message: str) -> str:
-        self.message = f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Dear {self.user_name}: {raw_message}"
-        return self.message
-
-    def send(self, raw_message: str) -> NotiStatus:
-        formatted = self.format_message(raw_message)
-        print(f"[Notification] {formatted}")
-        self.status = NotiStatus.SENT
-        return self.status
+    def format_message(self, message: str) -> str:
+        self.__message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+                        f"Dear {self.__username}: {message}")
+        return self.__message
+    
+    def set_status_noti(self, status : NotiStatus):
+        self.__status = status
 
     def mark_as_read(self):
-        self.is_read = True
+        self.__is_read = True
 
+    def noti_payment_success(self,message):
+        formatted = self.format_message(message)
+        print(f"[Email] Sending : \n" f"\t{formatted}")
 
+        self.set_status_noti(NotiStatus.SENT)
+        return True
+    
 # ===========================================================================
 # TIME SLOT
 # ===========================================================================
@@ -442,8 +446,9 @@ class TransactionRecord:
 
 
 class Payment:
-    def __init__(self, service_in_id: str, total_price: float, channel: PaymentChannel):
+    def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
         self.service_in_id  = service_in_id
+        self.__username = username
         self.total_price    = total_price
         self.channel        = channel
         self.is_success     = False
@@ -467,8 +472,26 @@ class Payment:
             self.transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
 
+            noti_id = self.gen_noti_id
+            self._send_confirm(noti_id,self.__username)
+
         print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price:.2f} THB")
         return self.is_success
+    
+    count_noti = 1
+    @classmethod
+    def gen_noti_id(cls):
+        date_format = date.today().strftime("%y%m%d")
+        count_str = str(cls.count_noti).zfill(3)
+        noti_id = f"{type.upper()}-{date_format}-{count_str}"
+        cls.count_noti += 1
+        return noti_id
+    
+    def _send_confirm(self,noti_id,username):
+        noti = Notification()
+
+        msg = f"Payment Successful!"
+        noti.noti_payment_success()
 
     #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
@@ -558,7 +581,7 @@ class Service_IN:
                  payment: Payment, start_time: Optional[datetime] = None):
         self.service_in_id = service_in_id
         self.booking_list  = booking_list
-        self.payment       = payment
+        self.payment       = 9
         self.start_time    = start_time
         self.status        = ServiceStatus.PENDING_PAYMENT
         self.total_price   = 0.0
