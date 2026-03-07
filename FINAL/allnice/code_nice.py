@@ -57,17 +57,16 @@ class NotiStatus(Enum):
 # ===========================================================================
 
 class Notification:
-    def __init__(self, noti_id: str, username: str):
-        self.__noti_id = noti_id
+    def __init__(self, username: str):
+        self.__noti_id = f"NT-{uuid.uuid4().hex[:8].upper()}"
         self.__username       = username
-        self.__message         = ""
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
 
     def format_message(self, message: str) -> str:
-        self.__message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+        message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
                         f"Dear {self.__username}: {message}")
-        return self.__message
+        return message
     
     def set_status_noti(self, status : NotiStatus):
         self.__status = status
@@ -75,7 +74,7 @@ class Notification:
     def mark_as_read(self):
         self.__is_read = True
 
-    def noti_payment_success(self,message):
+    def noti_send(self,message):
         formatted = self.format_message(message)
         print(f"[Email] Sending : \n" f"\t{formatted}")
 
@@ -264,7 +263,7 @@ class Booking:
 
     @property
     def id(self) -> str:
-        return self.__id
+        return self.__id  
 
     def get_id(self) -> str:
         return self.__id
@@ -472,26 +471,25 @@ class Payment:
             self.transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
 
-            noti_id = self.gen_noti_id
-            self._send_confirm(noti_id,self.__username)
+            self._send_confirm(self.__username)
 
         print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price:.2f} THB")
         return self.is_success
     
-    count_noti = 1
-    @classmethod
-    def gen_noti_id(cls):
-        date_format = date.today().strftime("%y%m%d")
-        count_str = str(cls.count_noti).zfill(3)
-        noti_id = f"{type.upper()}-{date_format}-{count_str}"
-        cls.count_noti += 1
-        return noti_id
+    # count_noti = 1
+    # @classmethod
+    # def gen_noti_id(cls):
+    #     date_format = date.today().strftime("%y%m%d")
+    #     count_str = str(cls.count_noti).zfill(3)
+    #     noti_id = f"{type.upper()}-{date_format}-{count_str}"
+    #     cls.count_noti += 1
+    #     return noti_id
     
     def _send_confirm(self,noti_id,username):
-        noti = Notification()
+        noti = Notification(noti_id,username)
 
         msg = f"Payment Successful!"
-        noti.noti_payment_success()
+        noti.noti_send()
 
     #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:

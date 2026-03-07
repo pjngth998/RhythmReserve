@@ -11,6 +11,7 @@ from datetime import time
 # from classcode import *
 from fastapi.responses import RedirectResponse
 import uvicorn
+import uuid
 
 class ReserveSystem():
     def __init__(self):
@@ -108,6 +109,7 @@ class ReserveSystem():
         
         reserve = customer.search_reserve(reserve_id)
         if not reserve:
+            
             return "Not Found Reserve"
 
         success = reserve.get_checkin()
@@ -269,9 +271,6 @@ class Customer(User):
         self.__reserve_list = []
         self.__notification_list = []
 
-    # @property
-    # def customer_id(self):
-    #     return self.__customer_id
     
     @property
     def reserve_list(self):
@@ -554,17 +553,16 @@ class NotiStatus(Enum):
 
     
 class Notification:
-    def __init__(self, noti_id: str, username: str):
-        self.__noti_id = noti_id
+    def __init__(self, username: str):
+        self.__noti_id = f"NT-{uuid.uuid4().hex[:8].upper()}"
         self.__username       = username
-        self.__message         = ""
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
 
     def format_message(self, message: str) -> str:
-        self.__message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+        message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
                         f"Dear {self.__username}: {message}")
-        return self.__message
+        return message
     
     def set_status_noti(self, status : NotiStatus):
         self.__status = status
@@ -572,12 +570,14 @@ class Notification:
     def mark_as_read(self):
         self.__is_read = True
 
-    def noti_payment_success(self,message):
+    def noti_send(self,message):
         formatted = self.format_message(message)
         print(f"[Email] Sending : \n" f"\t{formatted}")
 
         self.set_status_noti(NotiStatus.SENT)
         return True
+    
+
 #  API  #
 app = FastAPI()
 system = ReserveSystem()
@@ -606,9 +606,6 @@ eq1 = Equipment("E01", 2, 20)
 eq2 = Equipment("E02", 4, 10)
 mock_stock.add_eq(eq1)
 mock_stock.add_eq(eq2)
-
-# mock_branch.add_equipment(eq1)
-# mock_branch.add_equipment(eq2)
 
 @app.get("/")
 def root():

@@ -168,8 +168,6 @@ class StockEquipment(Stock):
         super().__init__(type_)
 
     
-
-    
 class Service_IN():
     def __init__(self, booking):
         self.__id = id
