@@ -4,15 +4,10 @@ from enum import Enum
 def make_id(type_str: str):
     return f"{type_str}-{str(uuid.uuid4())[:8]}"
 
-# ==========================================
-# Enums
-# ==========================================
+
 class PenaltyType(Enum):
     DAMAGE = "DAMAGE"
 
-# ==========================================
-# Entity Classes for Maintenance
-# ==========================================
 class Penalty:
     def __init__(self, amount: float, reason: str, date: str):
         self.penalty_id = make_id("PEN")

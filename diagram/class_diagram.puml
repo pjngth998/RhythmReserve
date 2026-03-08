@@ -193,7 +193,7 @@ class Staff{
 
 class Customer{
     -current_points : int
-    ' -booking_history : list
+    -booking_history : list
     -coupon_list : list
     -reserve_list : list 
     -membership 
