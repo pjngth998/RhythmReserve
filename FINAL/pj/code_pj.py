@@ -66,6 +66,12 @@ class ServiceStatus(Enum):
     PAID            = "PAID"
     CANCELLED       = "CANCELLED"
 
+OPEN_TIME = time(9, 0)
+CLOSE_TIME = time(23, 0)
+
+SLOT_STEP = timedelta(minutes=30)
+BUFFER = timedelta(minutes=15)
+
 
 # ===========================================================================
 # User
@@ -191,65 +197,6 @@ class Premium(Customer):
 class Diamond(Customer):
     pass
 
-# ===========================================================================
-# Product
-# ===========================================================================
-class Products():
-    def __init__(self, type_: ProductType, price):
-        self.__type = type_
-        self.__price = price
-        self.__id = None
-
-    def make_item_id(self, branch_id):
-        temp = branch_id.split("-")
-        self.__id = f"PR-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
-
-    @property
-    def id(self):
-        return self.__id
-    
-    @property
-    def price(self):
-        return self.__price
-    
-    @property
-    def type(self):
-        return self.__price
-    
-# ===========================================================================
-# StockProduct
-# ===========================================================================
-
-class StockProduct():
-    def __init__(self, type_, id):
-        self.__type = type_
-        self.__id = None
-        self.__product_list = []
-
-    def add_stock(self, new_product):
-        self.__product_list.append(new_product)
-
-    def del_stock(self, product_id):
-        for index, item in enumerate(self.__product_list):
-            if item.id == product_id:
-                self.__product_list.pop(index)
-
-    def make_stock_id(self, branch_id):
-        temp = branch_id.split("-")
-        self.__id =  f"ST-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
-
-    @property
-    def id(self):
-        return self.__id
-
-    @property
-    def get_stock(self):
-        return self.__product_list
-    
-    @property
-    def type(self):
-        return self.__type
-    
 
 
 # ===========================================================================
@@ -298,6 +245,10 @@ class Branch():
 
     def make_branch_id(self, name):
         self.__id = f"BR-{name}-{uuid.uuid4()}"
+
+# ===========================================================================
+# TimeSlot
+# ===========================================================================
 
 class TimeSlot:
     def __init__(self,day,start_time,end_time,status):
@@ -416,13 +367,18 @@ class Equipment():
 # StockEquipment
 # ===========================================================================
 class StockEquipment():
-    def __init__(self,id):
+    def __init__(self,type_):
         self.__stock_id = id
+        self.__type = type_
         self.__equipment_ls = []   
     
     @property
     def stock_id(self):
         return self.__stock_id
+    
+    def make_stock_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id =  f"ST-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
     
     def check_stock(self,eq_id):
         for eq in self.__equipment_ls:
@@ -463,6 +419,67 @@ class StockEquipment():
             if eq.eq_id == eq_id:
                 return eq
         return None
+    
+# ===========================================================================
+# Product
+# ===========================================================================
+class Products():
+    def __init__(self, type_: ProductType, price):
+        self.__type = type_
+        self.__price = price
+        self.__id = None
+
+    def make_item_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id = f"PR-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
+
+    @property
+    def id(self):
+        return self.__id
+    
+    @property
+    def price(self):
+        return self.__price
+    
+    @property
+    def type(self):
+        return self.__price
+    
+# ===========================================================================
+# StockProduct
+# ===========================================================================
+
+class StockProduct():
+    def __init__(self, type_, id):
+        self.__type = type_
+        self.__id = None
+        self.__product_list = []
+
+    def add_stock(self, new_product):
+        self.__product_list.append(new_product)
+
+    def del_stock(self, product_id):
+        for index, item in enumerate(self.__product_list):
+            if item.id == product_id:
+                self.__product_list.pop(index)
+
+    def make_stock_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id =  f"ST-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
+
+    @property
+    def id(self):
+        return self.__id
+
+    @property
+    def get_stock(self):
+        return self.__product_list
+    
+    @property
+    def type(self):
+        return self.__type
+    
+
 
 
     
