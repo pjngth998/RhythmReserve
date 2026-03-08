@@ -18,7 +18,6 @@ class ReserveSystem():
         self.__customer_list = [] 
         self.__staff_list = []
         self.__branch_list =[]
-        # self.__room_list = [Room("A101"),Room("B202"),Room("C303")]
 
     def search_customer(self,customer_id):
         for customer in self.__customer_list:
@@ -31,15 +30,6 @@ class ReserveSystem():
     
     def add_branch(self,branch):
         self.__branch_list.append(branch)
-
-    count_user = 1
-    @classmethod
-    def generate_user_id(cls,type):
-        date_str = date.today().strftime("%y%m")
-        count_str = str(cls.count_user).zfill(3)
-        new_id = f"{type.upper()}-{date_str}-{count_str}"
-        cls.count_user +=1
-        return new_id
 
     def register(self,type,name,username,password,email,phone,birthday):
 
@@ -115,7 +105,8 @@ class ReserveSystem():
         success = reserve.get_checkin()
         if success:
             return "CHECK-IN SUCCESSFULLY!"
-
+        
+    
     def search_branch(self,branch_id):
         for branch in self.__branch_list:
             if branch.branch_id == branch_id:
@@ -190,9 +181,6 @@ class Branch():
             if room.room_id == room_id:
                 return room
         return None
-
-    # def check_stock_eq(self,eq_id):
-    #     return self.__stock.check_eq(eq_id) 
 
     def check_can_reserve(self,eq_id,day,s_time,e_time):
         c_stock = self.__stock.check_stock(eq_id)
@@ -323,6 +311,8 @@ class Service_IN:
         for booking in self.__booking_list:
             booking.get_booking_detail()
         return True
+    
+    def get_checkout(self):
 
 
 class Booking:
@@ -539,6 +529,9 @@ class TimeSlot:
     def get_status(self):
         return self.__status
     
+    def update_status(self,status :TimeSlotStatus):
+        self.__status = status
+    
     def ready_reserve(self,target_date,s_time,e_time):
         if self.__date == target_date and self.__status == "AVAILABLE":
             if self.check_overlab(s_time,e_time):
@@ -552,9 +545,23 @@ class NotiStatus(Enum):
     FAILED  = "FAILED"
 
     
+class IDGenerator:
+    def __init__(self, prefix):
+        self.__prefix = prefix
+        self.__count = 1
+
+    def gen_id(self):
+        date_format = date.today().strftime("%y%m")
+        id_str = f"{self.__prefix}-{date_format}-{self.__count:03d}"
+        self.__count += 1
+        return id_str
+    
 class Notification:
+
+    ID_FACTORY = IDGenerator("NT")
+
     def __init__(self, username: str):
-        self.__noti_id = f"NT-{uuid.uuid4().hex[:8].upper()}"
+        self.__noti_id = Notification.ID_FACTORY.gen_id()
         self.__username       = username
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
@@ -576,7 +583,7 @@ class Notification:
 
         self.set_status_noti(NotiStatus.SENT)
         return True
-    
+
 
 #  API  #
 app = FastAPI()
