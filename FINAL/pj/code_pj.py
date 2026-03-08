@@ -156,7 +156,6 @@ class Customer(User) :
         return None
 
 
-   
     @property
     def notification(self):
         return self.__notification_list

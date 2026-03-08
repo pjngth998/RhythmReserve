@@ -25,8 +25,11 @@ class ReserveSystem():
                 return customer
         return None
     
-    def add_customer(self,customer):
+    def add_customer_ls(self,customer):
         self.__customer_list.append(customer)
+    
+    def add_staff_ls(self,staff):
+        self.__staff_list.append(staff)
     
     def add_branch(self,branch):
         self.__branch_list.append(branch)
@@ -36,21 +39,15 @@ class ReserveSystem():
         if self.search_user(username):
             return "Have Account Already"
         
-        user_id = self.generate_user_id(type)
-        
         if type == 'C':
-            customer = Customer(user_id,name,username,password,email,phone,birthday)
+            customer = Customer(name,username,password,email,phone,birthday)
+            customer.make_customer_id()
             self.__customer_list.add_customer_ls(customer)
         else:
-            staff = Staff(user_id,name,username,password,email,phone,birthday)
-            self.__staff_list.add_staff_ls(staff)
-        
-    def add_customer_ls(self,cus):
-        self.__customer_list.append(cus)
+            staff = Staff(name,username,password,email,phone,birthday)
+            staff.make_staff_id()
+            self.__staff_list.add_staff_ls(username,password)
 
-    def add_staff_ls(self,staff):
-        self.__staff_list.append(staff)
-    
     def login(self,username,password):
         user = self.search_user(username)
 
@@ -152,11 +149,14 @@ class ReserveSystem():
         
         
 class Branch():
-    def __init__(self,name,id,stock_id):
+    def __init__(self,name,stock_id):
         self.__name = name
-        self.__branch_id = id
+        self.__branch_id = None
         self.__stock = StockEquipment(stock_id)
         self.__room_list = []
+
+    def make_branch_id(self, name):
+        self.__branch_id = f"BR-{name}-{str(uuid.uuid4())[:8]}"
 
     @property
     def branch_id(self):
@@ -205,7 +205,7 @@ class UserStatus(Enum):
 
 class User():
     def __init__(self,id,name,username,password,email,phone,birthday,status):
-        self.__user_id  = id
+        # self.__id  = id
         self.__name = name
         self.__username = username
         self.__password = password
@@ -230,6 +230,10 @@ class User():
     def status(self):
         return self.__status
     
+    @property
+    def name(self):
+        return self.__name
+    
     def set_status_user(self,n_status):
         if isinstance(n_status,UserStatus):
             self.__status = n_status
@@ -251,22 +255,35 @@ class User():
                 return True
         return False
         
-    
+
+class Membership(Enum):
+    STANDARD = "STD"
+    PREMIUM = "PRM"
+    DIAMOND = "DMN"
+
 
 class Customer(User):
-    def __init__(self,id,name,username,password,email,phone, birthday, memberhip):
-        super().__init__(id,username, password, name, email, phone, birthday)
+    def __init__(self,name,username,password,email,phone, birthday, membership):
+        super().__init__(username, password, name, email, phone, birthday)
+        self.__customer_id = None
+        self.__membership: Membership = membership
         self.__reserve_list = []
         self.__notification_list = []
 
+    def make_customer_id(self):
+        self.__customer_id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
     
+    @property
+    def customer_id(self):
+        
+
     @property
     def reserve_list(self):
         return self.__reserve_list
     
     def get_customer_info(self,customer_id):
         if self.__customer_id == customer_id:
-            return self.__customer_name, self.__customer_id,self.__reserve_list
+            return self.name, self.__customer_id,self.__reserve_list
         
     def add_reserve_list(self,reserve):
         self.__reserve_list.append(reserve)
@@ -283,11 +300,19 @@ class Customer(User):
                 return reserve
         return None
     
-class Staff:
-    def __init__(self,id,name,username,password,email,phone, birthday, memberhip):
-        super().__init__(id,username, password, name, email, phone, birthday)
+class Staff(User):
+    def __init__(self,name,username,password,email,phone, birthday):
+        super().__init__(username, password, name, email, phone, birthday)
+        self.__staff_id = None
         # self.__reserve_list = []
         self.__notification_list = []
+
+    def make_staff_id(self):
+        self.__staff_id = f"S-{self.name}-{str(uuid.uuid4())[:8]}"
+    
+    @property
+    def staff_id(self):
+        return self.__staff_id
 
 
 class Service_IN:
@@ -341,13 +366,17 @@ class Booking:
 
     
 class Room:
-    def __init__(self,room_id,size,rate,eq_quota):
-        self.__room_id = room_id
+    def __init__(self,size,rate,eq_quota):
+        self.__room_id = None
         self.__size = size
         self.__rate = rate
         self.__eq_quota = eq_quota
         self.__time_slot =[]
-        
+
+    
+    def make_room_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__id = f"RM-{temp[1]}-{self.__size.value}-{str(uuid.uuid4())[:8]}" 
 
     @property
     def room_id(self):
@@ -381,9 +410,11 @@ class Room:
         return None
 
 class StockEquipment:
-    def __init__(self,id):
-        self.__stock_id = id
+    def __init__(self):
+        self.__stock_id = None
         self.__equipment_ls = []   
+
+    def make_stock_id(self):
     
     @property
     def stock_id(self):
@@ -396,8 +427,11 @@ class StockEquipment:
             
         return False
     
-    def add_eq(self,eq):
+    def add_eq(self,size,stock):
+        eq = Equipment(size,stock)
+        eq.make_equipment_id()
         self.__equipment_ls.append(eq)
+        return eq
 
     def reduce_eq(self,eq_id):
         for eq in self.__equipment_ls:
@@ -437,13 +471,27 @@ class RoomEquipmentStatus(Enum):
     OCCUPIED = "Occupied"
     MAINTENANCE = "Maintenance"
 
+class EquipmentType(Enum):
+    ELECTRICGUITAR = "EGTR"
+    ACOUSTICGUITAR = "AGTR"
+    DRUM = "DM"
+    MICROPHONE = "MC"
+    BASS = "BS"
+    KEYBOARD = "KB"
+
+
 class Equipment:
-    def __init__(self,id,size,stock):
-        self.__eq_id = id
+    def __init__(self,type : EquipmentType,size,stock):
+        self.__eq_id = None
+        self.__type = type
         self.__size = size
         self.__stock = stock
         self.__quantity =  0
         self.__time_slot = []
+
+    def make_equipment_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__eq_id =  f"EQ-{temp[1]}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
     
     @property
     def eq_id(self):
@@ -545,26 +593,30 @@ class NotiStatus(Enum):
     FAILED  = "FAILED"
 
     
-class IDGenerator:
-    def __init__(self, prefix):
-        self.__prefix = prefix
-        self.__count = 1
-
-    def gen_id(self):
-        date_format = date.today().strftime("%y%m")
-        id_str = f"{self.__prefix}-{date_format}-{self.__count:03d}"
-        self.__count += 1
-        return id_str
-    
+# class IDGenerator:
+#     def __init__(self, prefix):
+#         self.__prefix = prefix
+#         self.__count = 1
+# 
+#     def gen_id(self):
+#         date_format = date.today().strftime("%y%m")
+#         id_str = f"{self.__prefix}-{date_format}-{self.__count:03d}"
+#         self.__count += 1
+#         return id_str
+#     
 class Notification:
 
-    ID_FACTORY = IDGenerator("NT")
+    # ID_FACTORY = IDGenerator("NT")
 
     def __init__(self, username: str):
-        self.__noti_id = Notification.ID_FACTORY.gen_id()
+        # self.__noti_id = Notification.ID_FACTORY.gen_id()
+        self.__noti_id = None
         self.__username       = username
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
+
+    def make_noti_id(self):
+        self.__noti_id = f"NT-{self.__username.upper()}-{str(uuid.uuid4())[:8]}"
 
     def format_message(self, message: str) -> str:
         message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
