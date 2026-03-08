@@ -12,6 +12,9 @@ from fastapi.responses import RedirectResponse
 import uvicorn
 import uuid
 
+# ===========================================================================
+# ReserveSystem
+# ===========================================================================
 class ReserveSystem():
     def __init__(self):
         self.__customer_list = [] 
@@ -59,6 +62,7 @@ class ReserveSystem():
                 return f"{username} logged in successfully"
             else:
                 return "Login Failed"
+        return "User not found"
             
     def logout(self,username):
         user = self.search_user(username)
@@ -66,6 +70,8 @@ class ReserveSystem():
         if user and user.status == UserStatus.LOGIN:
             user.set_status_user(UserStatus.LOGOUT)
             return f"{username} logged out successfully"
+            # return True
+        # return False
         return "Logout Failed"
     
     def edit_info(self,username,data,new_info):
@@ -107,7 +113,7 @@ class ReserveSystem():
     
     def search_branch(self,branch_id):
         for branch in self.__branch_list:
-            if branch.branch_id == branch_id:
+            if branch.id == branch_id:
                 return branch
         return None
 
@@ -149,6 +155,9 @@ class ReserveSystem():
             return "Exceed Room Quota Limit"
         
         
+# ===========================================================================
+# Branch
+# ===========================================================================      
 class Branch():
     def __init__(self,name):
         self.__name = name
@@ -157,7 +166,7 @@ class Branch():
         self.__room_list = []
 
     @property
-    def branch_id(self):
+    def id(self):
         return self.__branch_id
     
     @property
@@ -176,7 +185,7 @@ class Branch():
     
     def search_room(self,room_id):
         for room in self.__room_list:
-            if room.room_id == room_id:
+            if room.id == room_id:
                 return room
         return None
     
@@ -187,7 +196,7 @@ class Branch():
 
     def check_can_reserve(self,stock_id,eq_id,day,s_time,e_time):
         for stock_eq in self.__stock_ls:
-            if stock_eq.SE_id == stock_id:
+            if stock_eq.id == stock_id:
                 c_stock = stock_eq.check_stock(stock_id,eq_id)
                 if c_stock:
                     verify = stock_eq.verify_available(eq_id,day,s_time,e_time)
@@ -203,8 +212,12 @@ class Branch():
     
     def get_size_eq(self,stock_id,eq_id):
         for stock_eq in self.__stock_ls:
-            if stock_eq.SE_id == stock_id:
+            if stock_eq.id == stock_id:
                 size = stock_eq.get_size(eq_id)
+
+# ===========================================================================
+# User
+# ===========================================================================
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -225,10 +238,6 @@ class User():
     @property
     def username(self):
         return self.__username
-
-    @property
-    def user_id(self):
-        return self.__user_id
     
     @property
     def status(self):
@@ -257,6 +266,9 @@ class User():
             return True
         return False
         
+# ===========================================================================
+# Customer
+# ===========================================================================
 
 class Membership(Enum):
     STANDARD = "STD"
@@ -274,8 +286,9 @@ class Customer(User):
 
 
     @property
-    def customer_id(self):
+    def id(self):
         return self.__customer_id
+    
     @property
     def reserve_list(self):
         return self.__reserve_list
@@ -289,15 +302,19 @@ class Customer(User):
     
     def get_reserve_detail(self,reserve_id):
         for reserve in self.__reserve_list :
-            if reserve.reserve_id == reserve_id:
+            if reserve.id == reserve_id:
                 return reserve
         return None
     
     def search_reserve(self,reserve_id):
         for reserve in self.__reserve_list:
-            if reserve.reserve_id == reserve_id:
+            if reserve.id == reserve_id:
                 return reserve
         return None
+    
+# ===========================================================================
+# Staff
+# ===========================================================================
     
 class Staff(User):
     def __init__(self,name,username,password,email,phone, birthday):
@@ -306,10 +323,12 @@ class Staff(User):
         self.__notification_list = []
 
     @property
-    def staff_id(self):
+    def id(self):
         return self.__staff_id
 
-
+# ===========================================================================
+# Service_IN
+# ===========================================================================
 class Service_IN:
     def __init__(self,id,customer):
         self.__reserve_id = id
@@ -317,7 +336,7 @@ class Service_IN:
         self.__booking_list = []
     
     @property
-    def reserve_id(self):
+    def id(self):
         return self.__reserve_id
     
     @property
@@ -335,7 +354,9 @@ class Service_IN:
         return False
 
 
-
+# ===========================================================================
+# Booking
+# ===========================================================================
 class Booking:
     def __init__(self,id,date,start_tBooking,end_tBooking,customer,room,created_at,status,price,eq_list):
         self.__booking_id = id
@@ -363,7 +384,9 @@ class Booking:
                     return True
             return False
 
-    
+# ===========================================================================
+# Room
+# ===========================================================================   
 class Room:
     def __init__(self,branch_name,size,rate,eq_quota):
         self.__size = size
@@ -374,7 +397,7 @@ class Room:
 
 
     @property
-    def room_id(self):
+    def id(self):
         return self.__room_id
 
     @property
@@ -403,7 +426,11 @@ class Room:
         if self.__room_id == room_id:
             return self.__eq_quota
         return None
-    
+
+
+# ===========================================================================
+# StockEquipment & Equipment
+# ===========================================================================
 class EquipmentType(Enum):
     ELECTRICGUITAR = "EGTR"
     ACOUSTICGUITAR = "AGTR"
@@ -419,7 +446,7 @@ class StockEquipment:
         self.__equipment_ls = []   
 
     @property
-    def SE_id(self):
+    def id(self):
         return self.__SE_id
     
     def check_stock(self,eq_id):
@@ -436,14 +463,14 @@ class StockEquipment:
 
     def reduce_eq(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id ==eq_id:
+            if eq.id ==eq_id:
                 self.__equipment_ls.remove(eq)
                 return True
         return False
 
     def find_and_get_size(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id == eq_id:
+            if eq.id == eq_id:
                 verify = eq.verify_eq(eq_id)
                 if verify :
                     size = eq.get_size(eq_id)
@@ -460,7 +487,7 @@ class StockEquipment:
     
     def get_eq(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id == eq_id:
+            if eq.id == eq_id:
                 return eq
         return None
 
@@ -474,28 +501,16 @@ class RoomEquipmentStatus(Enum):
 
 
 class Equipment:
-    def __init__(self,type : EquipmentType, size):
-        self.__eq_id = None
+    def __init__(self,branch_name,type : EquipmentType, quota,price):
+        self.__eq_id = f"EQ-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__type = type
-        self.__size = size
-        self.__quantity =  0
+        self.__size = quota
         self.__time_slot = []
 
-    def make_equipment_id(self, branch_id):
-        temp = branch_id.split("-")
-        self.__eq_id =  f"EQ-{temp[1]}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
     
     @property
-    def eq_id(self):
+    def id(self):
         return self.__eq_id
-    
-    @property
-    def quantity(self):
-        return self.__quantity
-    
-    @quantity.setter
-    def quantity(self, value):
-        self.__quantity = value
     
     def add_time(self,time):
         self.__time_slot.append(time)
@@ -524,6 +539,9 @@ class Equipment:
                 return timeslot.get_status()
     
 
+# ===========================================================================
+# TimeSlot
+# ===========================================================================
 class TimeSlotStatus(Enum):
     AVAILABLE = "Available"
     PENDING = "Pending"
@@ -575,6 +593,9 @@ class TimeSlot:
             return True
         return False
 
+# ===========================================================================
+# Notification
+# ===========================================================================
 class NotiStatus(Enum):
     PENDING = "PENDING"
     SENT    = "SENT"
@@ -607,55 +628,3 @@ class Notification:
 
         self.set_status_noti(NotiStatus.SENT)
         return True
-
-
-#  API  #
-app = FastAPI()
-system = ReserveSystem()
-
-# mock_room = Room("A101", TimeSlotStatus.AVAILABLE)
-mock_ts = TimeSlot("2024-02-24", "10:00", "12:00",TimeSlotStatus.AVAILABLE)
-
-mock_cust = Customer("Yam", "C001","68010491")
-system.add_customer(mock_cust)
-
-mock_branch = Branch("Ladkrabang", "B001", "S01")
-system.add_branch(mock_branch)
-
-mock_stock = mock_branch.stock
-
-mock_room = Room("A101", "Medium", 500.0, 10)
-mock_branch.add_room(mock_room)
-
-mock_room.add_time_slot(mock_ts)
-
-mock_res = Service_IN("A111",mock_cust)
-
-mock_cust.add_reserve_list(mock_res)
-
-eq1 = Equipment("E01", 2, 20)
-eq2 = Equipment("E02", 4, 10)
-mock_stock.add_eq(eq1)
-mock_stock.add_eq(eq2)
-
-@app.get("/")
-def root():
-    return {"message": "Welcome to ReserveSystem API", "docs": "/docs"}
-
-@app.post("/checkin")
-def api_checkin(customer_id: str, reserve_id: str):
-    result = system.checkin(customer_id, reserve_id)
-    if result != "CHECK-IN SUCCESSFULLY!":
-        raise HTTPException(status_code=404, detail=result)
-    return {"message": result}
-
-@app.post("/select_eq")
-def api_select_eq(customer_id : str, branch_id : str,room_id : str, eq_list : list[str]):
-    result = system.select_eq(customer_id, branch_id, room_id,eq_list)
-    if result != "Can Reserve Equipment - Add to Booking Successfully":
-        raise HTTPException(status_code=404, detail=result)
-    return {"message": result}
-
-if __name__ == "__main__":
-    uvicorn.run("checkin:app",host = "127.0.0.1",port=8000, reload = True) 
-

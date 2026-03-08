@@ -27,7 +27,7 @@ class ProductType(Enum):
 # ==========================================
 class DummyBooking:
     def __init__(self, b_id: str, start_time: time, end_time: time):
-        self.id = b_id
+        self.id = f"B-{(str(uuid.uuid4()))[:8]}"
         self.start = start_time
         self.end = end_time
 
@@ -43,7 +43,7 @@ class Products:
 
 class Penalty:
     def __init__(self, penalty_id: str, type_: PenaltyType, amount: float, reason: str, booking_id: str):
-        self.__penalty_id = penalty_id
+        self.__penalty_id = f"PN-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__reason = reason
         self.__type = type_
         self.__amount = amount
