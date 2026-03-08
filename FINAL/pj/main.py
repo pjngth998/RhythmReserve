@@ -1,14 +1,16 @@
 from fastapi import FastAPI
+from fastmcp import FastMCP
 import uvicorn
 from code_pj import *
 from datetime import time, date
 
 app = FastAPI()
+mcp = FastMCP()
 
 store = RhythmReserve("RhythmReserve")
 eq_list = []
 
-
+@mcp.tool
 @app.get("/")
 def sanity_check():
     return "Hello World!"
