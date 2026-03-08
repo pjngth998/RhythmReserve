@@ -1,9 +1,7 @@
 import uuid
 from enum import Enum
 from abc import ABC, abstractmethod
-from datetime import time
-from datetime import date
-
+from datetime import time, date, datetime
 
 
 #ENUM CLASS
@@ -46,11 +44,15 @@ class Membership(Enum):
     PREMIUM = "PRM"
     DIAMOND = "DMN"
 
+class UserStatus(Enum):
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+
 
 #Class
 
 class User():
-    def __init__(self, username, password, name, email, phone, birthday):
+    def __init__(self, username, password, name, email, phone, birthday, status):
         self.__id:str = None
         self.__username = username
         self.__password = password
@@ -58,18 +60,46 @@ class User():
         self.__email = email
         self.__phone = phone
         self.__birthday:date = birthday
+        self.__status :UserStatus = status
 
-    def log_in(self, username, password):
-        pass
+    @property
+    def username(self):
+        return self.__username
 
-    def log_out(self):
-        pass
+    @property
+    def user_id(self):
+        return self.__user_id
+    
+    @user_id.setter
+    def user_if(self,value):
+        self.__user_id = value
+    
+    @property
+    def status(self):
+        return self.__status
+    
+    def set_status_user(self,n_status):
+        if isinstance(n_status,UserStatus):
+            self.__status = n_status
+        else:
+            raise ValueError
+        
+    @property
+    def password(self):
+        return self.__password
+    
+    @password.setter
+    def password(self,value):
+        self.__password = value
+    
+    # def login(self, username, pasword):
+    def verify_password(self,username,password):
+        if username == self.__username:
+            if password == self.__password:
+                return True
+        return False
 
-    def edit_info(self):
-        pass
-
-    def change_password(self):
-        pass
+    
 
 
 class Customer(User) :
@@ -78,11 +108,33 @@ class Customer(User) :
         super().__init__(username, password, name, email, phone, birthday)
         self.__memberhip: Membership = memberhip
         self.__points:int = None
-        self.__booking_history : Service_IN = None
+        self.__reserve_list : Service_IN = None
         self.__coupon_list = None
         self.__notification_list = []
-   
 
+    @property
+    def reserve_list(self):
+        return self.__reserve_list
+    
+    def get_customer_info(self,customer_id):
+        if self.__customer_id == customer_id:
+            return self.__customer_name, self.__customer_id,self.__reserve_list
+        
+    def add_reserve_list(self,reserve):
+        self.__reserve_list.append(reserve)
+    
+    def get_reserve_detail(self,reserve_id):
+        for reserve in self.__reserve_list :
+            if reserve.reserve_id == reserve_id:
+                return reserve
+        return None
+    
+    def search_reserve(self,reserve_id):
+        for reserve in self.__reserve_list:
+            if reserve.reserve_id == reserve_id:
+                return reserve
+        return None
+   
     @property
     def notification(self):
         return self.__notification_list
@@ -91,13 +143,6 @@ class Customer(User) :
     def notification(self, new_notification):
         self.__notification_list.append(new_notification)
 
-
-    def make_customer_id(self):
-        super().__id = f"MB-{self.__memberhip.value}-{uuid.uuid4()}"
-
-    @property
-    def id(self):
-        return self.__id
 
     @abstractmethod
     def recieve_point_per_hr(self):
@@ -112,26 +157,24 @@ class Customer(User) :
         pass
 
 class Standard(Customer):
-    def __init__(self, username, password, name, email, phone, birthday, memberhip):
-        super().__init__(username, password, name, email, phone, birthday, memberhip)
-
+    pass
+    
 class Premium(Customer):
-    def __init__(self, username, password, name, email, phone, birthday, memberhip):
-        super().__init__(username, password, name, email, phone, birthday, memberhip)
+    pass
 
 class Diamond(Customer):
-    def __init__(self, username, password, name, email, phone, birthday, memberhip):
-        super().__init__(username, password, name, email, phone, birthday, memberhip)
+    pass
+
 
 class Products():
-    def __init__(self, type_: ProductType, price, stock):
+    def __init__(self, type_: ProductType, price):
         self.__type = type_
         self.__price = price
         self.__id = None
 
     def make_item_id(self, branch_id):
         temp = branch_id.split("-")
-        self.__id = f"PR-{temp[1]}-{super().__type.value}-{uuid.uuid4()}"
+        self.__id = f"PR-{temp[1]}-{self.__type.value}-{uuid.uuid4()}"
 
     @property
     def id(self):
@@ -369,8 +412,130 @@ class RhythmReserve():
         self.__branch_list = []
         self.__customer_list = []
 
-    def register(self, username, password, name, email, phone, birthday, membership) :
-        pass
+    count_user = 1
+    @classmethod
+    def generate_user_id(cls,type):
+        date_str = date.today().strftime("%y%m")
+        count_str = str(cls.count_user).zfill(3)
+        new_id = f"{type.upper()}-{date_str}-{count_str}"
+        cls.count_user +=1
+        return new_id
+
+    def register(self,type,name,username,password,email,phone,birthday):
+
+        if self.search_user(username):
+            return "Have Account Already"
+        
+        user_id = self.generate_user_id(type)
+        
+        if type == 'C':
+            customer = Customer(user_id,name,username,password,email,phone,birthday)
+            self.__customer_list.add_customer_ls(customer)
+        else:
+            staff = Staff(user_id,name,username,password,email,phone,birthday)
+            self.__staff_list.add_staff_ls(staff)
+        
+    def add_customer_ls(self,cus):
+        self.__customer_list.append(cus)
+
+    def add_staff_ls(self,staff):
+        self.__staff_list.append(staff)
+    
+    def login(self,username,password):
+        user = self.search_user(username)
+
+        if user:
+            verify = user.verify_password(username,password)
+
+            if verify:
+                user.set_status_user(UserStatus.LOGIN)
+                return f"{username} logged in successfully"
+            else:
+                return "Login Failed"
+            
+    def logout(self,username):
+        user = self.search_user(username)
+
+        if user and user.status == UserStatus.LOGIN:
+            user.set_status_user(UserStatus.LOGOUT)
+            return f"{username} logged out successfully"
+        return "Logout Failed"
+    
+    def edit_info(self,username,data,new_info):
+        user = self.search_user(username)
+
+        if user and hasattr(user,data):
+            if data != "password" and data != "user_id" and data != "username":
+                setattr(user,data,new_info)
+                return f"Edit {data} Success"
+    
+    def change_password(self,username,old_password,n_password):
+        user = self.search_user(username)
+        if user and (user.password == old_password):
+            user.password = n_password
+            return f"Change Password for {username} Successfully"
+
+    
+    def search_user(self,username):
+        for user in self.__customer_list + self.__staff_list:
+            if user.username == username:
+                return user
+        return None
+
+    def checkin(self,customer_id,reserve_id):
+        customer = self.search_customer(customer_id)
+        if not customer:
+            return "Not found Customer in System"
+        
+        reserve = customer.search_reserve(reserve_id)
+        if not reserve:
+            return "Not Found Reserve"
+
+        success = reserve.get_checkin()
+        if success:
+            return "CHECK-IN SUCCESSFULLY!"
+
+    def search_branch(self,branch_id):
+        for branch in self.__branch_list:
+            if branch.branch_id == branch_id:
+                return branch
+        return None
+
+    def select_eq(self,customer_id,branch_id,room_id,eq_list):
+        customer = self.search_customer(customer_id)
+        customer_info = customer.get_customer_info(customer_id)
+        
+        branch = self.search_branch(branch_id)
+        if not branch:
+            return "Branch Not Found"
+
+        max_quota = branch.get_room_quota(room_id)
+        room = branch.search_room(room_id)
+        if not room: 
+            return "Room Not Found"
+        # max_quota = room.get_eq_quota(room_id)
+
+
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
+        status = "PENDING"
+        price = room.rate
+
+        for eq_id in eq_list:
+            check_stock = branch.check_stock_eq(eq_id)
+            if not check_stock:
+                return "Don't have Equipment in Stock"
+            
+        total_requested_size = 0
+        for eq_id in eq_list:
+            stock =  branch.stock
+            size = stock.get_size_eq(eq_id)
+
+            total_requested_size += size
+
+        if total_requested_size <= max_quota:
+            return "Can Reserve Equipment - Add to Booking Successfully"
+        else:
+            return "Exceed Room Quota Limit"
         
 
     def add_customer(self, username, password):
@@ -424,7 +589,10 @@ class RhythmReserve():
         return equipment\
         
     def add_stock(self, branch_id, type_: ProductType, amount):
-        pass
+        for i in range(amount):
+            match type_:
+                case ProductType.WATER:
+                    item = Products(type_, 10)
         
 
     
