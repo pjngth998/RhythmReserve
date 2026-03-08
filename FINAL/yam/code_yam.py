@@ -8,7 +8,6 @@ from fastapi import FastAPI,  HTTPException
 from pydantic import BaseModel
 from datetime import date
 from datetime import time
-# from classcode import *
 from fastapi.responses import RedirectResponse
 import uvicorn
 import uuid
@@ -25,37 +24,35 @@ class ReserveSystem():
                 return customer
         return None
     
-    def add_customer(self,customer):
-        self.__customer_list.append(customer)
+    # def add_customer_ls(self,customer):
+    #     self.__customer_list.append(customer)
+    # 
+    # def add_staff_ls(self,staff):
+    #     self.__staff_list.append(staff)
     
     def add_branch(self,branch):
         self.__branch_list.append(branch)
 
     def register(self,type,name,username,password,email,phone,birthday):
-
         if self.search_user(username):
             return "Have Account Already"
-        
-        user_id = self.generate_user_id(type)
-        
-        if type == 'C':
-            customer = Customer(user_id,name,username,password,email,phone,birthday)
-            self.__customer_list.add_customer_ls(customer)
-        else:
-            staff = Staff(user_id,name,username,password,email,phone,birthday)
-            self.__staff_list.add_staff_ls(staff)
-        
-    def add_customer_ls(self,cus):
-        self.__customer_list.append(cus)
 
-    def add_staff_ls(self,staff):
-        self.__staff_list.append(staff)
-    
+        if type == "C":
+            customer = Customer(name,username,password,email,phone,birthday,Membership.STANDARD)
+            self.__customer_list.append(customer)
+            return customer
+        elif type == "S":
+            staff = Staff(name,username,password,email,phone,birthday)
+            self.__staff_list.append(staff)
+            return staff
+        else:
+            raise ValueError
+
     def login(self,username,password):
         user = self.search_user(username)
 
         if user:
-            verify = user.verify_password(username,password)
+            verify = user.verify_password(password)
 
             if verify:
                 user.set_status_user(UserStatus.LOGIN)
@@ -74,8 +71,9 @@ class ReserveSystem():
     def edit_info(self,username,data,new_info):
         user = self.search_user(username)
 
+        protected_fields = ["password", "username", "customer_id", "staff_id"]
         if user and hasattr(user,data):
-            if data != "password" and data != "user_id" and data != "username":
+            if data != protected_fields:
                 setattr(user,data,new_info)
                 return f"Edit {data} Success"
     
@@ -102,7 +100,7 @@ class ReserveSystem():
             
             return "Not Found Reserve"
 
-        success = reserve.get_checkin()
+        success = reserve.process_checkin()
         if success:
             return "CHECK-IN SUCCESSFULLY!"
         
@@ -113,7 +111,7 @@ class ReserveSystem():
                 return branch
         return None
 
-    def select_eq(self,customer_id,branch_id,room_id,eq_list):
+    def select_eq(self,customer_id,branch_id,room_id,stock_id,day,s_time,e_time,eq_list):
         customer = self.search_customer(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
@@ -132,7 +130,7 @@ class ReserveSystem():
         price = room.rate
 
         for eq_id in eq_list:
-            can_reserve = branch.check_can_reserve(eq_id)
+            can_reserve = branch.check_can_reserve(stock_id,eq_id,day,s_time,e_time)
             if can_reserve:
                 branch.get_size_eq(eq_id)
             else:
@@ -152,10 +150,10 @@ class ReserveSystem():
         
         
 class Branch():
-    def __init__(self,name,id,stock_id):
+    def __init__(self,name):
         self.__name = name
-        self.__branch_id = id
-        self.__stock = StockEquipment(stock_id)
+        self.__branch_id = f"BR-{name}-{str(uuid.uuid4())[:8]}"
+        self.__stock_ls = []
         self.__room_list = []
 
     @property
@@ -164,7 +162,7 @@ class Branch():
     
     @property
     def stock(self):
-        return self.__stock
+        return self.__stock_ls
     
     @property
     def room_list(self):
@@ -174,21 +172,28 @@ class Branch():
         self.__room_list.append(room)
 
     def get_branch_info(self):
-        return self.__name, self.__room_list, self.__equipment_list
+        return self.__name, self.__room_list, self.__stock_ls
     
     def search_room(self,room_id):
         for room in self.__room_list:
             if room.room_id == room_id:
                 return room
         return None
+    
+    def add_stock_ls(self,type_):
+        stock = StockEquipment(type_)
+        self.__stock_ls.append(stock)
 
-    def check_can_reserve(self,eq_id,day,s_time,e_time):
-        c_stock = self.__stock.check_stock(eq_id)
-        if c_stock:
-            verify = self.__stock.verify_available(eq_id,day,s_time,e_time)
-            if verify:
-                return True
-        return False
+
+    def check_can_reserve(self,stock_id,eq_id,day,s_time,e_time):
+        for stock_eq in self.__stock_ls:
+            if stock_eq.SE_id == stock_id:
+                c_stock = stock_eq.check_stock(stock_id,eq_id)
+                if c_stock:
+                    verify = stock_eq.verify_available(eq_id,day,s_time,e_time)
+                    if verify:
+                        return True
+                return False
 
     def get_room_quota(self,room_id):
         room = self.search_room(room_id)
@@ -196,16 +201,18 @@ class Branch():
             return "Room Not Found"
         return room.get_eq_quota(room_id)
     
-    def get_size_eq(self,eq_id):
-        size = self.__stock.get_size(eq_id)
+    def get_size_eq(self,stock_id,eq_id):
+        for stock_eq in self.__stock_ls:
+            if stock_eq.SE_id == stock_id:
+                size = stock_eq.get_size(eq_id)
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
     LOGOUT = "LOGOUT"
 
 class User():
-    def __init__(self,id,name,username,password,email,phone,birthday,status):
-        self.__user_id  = id
+    def __init__(self,username,password,name,email,phone,birthday):
+        # self.__id  = id
         self.__name = name
         self.__username = username
         self.__password = password
@@ -213,7 +220,7 @@ class User():
         self.__email = email
         self.__phone = phone
         self.__birthday:date = birthday
-        self.__status :UserStatus = status
+        self.__status :UserStatus = UserStatus.LOGOUT
 
     @property
     def username(self):
@@ -222,13 +229,14 @@ class User():
     @property
     def user_id(self):
         return self.__user_id
-    @user_id.setter
-    def user_if(self,value):
-        self.__user_id = value
     
     @property
     def status(self):
         return self.__status
+    
+    @property
+    def name(self):
+        return self.__name
     
     def set_status_user(self,n_status):
         if isinstance(n_status,UserStatus):
@@ -244,29 +252,37 @@ class User():
     def password(self,value):
         self.__password = value
     
-    # def login(self, username, pasword):
-    def verify_password(self,username,password):
-        if username == self.__username:
-            if password == self.__password:
-                return True
+    def verify_password(self,password):
+        if password == self.__password:
+            return True
         return False
         
-    
+
+class Membership(Enum):
+    STANDARD = "STD"
+    PREMIUM = "PRM"
+    DIAMOND = "DMN"
+
 
 class Customer(User):
-    def __init__(self,id,name,username,password,email,phone, birthday, memberhip):
-        super().__init__(id,username, password, name, email, phone, birthday)
+    def __init__(self,name,username,password,email,phone, birthday, membership):
+        super().__init__(username, password, name, email, phone, birthday)
+        self.__membership: Membership = membership
+        self.__customer_id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.__reserve_list = []
         self.__notification_list = []
 
-    
+
+    @property
+    def customer_id(self):
+        return self.__customer_id
     @property
     def reserve_list(self):
         return self.__reserve_list
     
     def get_customer_info(self,customer_id):
         if self.__customer_id == customer_id:
-            return self.__customer_name, self.__customer_id,self.__reserve_list
+            return self.name, self.__customer_id,self.__reserve_list
         
     def add_reserve_list(self,reserve):
         self.__reserve_list.append(reserve)
@@ -283,11 +299,15 @@ class Customer(User):
                 return reserve
         return None
     
-class Staff:
-    def __init__(self,id,name,username,password,email,phone, birthday, memberhip):
-        super().__init__(id,username, password, name, email, phone, birthday)
-        # self.__reserve_list = []
+class Staff(User):
+    def __init__(self,name,username,password,email,phone, birthday):
+        super().__init__(username, password, name, email, phone, birthday)
+        self.__staff_id = f"S-{self.name}-{str(uuid.uuid4())[:8]}"
         self.__notification_list = []
+
+    @property
+    def staff_id(self):
+        return self.__staff_id
 
 
 class Service_IN:
@@ -307,12 +327,13 @@ class Service_IN:
     def add_booking(self,booking):
         self.__booking_list.append(booking)    
 
-    def get_checkin(self):
+    def process_checkin(self):
         for booking in self.__booking_list:
-            booking.get_booking_detail()
-        return True
-    
-    def get_checkout(self):
+            process = booking.process_booking()
+            if process:
+                return True
+        return False
+
 
 
 class Booking:
@@ -333,21 +354,24 @@ class Booking:
     def booking_id(self):
         return self.__booking_id 
     
-    def get_booking_detail(self):
-        self.__room.get_room_reserve_detail(self.__date,self.__ST_booking,self.__ED_booking)
-        for eq in self.__equipment_list:
-            eq.get_equipment_reserve_detail(self.__date,self.__ST_booking,self.__ED_booking)
-        return True
+    def process_booking(self):
+        update_status_room = self.__room.update_room_reserve_status(self.__date,self.__ST_booking,self.__ED_booking)
+        if update_status_room:
+            for eq in self.__equipment_list:
+                update_status_eq = eq.update_equipment_reserve_status(self.__date,self.__ST_booking,self.__ED_booking)
+                if update_status_eq :
+                    return True
+            return False
 
     
 class Room:
-    def __init__(self,room_id,size,rate,eq_quota):
-        self.__room_id = room_id
+    def __init__(self,branch_name,size,rate,eq_quota):
         self.__size = size
+        self.__room_id = f"RM-{branch_name}-{self.__size.value}-{str(uuid.uuid4())[:8]}" 
         self.__rate = rate
         self.__eq_quota = eq_quota
         self.__time_slot =[]
-        
+
 
     @property
     def room_id(self):
@@ -368,26 +392,35 @@ class Room:
     def add_time_slot(self,time):
         self.__time_slot.append(time)
     
-    def get_room_reserve_detail(self,date,ST_time,ED_time):
+    def update_room_reserve_status(self,date,ST_time,ED_time):
         for time_slot in self.__time_slot:
             if time_slot.date == date and time_slot.start_time  == ST_time and time_slot.end_time == ED_time:
                 time_slot.update_status()
-                return "update status 'OCCUPIED' success"
+                return True
         return False
 
     def get_eq_quota(self,room_id):
         if self.__room_id == room_id:
             return self.__eq_quota
         return None
+    
+class EquipmentType(Enum):
+    ELECTRICGUITAR = "EGTR"
+    ACOUSTICGUITAR = "AGTR"
+    DRUM = "DM"
+    MICROPHONE = "MC"
+    BASS = "BS"
+    KEYBOARD = "KB"
 
 class StockEquipment:
-    def __init__(self,id):
-        self.__stock_id = id
+    def __init__(self,type_ : EquipmentType):
+        self.__type = type_
+        self.__SE_id =  f"SE-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__equipment_ls = []   
-    
+
     @property
-    def stock_id(self):
-        return self.__stock_id
+    def SE_id(self):
+        return self.__SE_id
     
     def check_stock(self,eq_id):
         for eq in self.__equipment_ls:
@@ -396,8 +429,10 @@ class StockEquipment:
             
         return False
     
-    def add_eq(self,eq):
+    def add_eq(self,type_,size):
+        eq = Equipment(type_,size)
         self.__equipment_ls.append(eq)
+        return eq
 
     def reduce_eq(self,eq_id):
         for eq in self.__equipment_ls:
@@ -437,21 +472,22 @@ class RoomEquipmentStatus(Enum):
     OCCUPIED = "Occupied"
     MAINTENANCE = "Maintenance"
 
+
 class Equipment:
-    def __init__(self,id,size,stock):
-        self.__eq_id = id
+    def __init__(self,type : EquipmentType, size):
+        self.__eq_id = None
+        self.__type = type
         self.__size = size
-        self.__stock = stock
         self.__quantity =  0
         self.__time_slot = []
+
+    def make_equipment_id(self, branch_id):
+        temp = branch_id.split("-")
+        self.__eq_id =  f"EQ-{temp[1]}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
     
     @property
     def eq_id(self):
         return self.__eq_id
-    
-    @property
-    def stock(self):
-        return self.__stock
     
     @property
     def quantity(self):
@@ -467,7 +503,7 @@ class Equipment:
     def calculate_quota(self, qty):
         return self.__size * qty 
     
-    def get_equipment_reserve_detail(self,date,ST_time,ED_time):
+    def update_equipment_reserve_status(self,date,ST_time,ED_time):
         for time_slot in self.__time_slot:
             if time_slot.date == date and time_slot.start_time  == ST_time and time_slot.end_time == ED_time:
                 time_slot.update_status()
@@ -533,7 +569,7 @@ class TimeSlot:
         self.__status = status
     
     def ready_reserve(self,target_date,s_time,e_time):
-        if self.__date == target_date and self.__status == "AVAILABLE":
+        if self.__date == target_date and self.__status == TimeSlotStatus.AVAILABLE:
             if self.check_overlab(s_time,e_time):
                 return False
             return True
@@ -544,28 +580,16 @@ class NotiStatus(Enum):
     SENT    = "SENT"
     FAILED  = "FAILED"
 
-    
-class IDGenerator:
-    def __init__(self, prefix):
-        self.__prefix = prefix
-        self.__count = 1
-
-    def gen_id(self):
-        date_format = date.today().strftime("%y%m")
-        id_str = f"{self.__prefix}-{date_format}-{self.__count:03d}"
-        self.__count += 1
-        return id_str
-    
 class Notification:
-
-    ID_FACTORY = IDGenerator("NT")
-
     def __init__(self, username: str):
-        self.__noti_id = Notification.ID_FACTORY.gen_id()
         self.__username       = username
+        self.__noti_id = f"NT-{self.__username.upper()}-{str(uuid.uuid4())[:8]}"
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
 
+    @property
+    def noti_id(self):
+        return self.__noti_id
     def format_message(self, message: str) -> str:
         message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
                         f"Dear {self.__username}: {message}")
