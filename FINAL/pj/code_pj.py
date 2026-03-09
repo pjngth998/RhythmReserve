@@ -210,7 +210,8 @@ class Branch():
         self.__eqipment_list = []
         self.__stock_product_list = []
         self.__officer_list = []
-
+        self.make_branch_id(name)
+    
     @property
     def id(self):
         return self.__id
