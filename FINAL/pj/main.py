@@ -1,16 +1,20 @@
 from fastapi import FastAPI
-from fastmcp import FastMCP
 import uvicorn
 from code_pj import *
 from datetime import time, date
 
 app = FastAPI()
-mcp = FastMCP()
+
 
 store = RhythmReserve("RhythmReserve")
 eq_list = []
 
-@mcp.tool
+OPEN_TIME = time(9, 0)
+CLOSE_TIME = time(23, 0)
+
+SLOT_STEP = timedelta(minutes=30)
+BUFFER = timedelta(minutes=15)
+
 @app.get("/")
 def sanity_check():
     return "Hello World!"
@@ -33,11 +37,18 @@ def add_equipment(branch_id: str, type_: EquipmentType):
     eq_list.append(eq)
     return eq.id
 
+@app.post("/create_product_stock")
+def create_product_stock(branch_id, type_: ProductType):
+    return store.create_product_stock(branch_id, type_).id
+
+@app.post("/add_product")
+def add_product(branch_id, type_: ProductType, amount:int):
+    return store.add_product(branch_id, type_, amount)
 
 
-@app.get("/available_room")
-def search_rooms(branch_id: str, day: date, room_size: RoomType):
-    return store.search_rooms(branch_id, day, room_size)
+@app.get("/get_available_slots")
+def get_available_slots(branch_id: str, day: date, room_size: RoomType):
+    return store.get_available_slots(branch_id, day, room_size)
 
 
 @app.post("/booking")
