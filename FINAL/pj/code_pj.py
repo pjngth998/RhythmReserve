@@ -1143,8 +1143,12 @@ class RhythmReserve():
         branch = self.get_branch_by_id(branch_id)
         first_booking = self.create_booking(customer.id, branch_id, room_size, eq_list, date, start_time, start_time + timedelta(hours=duration))
 
+    def select_eq(self, eq_list:list, eq):
+        eq_list.append(eq)
+        return eq_list
 
-    def create_booking(self, customer_id, branch_id, room_size, eq_list, day, start, end):
+
+    def create_booking(self, customer_id, branch_id, room_size, day, start, end):
         customer = self.get_customer_by_id(customer_id)
         if customer == "customer not found":
             return "customer not found"
@@ -1157,6 +1161,10 @@ class RhythmReserve():
         
         timeslot = TimeSlot(day, start, end, RoomEquipmentStatus.PENDING)
         room.add_timeslot = timeslot
+        eq_list = []
+
+        for i in range(15):
+            self.select_eq()
 
         
         
