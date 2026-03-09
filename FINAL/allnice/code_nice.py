@@ -58,7 +58,7 @@ class NotiStatus(Enum):
 
 class Notification:
     def __init__(self, username: str):
-        self.__noti_id = f"NT-{uuid.uuid4().hex[:8].upper()}"
+        self.__noti_id = f"NT-{self.__username.upper()}-{str(uuid.uuid4())[:8]}"
         self.__username       = username
         self.__is_read         = False
         self.__status          = NotiStatus.PENDING
@@ -118,14 +118,14 @@ class TimeSlot:
 # ===========================================================================
 
 class Equipment:
-    def __init__(self, eq_id: str, type_: EquipmentType, quota: int, price: float):
-        self.__id             = eq_id
+    def __init__(self, branch_name, type_: EquipmentType, quota: int, price: float):
+        self.__id             = f"EQ-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__type           = type_
         self.__quota          = quota
         self.__price          = price
         self.__time_slot_list: list[TimeSlot] = []
-        self.time_slot_status = RoomEquipmentStatus.AVAILABLE
-        self.equipment_status = RoomEquipmentStatus.AVAILABLE
+        # self.__time_slot_status = RoomEquipmentStatus.AVAILABLE
+        # self.__equipment_status = RoomEquipmentStatus.AVAILABLE
 
     @property
     def id(self) -> str:
@@ -154,12 +154,12 @@ class Equipment:
         self.__time_slot_list.append(timeslot)
 
     def update_time_slot_status(self, status: RoomEquipmentStatus):
-        self.time_slot_status = status
+        self.__time_slot_status = status
         print(f"  [Equipment] {self.__id} time_slot → {status.value}")
 
-    def update_equipment_status(self, status: RoomEquipmentStatus):
-        self.equipment_status = status
-        print(f"  [Equipment] {self.__id} equipment_status → {status.value}")
+    # def update_equipment_status(self, status: RoomEquipmentStatus):
+    #     self.equipment_status = status
+    #     print(f"  [Equipment] {self.__id} equipment_status → {status.value}")
 
 
 # ===========================================================================
@@ -167,14 +167,14 @@ class Equipment:
 # ===========================================================================
 
 class Room:
-    def __init__(self, room_id: str, size: RoomType, rate: float, eq_quota: int):
-        self.__id             = room_id
+    def __init__(self,branch_name,size,rate,eq_quota):
+        self.__id             = f"RM-{branch_name}-{self.__size.value}-{str(uuid.uuid4())[:8]}" 
         self.__size           = size
         self.__rate           = rate
         self.__eq_quota       = eq_quota
         self.__time_slot_list: list[TimeSlot] = []
-        self.time_slot_status = RoomEquipmentStatus.AVAILABLE
-        self.room_status      = RoomEquipmentStatus.AVAILABLE
+        # self.time_slot_status = RoomEquipmentStatus.AVAILABLE
+        # self.room_status      = RoomEquipmentStatus.AVAILABLE
 
     @property
     def id(self) -> str:
@@ -206,13 +206,13 @@ class Room:
     def add_timeslot(self, timeslot: TimeSlot):
         self.__time_slot_list.append(timeslot)
 
-    def update_time_slot_status(self, status: RoomEquipmentStatus):
-        self.time_slot_status = status
-        print(f"  [Room] {self.__id} time_slot → {status.value}")
-
-    def update_room_status(self, status: RoomEquipmentStatus):
-        self.room_status = status
-        print(f"  [Room] {self.__id} room_status → {status.value}")
+#     def update_time_slot_status(self, status: RoomEquipmentStatus):
+#         self.time_slot_status = status
+#         print(f"  [Room] {self.__id} time_slot → {status.value}")
+# 
+#     def update_room_status(self, status: RoomEquipmentStatus):
+#         self.room_status = status
+#         print(f"  [Room] {self.__id} room_status → {status.value}")
 
 
 # ===========================================================================
@@ -223,28 +223,29 @@ class Coupon:
     EXPIRE_MONTHS = 1
 
     def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
-        self.coupon_id    = coupon_id
-        self.discount     = discount
-        self.expired_date = expired_date
+        self.__coupon_id    = coupon_id
+        self.__discount      = discount
+        self.__expired_date = expired_date
 
     @classmethod
     def create_coupon(cls, discount: float) -> "Coupon":
         expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
-        coupon_id    = f"CPN-{uuid.uuid4().hex[:8].upper()}"
+        date_part = expired_date.strftime("%y%m%d")
+        coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
         print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
         return cls(coupon_id, discount, expired_date)
 
     def get_coupon_id(self) -> str:
-        return self.coupon_id
+        return self.__coupon_id
 
     def get_discount(self) -> float:
-        return self.discount
+        return self.__discount 
 
     def get_expired_date(self) -> datetime:
-        return self.expired_date
+        return self.__expired_date
 
     def is_expired(self) -> bool:
-        return datetime.now() > self.expired_date
+        return datetime.now() > self.__expired_date
 
 
 # ===========================================================================
