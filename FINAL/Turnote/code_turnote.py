@@ -26,7 +26,7 @@ class ProductType(Enum):
 
 class Customer(ABC):
     def __init__(self, customer_id: str, name: str, password: str):
-        self.customer_id    = customer_id
+        self.customer_id    = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.name           = name
         self.__password     = password
         self.current_points = 0
@@ -124,7 +124,7 @@ class Products:
 
 class Penalty:
     def __init__(self, penalty_id: str, type_: PenaltyType, amount: float, reason: str, booking_id: str):
-        self.__penalty_id = penalty_id
+        self.__penalty_id = f"PN-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__reason = reason
         self.__type = type_
         self.__amount = amount
