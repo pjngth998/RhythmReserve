@@ -268,6 +268,8 @@ class Staff:
         return receipt
 
 
+
+
 app = FastAPI()
 
 @app.get("/")
@@ -349,7 +351,7 @@ def api_cancel(booking_id: str, cancel_time: datetime, booking_start_time: datet
         mock_report.add_revenue(penalty.amount)
         return {"status": "NO_REFUND", "detail": penalty.reason, "type": penalty.type.value}
         
-    return {"status": "REFUNDED", "detail": f"Policy {booking.customer.__class__.__name__} Refund {refund} baht"}
+    return {"status": "REFUND", "detail": f"Policy {booking.customer.__class__.__name__} Refund {refund} baht"}
 
 @app.get("/daily_report")
 def api_daily_report():
