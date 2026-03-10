@@ -87,7 +87,7 @@ class UserField(Enum):
     PHONE = "phone"
     ADDRESS = "address"
 
-class PaymentChannelEnum(Enum):
+class PaymentChannelType(Enum):
     QRSCAN = "Qr"
     CREDITCARD = "Cr"
 
@@ -386,6 +386,9 @@ class TimeSlot:
     def get_status(self):
         return self.__status
     
+    def set_status(self,status : TimeSlotStatus):
+        self.__status = status
+    
     def ready_reserve(self,target_date,s_time,e_time):
         if self.__date == target_date and self.__status == "AVAILABLE":
             if self.check_overlab(s_time,e_time):
@@ -426,7 +429,6 @@ class Room():
     def rate(self):
         return self.__rate
     
-    @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
     
@@ -614,7 +616,7 @@ class Booking():
     
     @property
     def day(self):
-        return self.__timeslot.day
+        return self.__timeslot.date
     
     @property
     def start(self):
@@ -638,6 +640,16 @@ class Booking():
         for eq in self.__eq_list:
             eq_price += eq.rate
         self.__price = room_price + eq_price
+
+    def booking_cancel(self):
+        set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+
+        for eq in self.__eq_list:
+            set_eq_success =  eq.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+
+        if set_room_success and set_eq_success:
+            return True
+        return False
 
 
     
@@ -994,6 +1006,7 @@ class ServiceIN:
         self.__status        = ServiceStatus.PENDING
         self.__total_price   = 0.0
         self.__final_price   = 0.0
+        self.__payment = None
 
 
     # def get_id(self) -> str:
@@ -1090,19 +1103,14 @@ class ServiceIN:
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 refund_amount =self._calculate_refund(booking)
+                refund_success = self.__payment.payment_refund(refund_amount,original_txn_id)
 
-    def cancel(self,original_txn_id: Optional[str] = None) -> bool:
-        if self.status == ServiceStatus.CANCELLED:
-            print(f"[Service_IN] {self.__servicein_id} already cancelled")
-            return False
-
-        self.change_status(ServiceStatus.CANCELLED)
-
-        for booking in self.__booking_list:
-            booking.cancel()
-
-        refund_success = self.__payment.payment_refund(original_txn_id)
-        return refund_success
+                if refund_success:
+                    set_status= booking.booking_cancel()
+                    if set_status :
+                        return True
+        return False
+    
 
 # ===========================================================================
 # ServiceOUT
@@ -1603,11 +1611,16 @@ class RhythmReserve():
     def cancel_booking(self,customer_id,servicein_id,booking_id):
         customer = self.search_custoemr(customer_id)
         service_in = customer.search_reserve(servicein_id)
+        
 
         if service_in != ServiceStatus.PENDING:
             raise Exception("Cannot refund: Service not paid yet")\
             
-        cancel = service_in.cancel(booking_id)
+        cancel = service_in.cancel_b(booking_id)
+
+        if cancel:
+            return "Cancel Booking Successfully"
+        raise Exception("Can't Cancle This Booking")
         
 
   
