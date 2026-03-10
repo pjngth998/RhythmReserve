@@ -52,10 +52,16 @@ class ProductType(Enum):
     LAY = "LY"
     TARO = "TR"
 
-class Membership(Enum):
-    STANDARD = "STD"
-    PREMIUM = "PRM"
-    DIAMOND = "DMN"
+class Membership(str, Enum):
+    STANDARD = ("STD", 0)
+    PREMIUM = ("PRM", 599)
+    DIAMOND = ("DMN", 999)
+
+    def __new__(cls, code, price):
+        obj = str.__new__(cls, code)
+        obj._value_ = code
+        obj.price = price
+        return obj
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -65,6 +71,11 @@ class ServiceStatus(Enum):
     PENDING_PAYMENT = "PENDING_PAYMENT"
     PAID            = "PAID"
     CANCELLED       = "CANCELLED"
+
+class PaymentChannelEnum(Enum):
+    QRSCAN = "Qr"
+    CREDITCARD = "Cr"
+
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -130,10 +141,10 @@ class User():
 # ===========================================================================
 class Customer(User) :
 
-    def __init__(self, username, password, name, email, phone, birthday, memberhip, status):
+    def __init__(self, username, password, name, email, phone, birthday, membership, status):
         super().__init__(username, password, name, email, phone, birthday, status)
-        self.__id = "pasokdoas"
-        self.__memberhip = memberhip
+        self.__membership = membership
+        self.__id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.__points:int = None
         self.__reserve_list = []
         self.__coupon_list = None
@@ -202,7 +213,23 @@ class PendingCustomer():
         self.__phone = phone
         self.__birthday = birthday
         self.__membership = membership
-        self.__paid = False
+        self.__is_paid = False
+
+    @property
+    def username(self):
+        return self.__username
+    
+    @property
+    def is_paid(self):
+        return self.__is_paid
+    
+    @is_paid.setter
+    def is_paid(self, status):
+        self.__is_paid = status
+
+    @property
+    def membership(self):
+        return self.__membership
 
 class Standard(Customer):
     pass
@@ -825,6 +852,28 @@ class Payment:
         return self.transaction_history
     
 # ===========================================================================
+# PaymentRegister
+# ===========================================================================
+
+class PaymentRegister():
+    def __init__(self, username, membership : Membership, channel):
+        self.__username = username
+        self.__member = membership
+        self.__cost = self.__member.price
+        self.__channel = channel
+        self.__is_success = False
+
+
+    def process_payment(self) -> bool:
+        self.__is_success = True
+
+        print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
+        return self.__is_success
+
+    
+        
+
+# ===========================================================================
 # Service_IN
 # ===========================================================================
     
@@ -836,6 +885,7 @@ class ServiceIN:
         self.__status        = ServiceStatus.PENDING_PAYMENT
         self.__total_price   = 0.0
         self.__final_price   = 0.0
+    
 
     def get_id(self) -> str:
         return self.service_in_id
@@ -945,7 +995,7 @@ class RhythmReserve():
         self.__staff_list = []
         self.__pending_register = []
 
-    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership):
+    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
             raise Exception("Have Account Already")
         
@@ -953,30 +1003,40 @@ class RhythmReserve():
             customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
             self.add_customer_ls(customer)
             return customer
+    
+        if channel is None:
+            raise Exception("Payment channel required for non-standard membership")
         
         pending = PendingCustomer(name, username, password, email, phone, birthday, membership)
         self.__pending_register.append(pending)
+        if self.pay_register(username, membership, channel):
+            return self.confirm_register(name, username, password, email, phone, birthday, membership)
         
-    def pay_register(self, username):
-        pass
+        
+    def pay_register(self, username, membership, channel):
+        pending = self.get_pending_register(username)
+        payment = PaymentRegister(username, membership, channel)
+        if payment.process_payment():
+            pending.is_paid = True
+            return True
+        raise Exception("Payment Unsuccessfully")
 
-    
-
-    def customer_register(self, name, username, password, email, phone, birthday, membership: Membership):
-
+    def confirm_register(self, name, username, password, email, phone, birthday, membership: Membership):
         if self.search_user(username):
             raise Exception("Have Account Already")
+        pending = self.get_pending_register(username)
+        if not pending.is_paid:
+            raise Exception("Haven't paid yet")
         
-        if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
-            self.add_customer_ls(customer)
-            return customer
-        
+        match pending.membership:
+            case Membership.PREMIUM:
+                customer = Premium(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            case Membership.DIAMOND:
+                customer = Diamond(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
 
-
-        
-        
-        
+        self.__pending_register.remove(pending)
+        self.add_customer_ls(customer)
+        return customer
         
         
     def add_customer_ls(self,cus):
@@ -1085,12 +1145,6 @@ class RhythmReserve():
         else:
             raise Exception("Exceed Room Quota Limit")
         
-
-    def add_customer(self, username, password):
-        customer = Customer(username, password)
-        customer.make_customer_id()
-        self.__customer_list.append(customer)
-        return customer
     
     def add_branch(self, name):
         branch = Branch(name)
@@ -1231,6 +1285,12 @@ class RhythmReserve():
             if stock.type == type_:
                 return stock
         raise Exception(f"{type_} stock not found" ) 
+    
+    def get_pending_register(self, username):
+        for cus in self.__pending_register:
+            if cus.username == username:
+                return cus
+        raise Exception("Not found in pending list")
 
     def get_available_equipment(self, branch_id, day, start, end):
         branch = self.get_branch_by_id(branch_id)
@@ -1358,6 +1418,11 @@ class RhythmReserve():
         service.add_booking(booking)
         service.total_price = booking.price
         return service
+    
+    def pay(self, service_in_id, customer, channel):
+        payment = Payment()
+
+
 
 
 

@@ -10,7 +10,6 @@ app = FastAPI()
 store = RhythmReserve("RhythmReserve")
 eq_list = []
 
-customer = Customer("pj", "1234", "ngth", "pj@gmail.com", "0821409584", date(2026,3,10), "premium", "good")
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -22,9 +21,9 @@ BUFFER = timedelta(minutes=15)
 def sanity_check():
     return "Hello World!"
 
-@app.post("/create_customer")
-def create_customer(username: str, password: str):
-    return store.add_customer(username, password).id
+@app.post("/register")
+def register(name: str, username: str, password: str, email: str, phone: str, birthday: date, membership: Membership, channel:  PaymentChannelEnum= None):  
+    return store.customer_register_request(name, username, password, email, phone, birthday, membership, channel).id
 
 @app.post("/create_branch")
 def create_branch(name: str):
