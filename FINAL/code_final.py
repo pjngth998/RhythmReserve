@@ -147,7 +147,7 @@ class User():
 # Customer
 # ===========================================================================
 class Customer(User) :
-    def __init__(self, username, password, name, email, phone, birthday, membership, status):
+    def __init__(self, username, password, name, email, phone, birthday, status, membership):
         super().__init__(username, password, name, email, phone, birthday, status)
         self.__membership = membership
         self.__id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
@@ -251,21 +251,21 @@ class Diamond(Customer):
 # Member
 # ===========================================================================
 class Standard(Customer):
-    def __init__(self, name: str, password: str):
+    def __init__(self, username, password, name, email, phone, birthday, status):
         super().__init__(Membership.STANDARD, name, password)
     def get_cancellation_limit_hours(self) -> int: return 24
     def get_tier_discount(self) -> float:          return 0.0
     def get_points_per_hr(self) -> int:            return 3
 
 class Premium(Customer):
-    def __init__(self, name: str, password: str):
+    def __init__(self, username, password, name, email, phone, birthday, status):
         super().__init__(Membership.PREMIUM, name, password)
     def get_cancellation_limit_hours(self) -> int: return 12
     def get_tier_discount(self) -> float:          return 0.03
     def get_points_per_hr(self) -> int:            return 5
 
 class Diamond(Customer):
-    def __init__(self, name: str, password: str):
+    def __init__(self, username, password, name, email, phone, birthday, status):
         super().__init__(Membership.DIAMOND, name, password)
     def get_cancellation_limit_hours(self) -> int: return 6
     def get_tier_discount(self) -> float:          return 0.05
