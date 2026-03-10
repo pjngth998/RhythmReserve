@@ -274,7 +274,7 @@ class Customer(User) :
         pass
 
     @abstractmethod
-    def redeem_point(self):
+    def redeem_coupon(self):
         pass
 
     @abstractmethod
@@ -1367,7 +1367,7 @@ class PaymentServiceIn:
         if success:
             refund_record = TransactionRecord(
                 txn_id        = refund_txn_id,
-                service_in_id = self.__servicein_id,
+                servicein_id = self.__servicein_id,
                 txn_type      = TXNType.REFUND,
                 amount        = refund_amount,
                 channel_type  = type(self.__channel).__name__,
@@ -2024,7 +2024,7 @@ class RhythmReserve():
         service_out = booking.service_out
 
         stock = None
-        for s in branch.stock_product:
+        for s in branch.product:
             if s.type == product_type:
                 stock = s
                 break
