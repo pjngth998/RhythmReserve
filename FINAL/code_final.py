@@ -181,15 +181,17 @@ class Customer(User) :
     
     def get_reserve(self, reserve_id):
         for reserve in self.__reserve_list:
-            if reserve.reserve_id == reserve_id:
+            if reserve.id == reserve_id:
                 return reserve
         raise Exception("service not found")
     
-    def search_reserve(self,reserve_id):
+    
+    def get_booking(self, booking_id):
         for reserve in self.__reserve_list:
-            if reserve.id == reserve_id:
-                return reserve
-        return None
+            for booking in reserve:
+                if booking.id == booking_id:
+                    return booking
+        raise Exception("booking not found")
 
     @property
     def notification(self):
@@ -317,6 +319,7 @@ class Booking():
         self.__timeslot: TimeSlot = timeslot
         self.__price = 0.0
         self.__duration = timeslot.duration
+        self.__service_out : ServiceOUT = None
 
     @property
     def id(self):
@@ -346,12 +349,17 @@ class Booking():
     def price(self):
         return self.__price
     
+    @property
+    def service_out(self):
+        return self.__service_out
+    
     def calculate_price(self):
         room_price = self.__room.rate * self.__duration
         eq_price = 0
         for eq in self.__eq_list:
             eq_price += eq.rate
         self.__price = room_price + eq_price
+        return self.__price
 
     def booking_cancel(self):
         set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
@@ -362,6 +370,9 @@ class Booking():
         if set_room_success and set_eq_success:
             return True
         return False
+    
+    def set_service_out(self, service_out):
+        self.__service_out = service_out
 
 
 # ===========================================================================
@@ -474,20 +485,12 @@ class ServiceIN:
             if booking.id == booking_id:
                 self.__booking_list.remove(booking)
 
-    def calculate_total(self) -> float:
-        total_price = self.cal_total_price(sum(b.price for b in self.__booking_list))
-        print(f"[Service_IN] Total calculated: {total_price:.2f} THB")
-        return total_price
+    def calculate_total(self):
+        for booking in self.__booking_list:
+            booking.calculate_price()
+            self.__total_p += booking.price
+        return self.__total_price
 
-    def apply_tier_discount(self, total_price: float, tier_discount: float) -> float:
-        discounted_price = total_price * (1 - tier_discount)
-        print(f"[Service_IN] After tier discount ({tier_discount*100:.1f}%): {discounted_price:.2f} THB")
-        return discounted_price
-
-    def apply_coupon_discount(self, discounted_price: float, coupon_discount: float) -> float:
-        final_price = discounted_price * (1 - coupon_discount)
-        print(f"[Service_IN] After coupon discount ({coupon_discount*100:.1f}%): {final_price:.2f} THB")
-        return final_price
 
     def change_status(self, status: ServiceStatus):
         status = self.set_status(status)
@@ -543,8 +546,9 @@ class ServiceIN:
 # ServiceOUT
 # ===========================================================================
 class ServiceOUT:
-    def __init__(self):
+    def __init__(self, booking:Booking):
         self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
+        self.__booking = booking
         self.__product_list = []
         self.__penalty_list = []
         self.__status = ServiceStatus.PENDING
@@ -781,10 +785,6 @@ class TimeSlot:
     @property
     def status(self):
         return self.__status
-    
-    @status.setter
-    def set_status(self, status):
-        self.__status = status
 
     @property
     def duration(self):
@@ -794,16 +794,13 @@ class TimeSlot:
         if second_start < self.__end_time and self.__start_time < second_end:
             return True
         return False
-
-    def get_status(self):
-        return self.__status
     
     def set_status(self,status : TimeSlotStatus):
         self.__status = status
     
     def ready_reserve(self,target_date,s_time,e_time):
-        if self.__date == target_date and self.__status == "AVAILABLE":
-            if self.check_overlab(s_time,e_time):
+        if self.__date == target_date and self.__status == RoomEquipmentStatus.AVAILABLE:
+            if self.check_overlab(s_time, e_time):
                 return False
             return True
         return False
@@ -818,7 +815,7 @@ class Room():
         self.__id = f"RM-{branch_name}-{self.__size.value}-{str(uuid.uuid4())[:8]}"
         self.__branch_id = branch_id
         self.__rate: float = rate
-        self.__time_slot : list = []
+        self.__timeslot : list = []
         self.__equipment_quota : int = equipment_quota
 
     @property
@@ -835,7 +832,7 @@ class Room():
     
     @property
     def timeslot(self):
-        return self.__time_slot
+        return self.__timeslot
     
     @property
     def rate(self):
@@ -846,7 +843,14 @@ class Room():
         return self.__equipment_quota
     
     def add_timeslot(self, new_timeslot):
-        self.__time_slot.append(new_timeslot)
+        self.__timeslot.append(new_timeslot)
+
+    def update_timeslot_status(self, day, start, end, status):
+        for slot in self.__timeslot:
+            if slot.date == day and slot.start == start and slot.end == end:
+                slot.set_status(status)
+                return True
+        raise Exception("TimeSlot not found")
     
   
 # ===========================================================================
@@ -860,7 +864,7 @@ class Equipment():
         self.__size = quota
         self.__rate = rate
         self.__price = price
-        self.__time_slot = []
+        self.__timeslot = []
 
     @property
     def id(self):
@@ -884,17 +888,24 @@ class Equipment():
     
     @property
     def timeslot(self):
-        return self.__time_slot
+        return self.__timeslot
     
     @timeslot.setter
     def add_timeslot(self, new_timeslot):
-        self.__time_slot.append(new_timeslot)
+        self.__timeslot.append(new_timeslot)
 
     def check_status(self, day, s_time, e_time):
-        for timeslot in self.__time_slot:
+        for timeslot in self.__timeslot:
             if timeslot.date == day and timeslot.start == s_time and timeslot.end == e_time:
-                return timeslot.get_status()
+                return timeslot.status
         return RoomEquipmentStatus.AVAILABLE
+    
+    def update_timeslot_status(self, day, start, end, status):
+        for slot in self.__timeslot:
+            if slot.date == day and slot.start == start and slot.end == end:
+                slot.set_status(status)
+                return True
+        raise Exception("TimeSlot not found")
     
 # ===========================================================================
 # StockEquipment
@@ -1497,19 +1508,29 @@ class RhythmReserve():
                 return user
         return None
 
-    def checkin(self,customer_id,reserve_id):
-        customer = self.search_customer(customer_id)
-        if not customer:
-            raise Exception("Not found Customer in System")
+    def check_in(self, customer_id, reserve_id, booking_id):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
         
-        reserve = customer.search_reserve(reserve_id)
-        if not reserve:
-            raise Exception("Not Found Reserve")
+        now = datetime.now()
+        
+        if now.date() != booking.day:
+            raise Exception("Not the booking date")
+        
+        check_in_time = (datetime.combine(booking.day, booking.start) - timedelta(minutes=10)).time()
 
-        success = reserve.get_checkin()
-        if success:
-            return "CHECK-IN SUCCESSFULLY!"
-        raise Exception("CHECK_IN FAILED")
+        if now.time() < check_in_time:
+            raise Exception("Too early to check in, please wait until 10 minutes before booking time")
+        
+        booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.OCCUPIED)
+        for eq in booking.eq_list:
+            eq.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.OCCUPIED)
+        
+        service_out = ServiceOUT(booking)
+        booking.set_service_out(service_out)
+        
+        return service_out
         
 
     def search_branch(self,branch_id):
@@ -1519,7 +1540,7 @@ class RhythmReserve():
         return None
 
     def check_selected_eq(self, customer_id, branch_id, room_id, day, s_time, e_time, eq_list):
-        customer = self.search_customer(customer_id)
+        customer = self.get_customer_by_id(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
         branch = self.search_branch(branch_id)
@@ -1832,8 +1853,19 @@ class RhythmReserve():
         service.total_price = booking.price
         return service
     
-    def pay(self, service_in_id, customer, channel):
-        pass
+    def pay_service_in(self, customer_id, service_in_id, channel):
+        customer = self.get_customer_by_id(customer_id)
+        service_in = customer.get_reserve(service_in_id)
+        
+        if service_in.total_price == 0:
+            self.calculate_service_in_price(customer_id, service_in_id)
+        
+        payment = PaymentServiceIn(service_in.total_price, channel)
+        if payment.process_payment():
+            service_in.status = ServiceStatus.PAID
+            return service_in
+        
+        raise Exception("Payment failed")
 
 
     
@@ -1845,7 +1877,7 @@ class RhythmReserve():
 
     def cancel_booking(self,customer_id,servicein_id,booking_id):
         customer = self.search_custoemr(customer_id)
-        service_in = customer.search_reserve(servicein_id)
+        service_in = customer.get_reserve(servicein_id)
         
 
         if service_in != ServiceStatus.PENDING:
