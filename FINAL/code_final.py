@@ -217,7 +217,7 @@ class Customer(User) :
         return self.__coupon_list
     
     def add_points(self, duration_hrs: int):
-        self.points += self.get_points_per_hr() * duration_hrs
+        self.__points += self.get_points_per_hr() * duration_hrs
     
     def get_customer_info(self, customer_id):
         if self.__id == customer_id:
@@ -242,7 +242,7 @@ class Customer(User) :
     
     def get_booking(self, booking_id):
         for reserve in self.__reserve_list:
-            for booking in reserve:
+            for booking in reserve.booking_list:
                 if booking.id == booking_id:
                     return booking
         raise Exception("booking not found")
@@ -528,7 +528,7 @@ class Products():
     
     @property
     def type(self):
-        return self.__price
+        return self.__type
     
 
 # ===========================================================================
@@ -575,7 +575,7 @@ class ServiceIN:
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 return booking
-        return booking
+        raise Exception("Booking not found")
     
     def add_booking(self, booking: Booking):
         self.__booking_list.append(booking)
@@ -587,8 +587,9 @@ class ServiceIN:
         print(f"\n[Service_IN] remove_booking({booking_id})")
 
     def calculate_total(self):
+        self.__total_price = 0.0
         for booking in self.__booking_list:
-            self.__total_p += booking.calculate_price()
+            self.__total_price += booking.calculate_price()
         return self.__total_price
 
 
@@ -1216,60 +1217,6 @@ class CreditCard(PaymentChannel):
         return True
 
 
-class CreditCard(PaymentChannel):
-    def __init__(self, card_number: str, cvv: str, expiry: str):
-        self.__card_number = card_number
-        self.__cvv         = cvv
-        self.__expiry      = expiry
-
-    def validate_card(self) -> bool:
-        if not self._luhn_check(self.__card_number):
-            print("[CreditCard] Invalid card number (Luhn check failed)")
-            return False
-        if not re.fullmatch(r"\d{3,4}", self.__cvv):
-            print("[CreditCard] Invalid CVV")
-            return False
-        if not self._check_expiry(self.__expiry):
-            print("[CreditCard] Card expired")
-            return False
-        print(f"[CreditCard] Card *{self.__card_number[-4:]} validated ✓")
-        return True
-
-    @staticmethod
-    def _luhn_check(number: str) -> bool:
-        digits = [int(d) for d in number if d.isdigit()]
-        if len(digits) < 13:
-            return False
-        total = 0
-        for i, d in enumerate(reversed(digits)):
-            total += d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
-        return total % 10 == 0
-
-    @staticmethod
-    def _check_expiry(expiry: str) -> bool:
-        try:
-            month, year = expiry.split("/")
-            exp = datetime(2000 + int(year), int(month), 1)
-            return exp >= datetime.now().replace(day=1)
-        except Exception:
-            return False
-
-    def process(self, amount: float, ref: str = "TXN") -> bool:
-        if not self.validate_card():
-            print("[CreditCard] Payment rejected: invalid card")
-            return False
-        print(f"[CreditCard] Charging {amount:.2f} THB to *{self.__card_number[-4:]}... Success!")
-        return True
-
-    def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool:
-        if not self.validate_card():
-            print("[CreditCard] Refund rejected: invalid card")
-            return False
-        print(f"[CreditCard] Refund {amount:.2f} THB → *{self.__card_number[-4:]} "
-              f"(original TXN: {original_ref}, refund ID: {refund_ref})")
-        return True
-
-
 # ===========================================================================
 # TRANSACTION RECORD
 # ===========================================================================
@@ -1288,6 +1235,18 @@ class TransactionRecord:
     @property
     def amount(self):
         return self.__amount
+    
+    @property
+    def txn_id(self): 
+        return self.__txn_id
+
+    @property
+    def txn_type(self): 
+        return self.__txn_type
+
+    @property
+    def ref_txn_id(self): 
+        return self.__ref_txn_id
 
     def __repr__(self):
         ref = f" ref={self.__ref_txn_id}" if self.__ref_txn_id else ""
@@ -1844,6 +1803,8 @@ class RhythmReserve():
             for eq in stock.equipment:
                 conflict = False
                 for slot in eq.timeslot:
+                    if slot.status == TimeSlotStatus.AVAILABLE:
+                        continue
                     if slot.date == day:
                         if start < slot.end and end > slot.start:
                             conflict = True
@@ -1899,8 +1860,8 @@ class RhythmReserve():
             if slot.status == TimeSlotStatus.AVAILABLE:
                 continue
 
-            slot_start = datetime.combine(date.today(), slot.start)
-            slot_end = datetime.combine(date.today(), slot.end) + BUFFER
+            slot_start = datetime.combine(slot.date, slot.start)
+            slot_end = datetime.combine(slot.date, slot.end) + BUFFER
 
             if start < slot_end and slot_start < end:
                 return True
@@ -2129,7 +2090,7 @@ class RhythmReserve():
         service_in = customer.get_reserve(servicein_id)
         
 
-        if service_in != ServiceStatus.PENDING:
+        if service_in.status != ServiceStatus.PAID:
             raise Exception("Cannot refund: Service not paid yet")
             
         cancel = service_in.cancel_b(booking_id)
