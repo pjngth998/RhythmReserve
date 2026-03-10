@@ -1,7 +1,9 @@
 import uvicorn
+import traceback
 from datetime import datetime, date, time
 from typing import Optional, List
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from code_turnote import (
@@ -73,7 +75,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
 
 @app.get("/", tags=["Info"])
 def root():
-    return {"message": "RhythmReserve API", "branch": branch. to_format()}
+    return {"message": "RhythmReserve API", "branch": branch.to_format()}
 
 @app.get("/branches", tags=["Info"])
 def list_branches():
@@ -89,8 +91,9 @@ def register(
 ):
     try:
         c = system.register_customer(name, password, tier)
-        return {"message": "Registered!", "customer": c. to_format()}
+        return {"message": "Registered!", "customer": c.to_format()}
     except Exception as e:
+        traceback.print_exc()   # print full error to server console
         raise HTTPException(400, str(e))
 
 @app.get("/customers", tags=["Customer"])
@@ -120,7 +123,7 @@ def available_equipment(
 ):
     try:
         eqs = system.get_available_equipment(branch_id, parse_date(day), parse_time(start), parse_time(end))
-        return {"available_equipment": [eq. to_format() for eq in eqs]}
+        return {"available_equipment": [eq.to_format() for eq in eqs]}
     except Exception as e:
         raise HTTPException(400, str(e))
 
@@ -140,7 +143,7 @@ def create_booking(
         svc = system.create_booking(
             customer_id, branch_id, RoomType(room_size),
             parse_date(day), parse_time(start), parse_time(end), eq_ids)
-        return {"message": "Booking created!", "service": svc. to_format()}
+        return {"message": "Booking created!", "service": svc.to_format()}
     except Exception as e:
         raise HTTPException(400, str(e))
 
@@ -196,7 +199,7 @@ def checkout(
             "message":     "ยอดรวมคำนวณแล้ว กรุณายืนยันการชำระเงิน",
             "sout_id":     payment_sout.id,
             "total_price": payment_sout.total_price,
-            "breakdown":   payment_sout. to_format()["service_out"],
+            "breakdown":   payment_sout.to_format()["service_out"],
         }
     except HTTPException:
         raise
@@ -210,9 +213,9 @@ def confirm_checkout(sout_id: str = Query(...)):
         payment_sout = pending_payments.get(sout_id)
         if not payment_sout:
             raise HTTPException(404, "ไม่พบ sout_id หรือชำระเงินแล้ว")
-        result = system.confirm_checkout(payment_sout)
+        system.confirm_checkout(payment_sout)
         del pending_payments[sout_id]
-        return {"message": "CHECK-OUT SUCCESSFULLY!", "receipt": result}
+        return PlainTextResponse(payment_sout.to_receipt_text())
     except HTTPException:
         raise
     except Exception as e:
