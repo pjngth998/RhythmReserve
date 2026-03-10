@@ -487,8 +487,7 @@ class ServiceIN:
 
     def calculate_total(self):
         for booking in self.__booking_list:
-            booking.calculate_price()
-            self.__total_p += booking.price
+            self.__total_p += booking.calculate_price()
         return self.__total_price
 
 
@@ -1533,17 +1532,11 @@ class RhythmReserve():
         return service_out
         
 
-    def search_branch(self,branch_id):
-        for branch in self.__branch_list:
-            if branch.branch_id == branch_id:
-                return branch
-        return None
-
     def check_selected_eq(self, customer_id, branch_id, room_id, day, s_time, e_time, eq_list):
         customer = self.get_customer_by_id(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
-        branch = self.search_branch(branch_id)
+        branch = self.get_branch_by_id(branch_id)
         if not branch:
             return "Branch Not Found"
 
