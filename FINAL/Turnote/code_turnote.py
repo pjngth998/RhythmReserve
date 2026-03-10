@@ -13,7 +13,7 @@ class ServiceStatus(Enum):
     PENDING_PAYMENT = "PENDING_PAYMENT"
     PAID            = "PAID"
     CANCELLED       = "CANCELLED"
-    
+
 class RoomType(Enum):
     SMALL = "S"
     MEDIUM = "M"
@@ -357,18 +357,25 @@ class Penalty:
         self.__status = new_status
 
 class Policy:
-    def __init__(self, rate: float):
-        self.__rate = rate
 
-    def check_late_checkout(self, actual_checkout: datetime, expected_checkout: datetime, booking_id: str) -> Optional[Penalty]:
-        if actual_checkout > expected_checkout:
-            time_diff = actual_checkout - expected_checkout
-            hours_late = time_diff.total_seconds() / 3600
-            if hours_late > 0.25: 
-                rounded_hours = int(hours_late) + (1 if hours_late % 1 > 0 else 0)
-                fine_amount = rounded_hours * self.__rate
-                return Penalty(f"PEN-{str(uuid.uuid4())[:6]}", PenaltyType.LATE, fine_amount, f"Late checkout ({rounded_hours} hrs)", booking_id)
-        return None
+    def check_late_checkout(self, actual_checkout: datetime, expected_checkout: datetime, booking_id: str, room_rate: float) -> Optional[Penalty]:
+            if actual_checkout > expected_checkout:
+                time_diff = actual_checkout - expected_checkout
+                hours_late = time_diff.total_seconds() / 3600
+                
+                if hours_late > 0.25:  
+                    rounded_hours = int(hours_late) + (1 if hours_late % 1 > 0 else 0)
+                    
+                    fine_amount = rounded_hours * room_rate 
+                    
+                    return Penalty(
+                        f"PEN-{str(uuid.uuid4())[:6]}", 
+                        PenaltyType.LATE, 
+                        fine_amount, 
+                        f"Late checkout ({rounded_hours} hrs at {room_rate}/hr)", 
+                        booking_id
+                    )
+            return None
 
     def check_cancellation(self, cancel_time: datetime, booking_start_dt: datetime, customer: Customer, total_price: float, booking_id: str) -> Tuple[float, Optional[Penalty]]:
         limit_hours = customer.get_cancellation_limit_hours()
