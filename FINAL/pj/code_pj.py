@@ -52,10 +52,16 @@ class ProductType(Enum):
     LAY = "LY"
     TARO = "TR"
 
-class Membership(Enum):
-    STANDARD = "STD"
-    PREMIUM = "PRM"
-    DIAMOND = "DMN"
+class Membership(str, Enum):
+    STANDARD = ("STD", 0)
+    PREMIUM = ("PRM", 599)
+    DIAMOND = ("DMN", 999)
+
+    def __new__(cls, code, price):
+        obj = str.__new__(cls, code)
+        obj._value_ = code
+        obj.price = price
+        return obj
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -80,6 +86,11 @@ class UserField(Enum):
     EMAIL = "email"
     PHONE = "phone"
     ADDRESS = "address"
+
+class PaymentChannelType(Enum):
+    QRSCAN = "Qr"
+    CREDITCARD = "Cr"
+
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -144,11 +155,10 @@ class User():
 # Customer
 # ===========================================================================
 class Customer(User) :
-
     def __init__(self, username, password, name, email, phone, birthday, membership, status):
         super().__init__(username, password, name, email, phone, birthday, status)
-        self.__id =  f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.__membership = membership
+        self.__id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.__points:int = None
         self.__reserve_list = []
         self.__coupon_list = None
@@ -222,7 +232,23 @@ class PendingCustomer():
         self.__phone = phone
         self.__birthday = birthday
         self.__membership = membership
-        self.__paid = False
+        self.__is_paid = False
+
+    @property
+    def username(self):
+        return self.__username
+    
+    @property
+    def is_paid(self):
+        return self.__is_paid
+    
+    @is_paid.setter
+    def is_paid(self, status):
+        self.__is_paid = status
+
+    @property
+    def membership(self):
+        return self.__membership
 
 class Standard(Customer):
     pass
@@ -360,6 +386,9 @@ class TimeSlot:
     def get_status(self):
         return self.__status
     
+    def set_status(self,status : TimeSlotStatus):
+        self.__status = status
+    
     def ready_reserve(self,target_date,s_time,e_time):
         if self.__date == target_date and self.__status == "AVAILABLE":
             if self.check_overlab(s_time,e_time):
@@ -400,7 +429,6 @@ class Room():
     def rate(self):
         return self.__rate
     
-    @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
     
@@ -588,7 +616,7 @@ class Booking():
     
     @property
     def day(self):
-        return self.__timeslot.day
+        return self.__timeslot.date
     
     @property
     def start(self):
@@ -612,6 +640,16 @@ class Booking():
         for eq in self.__eq_list:
             eq_price += eq.rate
         self.__price = room_price + eq_price
+
+    def booking_cancel(self):
+        set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+
+        for eq in self.__eq_list:
+            set_eq_success =  eq.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+
+        if set_room_success and set_eq_success:
+            return True
+        return False
 
 
     
@@ -750,22 +788,30 @@ class CreditCard(PaymentChannel):
 # ===========================================================================
 # TRANSACTION RECORD & PAYMENT
 # ===========================================================================
+class TXNType(Enum):
+    CHARGE = "CHARGE"
+    REFUND = "REFUND"
+    PENALTY = "PENALTY"
 
 class TransactionRecord:
-    def __init__(self, txn_id: str, service_in_id: str, txn_type: str,
+    def __init__(self, txn_id: str, servicein_id: str, txn_type: TXNType,
                  amount: float, channel_type: str, ref_txn_id: Optional[str] = None):
-        self.txn_id        = txn_id
-        self.__servicein_id = service_in_id
-        self.txn_type      = txn_type
-        self.amount        = amount
+        self.__txn_id        = txn_id
+        self.__servicein_id = servicein_id
+        self.__txn_type      = txn_type
+        self.__amount        = amount
         self.__channel_type  = channel_type
-        self.ref_txn_id    = ref_txn_id
-        self.timestamp     = datetime.now()
+        self.__ref_txn_id    = ref_txn_id
+        self.__timestamp     = datetime.now()
+
+    @property
+    def amount(self):
+        return self.__amount
 
     def __repr__(self):
-        ref = f" ref={self.ref_txn_id}" if self.ref_txn_id else ""
-        return (f"<TXN {self.txn_id} | {self.txn_type} | "
-                f"{self.amount:.2f} THB | {self.__channel_type}{ref} | {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
+        ref = f" ref={self.__ref_txn_id}" if self.__ref_txn_id else ""
+        return (f"<TXN {self.__txn_id} | {self.txn_type} | "
+                f"{self.__amount:.2f} THB | {self.__channel_type}{ref} | {self.__timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
 
 class PaymentServiceOut:
     def __init__(self):
@@ -819,7 +865,7 @@ class PaymentServiceIn:
 
         if txn_id:
             for record in self.__transaction_history:
-                if record.txn_id == txn_id and record.txn_type == "CHARGE":
+                if record.txn_id == txn_id and record.txn_type == TXNType.CHARGE:
                     if record.txn_id in refunded_ids:
                         print(f"[Payment] TXN {txn_id} has already been refunded")
                         return None
@@ -828,7 +874,7 @@ class PaymentServiceIn:
             return None
 
         for record in reversed(self.__transaction_history):
-            if record.txn_type == "CHARGE" and record.txn_id not in refunded_ids:
+            if record.txn_type == TXNType.CHARGE and record.txn_id not in refunded_ids:
                 return record
         print("[Payment] No eligible CHARGE transaction found")
         return None
@@ -869,7 +915,29 @@ class PaymentServiceIn:
         return success
 
     def get_transaction_history(self) -> list[TransactionRecord]:
-        return self.__transaction_history
+        return self.transaction_history
+    
+# ===========================================================================
+# PaymentRegister
+# ===========================================================================
+
+class PaymentRegister():
+    def __init__(self, username, membership : Membership, channel):
+        self.__username = username
+        self.__member = membership
+        self.__cost = self.__member.price
+        self.__channel = channel
+        self.__is_success = False
+
+
+    def process_payment(self) -> bool:
+        self.__is_success = True
+
+        print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
+        return self.__is_success
+
+    
+        
 
 # ===========================================================================
 # Penalty
@@ -895,7 +963,38 @@ class Penalty:
     def change_penalty_status(self, new_status: PenaltyStatus):
         self.__status = new_status
 
+# ===========================================================================
+# COUPON
+# ===========================================================================
 
+class Coupon:
+    EXPIRE_MONTHS = 1
+
+    def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
+        self.__coupon_id    = coupon_id
+        self.__discount      = discount
+        self.__expired_date = expired_date
+
+    @classmethod
+    def create_coupon(cls, discount: float) -> "Coupon":
+        expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
+        date_part = expired_date.strftime("%y%m%d")
+        coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
+        print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
+        return cls(coupon_id, discount, expired_date)
+
+    def get_coupon_id(self) -> str:
+        return self.__coupon_id
+
+    def get_discount(self) -> float:
+        return self.__discount 
+
+    def get_expired_date(self) -> datetime:
+        return self.__expired_date
+
+    def is_expired(self) -> bool:
+        return datetime.now() > self.__expired_date
+    
 # ===========================================================================
 # ServiceIN
 # ===========================================================================
@@ -907,6 +1006,7 @@ class ServiceIN:
         self.__status        = ServiceStatus.PENDING
         self.__total_price   = 0.0
         self.__final_price   = 0.0
+        self.__payment = None
 
 
     # def get_id(self) -> str:
@@ -987,26 +1087,26 @@ class ServiceIN:
 
         if payment_success:
             self.change_status(ServiceStatus.PAID)
-            for booking in self.booking_list:
+            for booking in self.__booking_list:
                 booking.confirm()
         else:
             self.change_status(ServiceStatus.PENDING)
 
         return payment_success
     
-
-    def cancel(self,  original_txn_id: Optional[str] = None) -> bool:
-        if self.status == ServiceStatus.CANCELLED:
-            print(f"[Service_IN] {self.__servicein_id} already cancelled")
-            return False
-
-        self.change_status(ServiceStatus.CANCELLED)
-
+    def _calculate_refund(self,booking : Booking):
+        propotion = booking.price/self.__total_price
+        refund_amount = self.__final_price * propotion
+        return refund_amount
+    
+    def cancel_b(self,booking_id,original_txn_id: Optional[str] = None):
         for booking in self.__booking_list:
-            booking.cancel()
+            if booking.id == booking_id:
+                refund_amount =self._calculate_refund(booking)
+                refund_success = self.__payment.payment_refund(refund_amount,original_txn_id)
 
-        refund_success = self.__payment.payment_refund(refund_amount, original_txn_id)
-        return refund_success
+                if refund_success:
+    
 
 # ===========================================================================
 # ServiceOUT
@@ -1063,7 +1163,7 @@ class RhythmReserve():
         self.__staff_list = []
         self.__pending_register = []
 
-    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership):
+    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
             raise Exception("Have Account Already")
         
@@ -1071,26 +1171,41 @@ class RhythmReserve():
             customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
             self.add_customer_ls(customer)
             return customer
+    
+        if channel is None:
+            raise Exception("Payment channel required for non-standard membership")
         
         pending = PendingCustomer(name, username, password, email, phone, birthday, membership)
         self.__pending_register.append(pending)
+        if self.pay_register(username, membership, channel):
+            return self.confirm_register(name, username, password, email, phone, birthday, membership)
         
-    def pay_register(self, username):
-        pass
+        
+    def pay_register(self, username, membership, channel):
+        pending = self.get_pending_register(username)
+        payment = PaymentRegister(username, membership, channel)
+        if payment.process_payment():
+            pending.is_paid = True
+            return True
+        raise Exception("Payment Unsuccessfully")
 
-    
-
-    def customer_register(self, name, username, password, email, phone, birthday, membership: Membership):
-
+    def confirm_register(self, name, username, password, email, phone, birthday, membership: Membership):
         if self.search_user(username):
             raise Exception("Have Account Already")
+        pending = self.get_pending_register(username)
+        if not pending.is_paid:
+            raise Exception("Haven't paid yet")
         
-        if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
-            self.add_customer_ls(customer)
-            return customer
-        
+        match pending.membership:
+            case Membership.PREMIUM:
+                customer = Premium(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            case Membership.DIAMOND:
+                customer = Diamond(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
 
+        self.__pending_register.remove(pending)
+        self.add_customer_ls(customer)
+        return customer
+        
         
     def add_customer_ls(self,cus):
         self.__customer_list.append(cus)
@@ -1203,6 +1318,7 @@ class RhythmReserve():
             return True
         else:
             raise Exception("Exceed Room Quota Limit")
+        
     
     def add_branch(self, name):
         branch = Branch(name)
@@ -1343,6 +1459,12 @@ class RhythmReserve():
             if stock.type == type_:
                 return stock
         raise Exception(f"{type_} stock not found" ) 
+    
+    def get_pending_register(self, username):
+        for cus in self.__pending_register:
+            if cus.username == username:
+                return cus
+        raise Exception("Not found in pending list")
 
     def get_available_equipment(self, branch_id, day, start, end):
         branch = self.get_branch_by_id(branch_id)
@@ -1471,6 +1593,11 @@ class RhythmReserve():
         service.total_price = booking.price
         return service
     
+    def pay(self, service_in_id, customer, channel):
+        payment = Payment()
+
+
+    
     def search_custoemr(self,customer_id):
         for customer in self.__customer_list:
             if customer.id == customer_id:
@@ -1480,11 +1607,12 @@ class RhythmReserve():
     def cancel_booking(self,customer_id,servicein_id,booking_id):
         customer = self.search_custoemr(customer_id)
         service_in = customer.search_reserve(servicein_id)
+        
 
         if service_in != ServiceStatus.PENDING:
             raise Exception("Cannot refund: Service not paid yet")\
             
-        cancel = service_in.cancel()
+        cancel = service_in.cancel(booking_id)
         
 
   
