@@ -117,6 +117,11 @@ class User():
     @property
     def username(self):
         return self.__username
+    
+    # ใน Customer class
+    @property
+    def name(self):
+        return self.__name
 
     @property
     def user_id(self):
@@ -155,7 +160,7 @@ class User():
 # Customer
 # ===========================================================================
 class Customer(User) :
-    def __init__(self, username, password, name, email, phone, birthday, membership, status):
+    def __init__(self, username, password, name, email, phone, birthday,  status, membership):
         super().__init__(username, password, name, email, phone, birthday, status)
         self.__membership = membership
         self.__id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
@@ -174,7 +179,7 @@ class Customer(User) :
     
     def get_customer_info(self,customer_id):
         if self.__id == customer_id:
-            return self.__name, self.__id, self.__reserve_list
+            return self.name, self.__id, self.__reserve_list
         
     @reserve_list.setter
     def add_reserve_list(self, reserve):
@@ -308,33 +313,28 @@ class Branch():
         self.__stock_equipment_list.append(new_stock)
 
     def get_eq_by_id(self, eq_id):
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        return eq
-    
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:
+                if eq.id == eq_id:
+                    return eq
+        return None
+
     def get_eq_stock_by_id(self, eq_id):
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        return st
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:
+                if eq.id == eq_id:
+                    return stock
+        return None
                         
 
     def check_can_reserve(self, eq_id, day, s_time, e_time):
-        stock = None
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        stock = st
-        c_stock = stock.check_stock(eq_id)
-        if c_stock:
-            verify = stock.verify_available(eq_id, day, s_time, e_time)
-            if verify:
-                return True
-            return False
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:  
+                if eq.id == eq_id:
+                    c_stock = stock.check_stock(eq_id)
+                    if c_stock:
+                        return stock.verify_available(eq_id, day, s_time, e_time)
+        return False
         
     def get_size_eq(self, eq_id):
         eq = self.get_eq_by_id(eq_id)
@@ -426,7 +426,10 @@ class Room():
     def rate(self):
         return self.__rate
     
-    @timeslot.setter
+    @property
+    def quota(self):
+        return self.__equipment_quota
+    
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
     
@@ -471,6 +474,12 @@ class Equipment():
     @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
+
+    def check_status(self, day, s_time, e_time):
+        for timeslot in self.__time_slot:
+            if timeslot.date == day and timeslot.start == s_time and timeslot.end == e_time:
+                return timeslot.get_status()
+        return RoomEquipmentStatus.AVAILABLE
 
     
 # ===========================================================================
@@ -522,8 +531,9 @@ class StockEquipment:
     
     def verify_available(self, eq_id, day, s_time, e_time):
         eq = self.get_eq(eq_id)
-        status = eq.check_status(day,s_time,e_time)
-
+        if eq is None:
+            return False
+        status = eq.check_status(day, s_time, e_time)
         if status == RoomEquipmentStatus.AVAILABLE:
             return True
         return False
@@ -1117,7 +1127,7 @@ class RhythmReserve():
             raise Exception("Have Account Already")
         
         if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
             self.add_customer_ls(customer)
             return customer
     
@@ -1147,9 +1157,9 @@ class RhythmReserve():
         
         match pending.membership:
             case Membership.PREMIUM:
-                customer = Premium(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
             case Membership.DIAMOND:
-                customer = Diamond(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
 
         self.__pending_register.remove(pending)
         self.add_customer_ls(customer)
@@ -1224,11 +1234,11 @@ class RhythmReserve():
 
     def search_branch(self,branch_id):
         for branch in self.__branch_list:
-            if branch.branch_id == branch_id:
+            if branch.id == branch_id:
                 return branch
         return None
 
-    def check_selected_eq(self, customer_id, branch_id, room_id, stock_id, day, s_time, e_time, eq_list):
+    def check_selected_eq(self, customer_id, branch_id, room_id, day, s_time, e_time, eq_list):
         customer = self.search_customer(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
@@ -1236,8 +1246,9 @@ class RhythmReserve():
         if not branch:
             return "Branch Not Found"
 
-        max_quota = branch.get_room_quota(room_id)
-        room = branch.search_room(room_id)
+        room = self.get_room_by_id(room_id)
+        max_quota = room.quota
+
         if not room: 
             return "Room Not Found"
         # max_quota = room.get_eq_quota(room_id)
@@ -1255,9 +1266,7 @@ class RhythmReserve():
             
         total_requested_size = 0
         for eq_id in eq_list:
-            stock =  branch.stock
-            size = stock.get_size_eq(eq_id)
-
+            size = branch.get_size_eq(eq_id)
             total_requested_size += size
 
         if total_requested_size <= max_quota:
@@ -1423,12 +1432,15 @@ class RhythmReserve():
             for eq in stock.equipment:
                 conflict = False
                 for slot in eq.timeslot:
+                    if slot.status == TimeSlotStatus.AVAILABLE:
+                        continue
                     if slot.date == day:
                         if start < slot.end and end > slot.start:
                             conflict = True
                             break
                 if not conflict:
                     available.append(eq)
+
         summary = []
         for eq in available:
             line = f"{eq.type}: {sum(1 for e in available if e.type == eq.type)}"
@@ -1436,7 +1448,6 @@ class RhythmReserve():
                 summary.append(line)
 
         return available, summary
-    
     
     def get_available_room_slots(self, branch_id, day, room_size):
 
@@ -1474,20 +1485,21 @@ class RhythmReserve():
 
 
     def _has_conflict(self, room, start, end):
-     
         for slot in room.timeslot:
             if slot.status == TimeSlotStatus.AVAILABLE:
                 continue
 
-            buffered_end = slot.end + BUFFER
-            if start < buffered_end and slot.start < end:
+            slot_start = datetime.combine(date.today(), slot.start)
+            slot_end = datetime.combine(date.today(), slot.end) + BUFFER
+
+            if start < slot_end and slot_start < end:
                 return True
 
         return False
     
     def get_available_room(self, branch, size, start_time, end_time):
         for rm in branch.room:
-            if not self._has_conflict(rm, start_time, end_time):
+            if rm.sizeII == size and not self._has_conflict(rm, start_time, end_time):
                 return rm
         raise Exception("Don't have available room in that time")
     
@@ -1510,7 +1522,7 @@ class RhythmReserve():
 
         room = self.get_available_room(branch, room_size, start, end)
 
-        available = self.get_available_equipment(branch_id, day, start, end)
+        available, summary = self.get_available_equipment(branch_id, day, start, end)
         available_ids = [eq.id for eq in available]
 
         for eq_id in eq_list:
@@ -1527,7 +1539,7 @@ class RhythmReserve():
             eq = branch.get_eq_by_id(eq_id)
             selected_eqs.append(eq)
 
-        booking = Booking(customer_id, room, day, start, end, selected_eqs)
+        booking = Booking(branch.name, room, selected_eqs, customer, room_slot)
         return booking
     
     def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
@@ -1543,11 +1555,10 @@ class RhythmReserve():
         return service
     
     def pay(self, service_in_id, customer, channel):
-        payment = Payment()
-
-
+        pass
+        
     
-    def search_custoemr(self,customer_id):
+    def search_customer(self,customer_id):
         for customer in self.__customer_list:
             if customer.id == customer_id:
                 return customer

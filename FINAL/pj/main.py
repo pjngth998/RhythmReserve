@@ -66,21 +66,33 @@ def available_equipment(branch_id: str, day: date, start: time, end: time):
     return summary
 
 
-@app.post("/select_equipment")
-def select_equipment(branch_id: str, day: date, start: time, end: time, eq_type: EquipmentType, amount: int):
+@app.post("/create_booking")
+def create_booking(
+    customer_id: str, branch_id: str, room_size: RoomType, day: date,
+    start: time, duration: int, EGTR: int = 0,
+    AGTR: int = 0, DM: int = 0, MC: int = 0, BS: int = 0, KB: int = 0
+):
+    end = (datetime.combine(day, start) + timedelta(hours=duration)).time()
+    
     available, _ = store.get_available_equipment(branch_id, day, start, end)
     
-    matched = [eq for eq in available if eq.type == eq_type.value]
+    requested = {
+        EquipmentType.ELECTRICGUITAR: EGTR,
+        EquipmentType.ACOUSTICGUITAR: AGTR,
+        EquipmentType.DRUM: DM,
+        EquipmentType.MICROPHONE: MC,
+        EquipmentType.BASS: BS,
+        EquipmentType.KEYBOARD: KB
+    }
     
-    if len(matched) < amount:
-        return {"error": f"only {len(matched)} {eq_type.value} available"}
+    eq_ids = []
+    for eq_type, amount in requested.items():
+        if amount > 0:
+            matched = [eq for eq in available if eq.type == eq_type.value]
+            if len(matched) < amount:
+                return {"error": f"only {len(matched)} {eq_type.value} available"}
+            eq_ids += [eq.id for eq in matched[:amount]]
     
-    selected_ids = [eq.id for eq in matched[:amount]]
-    return {"selected_ids": selected_ids}
-
-
-@app.post("/create_booking")
-def create_booking( customer_id: str, branch_id: str, room_size: RoomType, day: date, start: time, end: time, eq_ids: List[str] = Query(default=[])):
     return store.create_booking(customer_id, branch_id, room_size, day, start, end, eq_ids)
 
 
