@@ -417,6 +417,7 @@ class Booking():
         self.__price = 0.0
         self.__duration = timeslot.duration
         self.__service_out : ServiceOUT = None
+        self.__payment_sout = None
 
     @property
     def id(self):
@@ -449,6 +450,17 @@ class Booking():
     @property
     def service_out(self):
         return self.__service_out
+    
+    @property
+    def duration(self):
+        return self.__duration 
+
+    def set_payment_sout(self, payment_sout):
+        self.__payment_sout = payment_sout
+
+    @property
+    def payment_sout(self):
+        return self.__payment_sout
     
     def calculate_price(self):
         room_price = self.__room.rate * self.__duration
@@ -1512,6 +1524,19 @@ class RhythmReserve():
         self.__customer_list = []
         self.__staff_list = []
         self.__pending_register = []
+        self.__policy = Policy()
+        self.__daily_reports = {}
+
+    @property
+    def policy(self):
+        return self.__policy
+
+    def get_daily_report(self, day) -> DailyReport:
+        key = day.isoformat()
+        if key not in self.__daily_reports:
+            branch = 
+            self.__daily_reports[key] = DailyReport(key, branch)
+        return self.__daily_reports[key]
 
     def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
@@ -2101,7 +2126,7 @@ class RhythmReserve():
         result = staff.confirm_checkout(payment_sout, report)
 
         customer.add_points(booking.duration)
-        reserve.set_status(ServiceStatus.COMPLETED)
+        reserve.set_status(ServiceStatus.PAID)
         return result
 
 
