@@ -81,12 +81,12 @@ def select_equipment(branch_id: str, day: date, start: time, end: time, eq_type:
 
 @app.post("/create_booking")
 def create_booking( customer_id: str, branch_id: str, room_size: RoomType, day: date, start: time, end: time, eq_ids: List[str] = Query(default=[])):
-    return store.create_booking(customer.id, branch_id, room_size, day, start, end, eq_ids)
+    return store.create_booking(customer_id, branch_id, room_size, day, start, end, eq_ids)
 
 
 @app.post("/add_booking_to_service")
 def add_booking_to_service(service_id: str, customer_id: str, branch_id: str, room_size: RoomType, day: date, start: time, end: time, eq_ids: List[str] = Query(default=[])):
-    return store.add_booking_to_service(service_id, customer.id, branch_id, room_size, day, start, end, eq_ids)
+    return store.add_booking_to_service(service_id, customer_id, branch_id, room_size, day, start, end, eq_ids)
 
 
 if __name__ == "__main__":

@@ -155,8 +155,6 @@ class User():
 # Customer
 # ===========================================================================
 class Customer(User) :
-
-    def __init__(self, username, password, name, email, phone, birthday, membership, status):
     def __init__(self, username, password, name, email, phone, birthday, membership, status):
         super().__init__(username, password, name, email, phone, birthday, status)
         self.__membership = membership
@@ -797,6 +795,7 @@ class TransactionRecord:
 
 class PaymentServiceOut:
     def __init__(self):
+        pass
 
 class TXNType(Enum):
     CHARGE = "CHARGE"
