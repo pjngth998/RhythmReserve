@@ -1,220 +1,228 @@
-from fastapi import FastAPI, HTTPException, Query
-from typing import Optional, List
-from datetime import datetime, date, time
-import uuid
 import uvicorn
+from datetime import datetime, date, time
+from typing import Optional, List
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from models import (
+    RhythmReserve, RoomType, EquipmentType, ProductType,
+    PenaltyType, DailyReport
+)
 
-from code_turnote import Branch, Staff, Policy, DailyReport, Standard, Diamond, Service_IN, Service_OUT, Products, ProductType, Penalty, PenaltyType, PenaltyStatus
+# ===========================================================================
+# SYSTEM INSTANCE  — ทุก logic อยู่ใน RhythmReserve
+# ===========================================================================
 
-app = FastAPI()
+system = RhythmReserve("RhythmReserve")
 
-@app.get("/")
-def read():
-    return {
-        "message": "Welcome to API!",
-        "docs_url": "http://127.0.0.1:8000/docs"
-    }
+# setup branch
+branch = system.add_branch("Ladkrabang")
+BID    = branch.id
 
-mock_branch = Branch("Ladkrabang")
-mock_staff = Staff(mock_branch)
+# rooms
+system.add_room(BID, RoomType.SMALL)
+system.add_room(BID, RoomType.MEDIUM)
+system.add_room(BID, RoomType.LARGE)
 
-mock_policy = Policy() 
-mock_report = DailyReport(str(date.today()), mock_branch)
+# equipment
+system.add_equipment(BID, EquipmentType.ELECTRICGUITAR, 2)
+system.add_equipment(BID, EquipmentType.DRUM,           2)
+system.add_equipment(BID, EquipmentType.MICROPHONE,     3)
+system.add_equipment(BID, EquipmentType.KEYBOARD,       1)
+system.add_equipment(BID, EquipmentType.BASS,           2)
+system.add_equipment(BID, EquipmentType.ACOUSTICGUITAR, 2)
 
-cust_standard = Standard("C01", "Somchai", "pass1234")
-cust_diamond = Diamond("C02", "Yaya", "pass5678")
+# products
+for pt in ProductType:
+    system.add_product(BID, pt, 10)
 
-booking_db = {
-    "B001": Service_IN("B001", time(10, 0), time(12, 0), cust_standard, price=1000.0),
-    "B002": Service_IN("B002", time(13, 0), time(15, 0), cust_diamond, price=1500.0)
-}
+# customers (mock)
+cust_std = system.register_customer("Somchai", "pass1234", "Standard")
+cust_prm = system.register_customer("Napat",   "pass0000", "Premium")
+cust_dmn = system.register_customer("Yaya",    "pass5678", "Diamond")
 
-# 🌟 2. ลบ PRODUCT_PRICES จำลองทิ้งไปได้เลย (เพราะจะดึงจาก branch)
+# daily report (shared per run)
+daily_report = DailyReport(str(date.today()), branch)
 
-# ==========================================
-# API ENDPOINTS
-# ==========================================
+# ===========================================================================
+# PARSE HELPERS
+# ===========================================================================
 
-@app.post("/checkout")
-def api_checkout(
-    booking_id: str, 
-    actual_checkout: datetime, 
-    expected_checkout: datetime, 
-    product_list: List[str] = Query(default=[]), 
-    
-    # 🌟 3. เพิ่มการรับ ID อุปกรณ์ที่พัง
-    damaged_equipment_ids: List[str] = Query(default=[]), 
-    
-    manual_penalty_type: Optional[PenaltyType] = None, 
-    manual_penalty_amount: float = 0.0, 
-    manual_penalty_reason: str = ""
-):
-    if booking_id not in booking_db:
-        raise HTTPException(status_code=404, detail="Booking Not Found")
-    
-    booking = booking_db[booking_id]
-    service_out = Service_OUT()
+def parse_dt(s: str) -> datetime:
+    try:
+        return datetime.strptime(s.strip(), "%d/%m/%Y %H:%M")
+    except ValueError:
+        raise ValueError("รูปแบบไม่ถูกต้อง ใช้ DD/MM/YYYY HH:MM เช่น 10/03/2026 14:30")
 
-    # --- เช็คของกินจากสต็อกสาขา ---
-    for item in product_list:
-        # ดึงสินค้าจากลิสต์ของสาขา
-        found_product = next((p for p in mock_branch.product if p.type.value == item), None)
-        if found_product:
-            service_out.add_product(found_product)
+def parse_time(s: str) -> time:
+    try:
+        return datetime.strptime(s.strip(), "%H:%M").time()
+    except ValueError:
+        raise ValueError("รูปแบบเวลาไม่ถูกต้อง ใช้ HH:MM เช่น 14:00")
 
-    # --- เช็คค่าปรับ Manual (เช่น ค่าห้องพัง ที่คุณทำไว้เดิม) ---
-    if manual_penalty_type and manual_penalty_amount > 0:
-        manual_penalty = Penalty(f"PEN-{str(uuid.uuid4())[:6]}", manual_penalty_type, manual_penalty_amount, manual_penalty_reason, booking_id)
-        service_out.add_penalty(manual_penalty)
-        mock_report.add_penalty(manual_penalty) 
+def parse_date(s: str) -> date:
+    try:
+        return datetime.strptime(s.strip(), "%d/%m/%Y").date()
+    except ValueError:
+        raise ValueError("รูปแบบวันที่ไม่ถูกต้อง ใช้ DD/MM/YYYY เช่น 10/03/2026")
 
-    # --- 🌟 เช็คค่าปรับอุปกรณ์พังอัตโนมัติ (ดึงราคาจาก Object Equipment) ---
-    if hasattr(booking, 'equipment_list') and booking.equipment_list:
-        for eq in booking.equipment_list:
-            if eq.id in damaged_equipment_ids:
-                eq.status = "MAINTENANCE"
-                eq_penalty = Penalty(
-                    f"PEN-{str(uuid.uuid4())[:6]}", 
-                    PenaltyType.DAMAGE, # ใช้ Enum DAMAGE
-                    eq.price,           # ดึงราคาจากอุปกรณ์
-                    f"Equipment Damage: {eq.type.value}", 
-                    booking_id
-                )
-                service_out.add_penalty(eq_penalty)
-                mock_report.add_penalty(eq_penalty)
+# ===========================================================================
+# PYDANTIC SCHEMAS
+# ===========================================================================
 
-    # --- ให้ Staff ทำการเช็คเอาท์ (ลอจิกเดิมของคุณ) ---
-    # *หมายเหตุ: ถ้าคลาส Staff มีการเรียกใช้ policy.check_late_checkout 
-    # อย่าลืมไปเติม room_rate = booking.room.price ลงในฟังก์ชันนั้นด้วยนะครับ*
-    receipt = mock_staff.customer_check_out(
-        service_out=service_out,
-        actual_time=actual_checkout,
-        expected_time=expected_checkout,
-        policy=mock_policy,
-        booking=booking,
-        report=mock_report
-    )
-    
-    # 🌟 4. เอา receipt ออกตามที่สั่งครับ
-    return {"message": "CHECK-OUT SUCCESSFULLY!"}
+class BookingRequest(BaseModel):
+    customer_id: str
+    branch_id:   str
+    room_size:   str          # "S" | "M" | "L" | "XL"
+    day:         str          # "10/03/2026"
+    start:       str          # "10:00"
+    end:         str          # "12:00"
+    eq_ids:      List[str] = []
 
-@app.post("/cancel")
-def api_cancel(booking_id: str, cancel_time: datetime, booking_start_time: datetime):
-    if booking_id not in booking_db:
-        raise HTTPException(status_code=404, detail="Booking Not Found")
-    
-    booking = booking_db[booking_id]
-    
-    refund, penalty = mock_policy.check_cancellation(
-        cancel_time=cancel_time, 
-        booking_start_dt=booking_start_time, 
-        customer=booking.customer, 
-        total_price=booking.price,
-        booking_id=booking.id
-    )
-    
-    if penalty: 
-        penalty.change_penalty_status(PenaltyStatus.APPLIED)
-        mock_report.add_penalty(penalty)
-        mock_report.add_revenue(penalty.amount)
-        return {"status": "NO_REFUND", "detail": penalty.reason, "type": penalty.type.value}
-        
-    return {"status": "REFUND", "detail": f"Policy {booking.customer.__class__.__name__} Refund {refund} baht"}
+class CheckoutRequest(BaseModel):
+    customer_id:      str
+    booking_id:       str
+    branch_id:        str
+    actual_checkout:  str     # "10/03/2026 14:30"
+    expected_checkout:str     # "10/03/2026 12:00"
+    product_names:    List[str] = []
+    is_room_damaged:  bool  = False
+    room_damage_cost: float = 0.0
+    damaged_eq_ids:   List[str] = []
 
-@app.get("/daily_report")
-def api_daily_report():
-    return mock_report.generate_report_data(mock_staff.branch.name)
+class CancelRequest(BaseModel):
+    customer_id: str
+    booking_id:  str
+    cancel_time: str          # "09/03/2026 10:00"
+
+class RegisterRequest(BaseModel):
+    name:     str
+    password: str
+    tier:     str = "Standard"   # "Standard" | "Premium" | "Diamond"
+
+# ===========================================================================
+# APP
+# ===========================================================================
+
+app = FastAPI(title="RhythmReserve API", version="2.0.0")
+
+app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                   allow_methods=["*"], allow_headers=["*"])
+
+# ── info ──────────────────────────────────────────────────────────────────
+
+@app.get("/", tags=["Info"])
+def root():
+    return {"message": "RhythmReserve API", "branch": branch.to_dict()}
+
+@app.get("/branches", tags=["Info"])
+def list_branches():
+    return {"branches": system.list_branches()}
+
+# ── customer ──────────────────────────────────────────────────────────────
+
+@app.post("/register", tags=["Customer"])
+def register(req: RegisterRequest):
+    try:
+        c = system.register_customer(req.name, req.password, req.tier)
+        return {"message": "Registered!", "customer": c.to_dict()}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.get("/customers", tags=["Customer"])
+def list_customers():
+    return {"customers": system.list_customers()}
+
+# ── availability ──────────────────────────────────────────────────────────
+
+@app.get("/available/rooms", tags=["Availability"])
+def available_rooms(branch_id: str, day: str, room_size: str):
+    try:
+        size = RoomType(room_size)
+        d    = parse_date(day)
+        slots = system.get_available_slots(branch_id, d, size)
+        return {"branch_id": branch_id, "day": day, "room_size": room_size, "slots": slots}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.get("/available/equipment", tags=["Availability"])
+def available_equipment(branch_id: str, day: str, start: str, end: str):
+    try:
+        d  = parse_date(day)
+        s  = parse_time(start)
+        e  = parse_time(end)
+        eqs = system.get_available_equipment(branch_id, d, s, e)
+        return {"available_equipment": [eq.to_dict() for eq in eqs]}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+# ── booking ───────────────────────────────────────────────────────────────
+
+@app.post("/booking", tags=["Booking"])
+def create_booking(req: BookingRequest):
+    try:
+        size = RoomType(req.room_size)
+        d    = parse_date(req.day)
+        s    = parse_time(req.start)
+        e    = parse_time(req.end)
+        svc  = system.create_booking(
+            req.customer_id, req.branch_id, size, d, s, e, req.eq_ids)
+        return {"message": "Booking created!", "service": svc.to_dict()}
+    except Exception as ex:
+        raise HTTPException(400, str(ex))
+
+@app.get("/bookings", tags=["Booking"])
+def list_bookings(customer_id: str):
+    try:
+        return {"bookings": system.list_bookings(customer_id)}
+    except Exception as e:
+        raise HTTPException(404, str(e))
+
+# ── checkout / cancel ─────────────────────────────────────────────────────
+
+@app.post("/checkout", tags=["Service"])
+def checkout(req: CheckoutRequest):
+    try:
+        product_types = []
+        for name in req.product_names:
+            matched = next((pt for pt in ProductType if pt.value == name), None)
+            if not matched:
+                raise HTTPException(400, f"Unknown product '{name}'")
+            product_types.append(matched)
+
+        result = system.checkout(
+            customer_id      = req.customer_id,
+            booking_id       = req.booking_id,
+            actual_dt        = parse_dt(req.actual_checkout),
+            expected_dt      = parse_dt(req.expected_checkout),
+            branch_id        = req.branch_id,
+            product_types    = product_types,
+            is_room_damaged  = req.is_room_damaged,
+            room_damage_cost = req.room_damage_cost,
+            damaged_eq_ids   = req.damaged_eq_ids,
+            report           = daily_report,
+        )
+        return {"message": "CHECK-OUT SUCCESSFULLY!", "receipt": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+@app.post("/cancel", tags=["Service"])
+def cancel(req: CancelRequest):
+    try:
+        result = system.cancel_booking(
+            req.customer_id, req.booking_id, parse_dt(req.cancel_time))
+        return result
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+# ── report ────────────────────────────────────────────────────────────────
+
+@app.get("/report", tags=["Report"])
+def daily_report_endpoint():
+    return daily_report.generate_report_data()
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-
-app = FastAPI()
-
-@app.get("/")
-def read_root():
-    return {
-        "message": "Welcome to API!",
-        "docs_url": "http://127.0.0.1:8000/docs"
-    }
-
-mock_branch = Branch("Ladkrabang")
-mock_staff = Staff(mock_branch)
-mock_policy = Policy(rate=500.0) 
-mock_report = DailyReport(str(date.today()))
-
-cust_standard = Standard("C01", "Somchai", "pass1234")
-cust_diamond = Diamond("C02", "Yaya", "pass5678")
-
-booking_db = {
-    "B001": Service_IN("B001", time(10, 0), time(12, 0), cust_standard, price=1000.0),
-    "B002": Service_IN("B002", time(13, 0), time(15, 0), cust_diamond, price=1500.0)
-}
-
-PRODUCT_PRICES = {"Water": 20.0, "Coke": 25.0, "Lay": 30.0, "Chocopie": 15.0}
-
-@app.post("/checkout")
-def api_checkout(
-    booking_id: str, 
-    actual_checkout: datetime, 
-    expected_checkout: datetime, 
-    product_list: list[str], 
-    manual_penalty_type: Optional[PenaltyType] = None, 
-    manual_penalty_amount: float = 0.0, 
-    manual_penalty_reason: str = ""
-):
-    if booking_id not in booking_db:
-        raise HTTPException(status_code=404, detail="Booking Not Found")
-    
-    booking = booking_db[booking_id]
-    service_out = Service_OUT()
-
-    for item in product_list:
-        if item in PRODUCT_PRICES:
-            prod_type = ProductType(item)
-            service_out.add_product(Products(prod_type, PRODUCT_PRICES[item]))
-
-    if manual_penalty_type and manual_penalty_amount > 0:
-        manual_penalty = Penalty(f"PEN-{str(uuid.uuid4())[:6]}", manual_penalty_type, manual_penalty_amount, manual_penalty_reason, booking_id)
-        service_out.add_penalty(manual_penalty)
-        mock_report.add_penalty(manual_penalty) 
-
-    receipt = mock_staff.customer_check_out(
-        service_out=service_out,
-        actual_time=actual_checkout,
-        expected_time=expected_checkout,
-        policy=mock_policy,
-        booking=booking,
-        report=mock_report
-    )
-    return {"message": "CHECK-OUT SUCCESSFULLY!", "receipt": receipt}
-
-@app.post("/cancel")
-def api_cancel(booking_id: str, cancel_time: datetime, booking_start_time: datetime):
-    if booking_id not in booking_db:
-        raise HTTPException(status_code=404, detail="Booking Not Found")
-    
-    booking = booking_db[booking_id]
-    
-    refund, penalty = mock_policy.check_cancellation(
-        cancel_time=cancel_time, 
-        booking_start_dt=booking_start_time, 
-        customer=booking.customer, 
-        total_price=booking.price,
-        booking_id=booking.id
-    )
-    
-    if penalty: 
-        penalty.change_penalty_status(PenaltyStatus.APPLIED)
-        mock_report.add_penalty(penalty)
-        mock_report.add_revenue(penalty.amount)
-        return {"status": "NO_REFUND", "detail": penalty.reason, "type": penalty.type.value}
-        
-    return {"status": "REFUND", "detail": f"Policy {booking.customer.__class__.__name__} Refund {refund} baht"}
-
-@app.get("/daily_report")
-def api_daily_report():
-    return mock_report.generate_report_data(mock_staff.branch.name)
-
-if __name__ == "__main__":
-    uvicorn.run("code2_turnote:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run(":app", host="127.0.0.1", port=8000, reload=True)
