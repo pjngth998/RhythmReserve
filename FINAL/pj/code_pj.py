@@ -86,7 +86,7 @@ class User():
         self.__email = email
         self.__phone = phone
         self.__birthday:date = birthday
-        self.__status :UserStatus = status
+        self.__status  = status
 
     @property
     def username(self):
@@ -130,11 +130,12 @@ class User():
 # ===========================================================================
 class Customer(User) :
 
-    def __init__(self, username, password, name, email, phone, birthday, memberhip):
-        super().__init__(username, password, name, email, phone, birthday)
-        self.__memberhip: Membership = memberhip
+    def __init__(self, username, password, name, email, phone, birthday, memberhip, status):
+        super().__init__(username, password, name, email, phone, birthday, status)
+        self.__id = "pasokdoas"
+        self.__memberhip = memberhip
         self.__points:int = None
-        self.__reserve_list : ServiceIN = None
+        self.__reserve_list = []
         self.__coupon_list = None
         self.__notification_list = []
 
@@ -142,25 +143,29 @@ class Customer(User) :
     def reserve_list(self):
         return self.__reserve_list
     
+    @property
+    def id(self):
+        return self.__id
+    
     def get_customer_info(self,customer_id):
-        if self.__customer_id == customer_id:
-            return self.__customer_name, self.__customer_id,self.__reserve_list
+        if self.__id == customer_id:
+            return self.__name, self.__id, self.__reserve_list
         
     @reserve_list.setter
     def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
     
-    def get_reserve_detail(self,reserve_id):
+    def get_reserve_detail(self, reserve_id):
         for reserve in self.__reserve_list :
             if reserve.reserve_id == reserve_id:
                 return reserve
         return None
     
-    def search_reserve(self,reserve_id):
+    def get_reserve(self, reserve_id):
         for reserve in self.__reserve_list:
             if reserve.reserve_id == reserve_id:
                 return reserve
-        return None
+        raise Exception("service not found")
 
 
     @property
@@ -187,6 +192,17 @@ class Customer(User) :
 # ===========================================================================
 # Member
 # ===========================================================================
+
+class PendingCustomer():
+    def __init__(self, name, username, password, email, phone, birthday, membership):
+        self.__name = name
+        self.__username = username
+        self.__password = password
+        self.__email = email
+        self.__phone = phone
+        self.__birthday = birthday
+        self.__membership = membership
+        self.__paid = False
 
 class Standard(Customer):
     pass
@@ -812,17 +828,28 @@ class Payment:
 # Service_IN
 # ===========================================================================
     
-    
 class ServiceIN:
     def __init__(self, first_booking: Booking):
-        self.service_in_id = f"SI-{str(uuid.uuid4())[:8]}"
-        self.booking_list  = [first_booking]
-        self.status        = ServiceStatus.PENDING_PAYMENT
-        self.total_price   = 0.0
-        self.final_price   = 0.0
+        self.__service_in_id = f"SI-{str(uuid.uuid4())[:8]}"
+        self.__booking_list  = [first_booking]
+        self.__status        = ServiceStatus.PENDING_PAYMENT
+        self.__total_price   = 0.0
+        self.__final_price   = 0.0
 
     def get_id(self) -> str:
         return self.service_in_id
+    
+    @property
+    def id(self):
+        return self.__service_in_id
+    
+    @property
+    def total_price(self):
+        return self.__total_price
+    
+    @total_price.setter
+    def total_price(self, add_price):
+        self.__total_price += add_price
 
     def add_booking(self, booking: Booking):
         self.booking_list.append(booking)
@@ -914,29 +941,37 @@ class RhythmReserve():
         self.__name: str = name
         self.__branch_list = []
         self.__customer_list = []
+        self.__staff_list = []
+        self.__pending_register = []
 
-    count_user = 1
-    @classmethod
-    def generate_user_id(cls,type):
-        date_str = date.today().strftime("%y%m")
-        count_str = str(cls.count_user).zfill(3)
-        new_id = f"{type.upper()}-{date_str}-{count_str}"
-        cls.count_user +=1
-        return new_id
+    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership):
+        if self.search_user(username):
+            raise Exception("Have Account Already")
+        
+        if membership == Membership.STANDARD:
+            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            self.add_customer_ls(customer)
+            return customer
+        
+        pending = PendingCustomer(name, username, password, email, phone, birthday, membership)
+        self.__pending_register.append(pending)
+        
+    def pay_register(self, username):
+        pass
 
-    def register(self,type,name,username,password,email,phone,birthday):
+    
+
+    def customer_register(self, name, username, password, email, phone, birthday, membership: Membership):
 
         if self.search_user(username):
-            return "Have Account Already"
+            raise Exception("Have Account Already")
         
-        user_id = self.generate_user_id(type)
+        if membership == Membership.STANDARD:
+            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            self.add_customer_ls(customer)
+            return customer
         
-        if type == 'C':
-            customer = Customer(user_id,name,username,password,email,phone,birthday)
-            self.__customer_list.add_customer_ls(customer)
-        else:
-            staff = Staff(user_id,name,username,password,email,phone,birthday)
-            self.__staff_list.add_staff_ls(staff)
+
         
     def add_customer_ls(self,cus):
         self.__customer_list.append(cus)
@@ -948,13 +983,14 @@ class RhythmReserve():
         user = self.search_user(username)
 
         if user:
-            verify = user.verify_password(username,password)
+            verify = user.verify_password(password)
 
             if verify:
                 user.set_status_user(UserStatus.LOGIN)
                 return f"{username} logged in successfully"
             else:
-                return "Login Failed"
+                raise Exception("Login Failed")
+        raise Exception("User not found")
             
     def logout(self,username):
         user = self.search_user(username)
@@ -962,21 +998,31 @@ class RhythmReserve():
         if user and user.status == UserStatus.LOGIN:
             user.set_status_user(UserStatus.LOGOUT)
             return f"{username} logged out successfully"
-        return "Logout Failed"
+        raise Exception("Logout Failed")
     
-    def edit_info(self,username,data,new_info):
+    class UserField(Enum):
+        EMAIL = "email"
+        PHONE = "phone"
+        ADDRESS = "address"
+    
+    def edit_info(self,username,data : UserField,new_info):
         user = self.search_user(username)
 
-        if user and hasattr(user,data):
-            if data != "password" and data != "user_id" and data != "username":
-                setattr(user,data,new_info)
-                return f"Edit {data} Success"
+        protected_fields = ["password", "username", "customer_id", "staff_id"]
+        if user and hasattr(user,data.value):
+            if data != protected_fields:
+                setattr(user,data.value,new_info)
+                return f"Edit {data.value} Success"
+            raise Exception(f"{data.value} can't edit")
+        raise Exception("Edit Information Falied")
     
     def change_password(self,username,old_password,n_password):
         user = self.search_user(username)
         if user and (user.password == old_password):
             user.password = n_password
             return f"Change Password for {username} Successfully"
+        raise Exception("Can't Change the password! please try it later.")
+
 
     
     def search_user(self,username):
@@ -988,11 +1034,11 @@ class RhythmReserve():
     def checkin(self,customer_id,reserve_id):
         customer = self.search_customer(customer_id)
         if not customer:
-            return "Not found Customer in System"
+            raise Exception("Not found Customer in System")
         
         reserve = customer.search_reserve(reserve_id)
         if not reserve:
-            return "Not Found Reserve"
+            raise Exception("Not Found Reserve")
 
         success = reserve.get_checkin()
         if success:
@@ -1045,11 +1091,11 @@ class RhythmReserve():
             raise Exception("Exceed Room Quota Limit")
         
 
-    def add_customer(self, username, password):
-        customer = Customer(username, password)
-        customer.make_customer_id()
-        self.__customer_list.append(customer)
-        return customer
+    # def add_customer(self, username, password):
+    #     customer = Customer(username, password)
+    #     customer.make_customer_id()
+    #     self.__customer_list.append(customer)
+    #     return customer
     
     def add_branch(self, name):
         branch = Branch(name)
@@ -1307,16 +1353,15 @@ class RhythmReserve():
         return booking
     
     def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
-        service = next((s for s in self.service_in_list if s.service_in_id == service_id), None)
-        if service is None:
-            raise Exception("service not found")
+        customer = self.get_customer_by_id(customer_id)
+        service = customer.get_reserve(service_id)
 
         booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
         if isinstance(booking, str):
             return booking
 
-        service.booking_list.append(booking)
-        service.total_price += booking.total_price
+        service.add_booking(booking)
+        service.total_price = booking.price
         return service
 
 

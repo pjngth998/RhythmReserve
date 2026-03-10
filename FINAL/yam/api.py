@@ -28,6 +28,13 @@ def api_login(username : str, password: str):
 def api_logout(username : str):
     return system.logout(username)
 
+@app.post("/edit_info")
+def api_edit_info(username : str, data : Enum, new_info):
+    return system.edit_info(username,data,new_info)
+
+@app.post("/change_password")
+def api_change_password(username : str, old_password : str, n_password:str);
+    return system.change_password(username,old_password,n_password)
 
 
 @app.post("/checkin")
@@ -43,6 +50,7 @@ def api_select_eq(customer_id : str, branch_id : str,room_id : str, eq_list : li
     if result != "Can Reserve Equipment - Add to Booking Successfully":
         raise HTTPException(status_code=404, detail=result)
     return {"message": result}
+
 
 if __name__ == "__main__":
     uvicorn.run("api:app",host = "127.0.0.1",port=8000, reload = True)
