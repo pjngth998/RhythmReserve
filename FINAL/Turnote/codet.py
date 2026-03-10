@@ -17,6 +17,10 @@ class EquipmentType(Enum):
     BASS           = "BS"
     KEYBOARD       = "KB"
 
+class RoomEquipmentStatus(Enum):
+    AVAILABLE   = "Available"
+    MAINTENANCE = "Maintenance"
+
 class PenaltyType(Enum):
     NO_SHOW     = "NO_SHOW"
     CANCEL_LATE = "CANCEL_LATE"
@@ -171,6 +175,7 @@ class Booking:
         self.__room_rate = room_rate     # rate ต่อชั่วโมงของห้องนั้น
         self.__price     = price
         self.__eq_list   = eq_list if eq_list else []
+        self.__room_status = RoomEquipmentStatus.AVAILABLE
 
     def make_booking_id(self, branch_id: str):
         temp = branch_id.split("-")
@@ -186,7 +191,11 @@ class Booking:
     @property
     def price(self):     return self.__price
     @property
-    def eq_list(self):   return self.__eq_list
+    def eq_list(self):      return self.__eq_list
+    @property
+    def room_status(self):  return self.__room_status
+    @room_status.setter
+    def room_status(self, s: RoomEquipmentStatus): self.__room_status = s
 
     def to_dict(self):
         return {
@@ -205,9 +214,10 @@ class Booking:
 
 class Equipment:
     def __init__(self, type_: EquipmentType, price: float):
-        self.__id    = None
-        self.__type  = type_
-        self.__price = price
+        self.__id     = None
+        self.__type   = type_
+        self.__price  = price
+        self.__status = RoomEquipmentStatus.AVAILABLE
 
     def make_equipment_id(self, branch_id: str):
         temp = branch_id.split("-")
@@ -215,14 +225,19 @@ class Equipment:
         self.__id = f"EQ-{prefix}-{self.__type.value}-{str(uuid.uuid4())[:6]}"
 
     @property
-    def id(self):    return self.__id
+    def id(self):     return self.__id
     @property
-    def type_(self): return self.__type.value
+    def type_(self):  return self.__type.value
     @property
-    def price(self): return self.__price
+    def price(self):  return self.__price
+    @property
+    def status(self): return self.__status
+    @status.setter
+    def status(self, s: RoomEquipmentStatus): self.__status = s
 
     def to_dict(self):
-        return {"equipment_id": self.__id, "type": self.__type.value, "price": self.__price}
+        return {"equipment_id": self.__id, "type": self.__type.value,
+                "price": self.__price, "status": self.__status.value}
 
 
 # ===========================================================================
@@ -456,18 +471,22 @@ class Staff:
             service_out.add_penalty(late_pen)
             report.add_penalty(late_pen)
 
-        # 2. ความเสียหายห้อง
+        # 2. ความเสียหายห้อง — เปลี่ยน status ตามโค้ดเดิม
         if is_room_damaged and room_damage_cost > 0:
+            booking.room_status = RoomEquipmentStatus.MAINTENANCE
             r_pen = policy.check_damage_penalty(
                 booking.id, room_damage_cost, f"Room damage ฿{room_damage_cost}"
             )
             if r_pen:
                 service_out.add_penalty(r_pen)
                 report.add_penalty(r_pen)
+        else:
+            booking.room_status = RoomEquipmentStatus.AVAILABLE
 
-        # 3. ความเสียหายอุปกรณ์ — ปรับตาม eq.price ของแต่ละชิ้นที่เสียหาย
+        # 3. ความเสียหายอุปกรณ์ — ปรับตาม eq.price + เปลี่ยน status ตามโค้ดเดิม
         for eq in booking.eq_list:
             if eq.id in damaged_eq_ids:
+                eq.status = RoomEquipmentStatus.MAINTENANCE
                 e_pen = policy.check_damage_penalty(
                     booking.id,
                     eq.price,
@@ -476,6 +495,8 @@ class Staff:
                 if e_pen:
                     service_out.add_penalty(e_pen)
                     report.add_penalty(e_pen)
+            else:
+                eq.status = RoomEquipmentStatus.AVAILABLE
 
         # 4. คำนวณยอดรวม + เปลี่ยนสถานะ penalty → APPLIED
         total = service_out.calculate_total_price()
