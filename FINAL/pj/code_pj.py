@@ -134,7 +134,7 @@ class Customer(User) :
         super().__init__(username, password, name, email, phone, birthday)
         self.__memberhip: Membership = memberhip
         self.__points:int = None
-        self.__reserve_list : Service_IN = None
+        self.__reserve_list : ServiceIN = None
         self.__coupon_list = None
         self.__notification_list = []
 
@@ -146,7 +146,8 @@ class Customer(User) :
         if self.__customer_id == customer_id:
             return self.__customer_name, self.__customer_id,self.__reserve_list
         
-    def add_reserve_list(self,reserve):
+    @reserve_list.setter
+    def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
     
     def get_reserve_detail(self,reserve_id):
@@ -205,12 +206,11 @@ class Diamond(Customer):
 class Branch():
     def __init__(self, name):
         self.__name: str = name
-        self.__id = f"BR-{name}-{uuid.uuid4()}"
+        self.__id = f"BR-{name}-{str(uuid.uuid4())[:8]}"
         self.__room_list = []
-        self.__eqipment_list = []
         self.__stock_product_list = []
+        self.__stock_equipment_list = []
         self.__officer_list = []
-        self.make_branch_id(name)
     
     @property
     def id(self):
@@ -228,13 +228,6 @@ class Branch():
     def room(self, new_room):
         self.__room_list.append(new_room)
 
-    @property
-    def equipment(self):
-        return self.__eqipment_list
-    
-    @equipment.setter
-    def equipment(self, new_equipment):
-        self.__eqipment_list.append(new_equipment)
 
     @property
     def product(self):
@@ -244,15 +237,47 @@ class Branch():
     def product(self, new_stock):
         self.__stock_product_list.append(new_stock)
 
-    def check_can_reserve(self, stock_id, eq_id, day, s_time, e_time):
-        for stock_eq in self.__stock_ls:
-            if stock_eq.SE_id == stock_id:
-                c_stock = stock_eq.check_stock(stock_id,eq_id)
-                if c_stock:
-                    verify = stock_eq.verify_available(eq_id,day,s_time,e_time)
-                    if verify:
-                        return True
-                return False
+    @property
+    def equipment(self):
+        return self.__stock_equipment_list
+    
+    @equipment.setter
+    def equipment(self, new_stock):
+        self.__stock_equipment_list.append(new_stock)
+
+    def get_eq_by_id(self, eq_id):
+        for stock_eq in self.__stock_equipment_list:
+            for st in stock_eq:
+                for eq in st:
+                    if eq.id == eq_id:
+                        return eq
+    
+    def get_eq_stock_by_id(self, eq_id):
+        for stock_eq in self.__stock_equipment_list:
+            for st in stock_eq:
+                for eq in st:
+                    if eq.id == eq_id:
+                        return st
+                        
+
+    def check_can_reserve(self, eq_id, day, s_time, e_time):
+        stock = None
+        for stock_eq in self.__stock_equipment_list:
+            for st in stock_eq:
+                for eq in st:
+                    if eq.id == eq_id:
+                        stock = st
+        c_stock = stock.check_stock(eq_id)
+        if c_stock:
+            verify = stock.verify_available(eq_id, day, s_time, e_time)
+            if verify:
+                return True
+            return False
+        
+    def get_size_eq(self, eq_id):
+        eq = self.get_eq_by_id(eq_id)
+        return eq.size
+                        
 
 
 # ===========================================================================
@@ -265,9 +290,10 @@ class TimeSlot:
         self.__start_time : time = start_time
         self.__end_time : time = end_time
         self.__status : TimeSlotStatus = status
+        self.__duration = (datetime.combine(day, end_time) - datetime.combine(day, start_time)).seconds // 3600
 
     @property
-    def day(self):
+    def date(self):
         return self.__date  
     
     @property
@@ -285,6 +311,10 @@ class TimeSlot:
     @status.setter
     def set_status(self, status):
         self.__status = status
+
+    @property
+    def duration(self):
+        return self.__duration
 
     def check_overlab(self, second_start, second_end):
         if second_start < self.__end_time and self.__start_time < second_end:
@@ -308,7 +338,7 @@ class TimeSlot:
 class Room():
     def __init__(self, branch_name, size, rate, equipment_quota, branch_id):
         self.__size: RoomType = size
-        self.__id = f"RM-{branch_name}-{self.__size.value}-{uuid.uuid4()}"
+        self.__id = f"RM-{branch_name}-{self.__size.value}-{str(uuid.uuid4())[:8]}"
         self.__branch_id = branch_id
         self.__rate: float = rate
         self.__time_slot : list = []
@@ -330,6 +360,10 @@ class Room():
     def timeslot(self):
         return self.__time_slot
     
+    @property
+    def rate(self):
+        return self.__rate
+    
     @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
@@ -340,10 +374,11 @@ class Room():
 # ===========================================================================
     
 class Equipment():
-    def __init__(self, branch_name, type_ : EquipmentType, quota, price):
+    def __init__(self, branch_name, type_ : EquipmentType, quota, price, rate):
         self.__type = type_
-        self.__id = f"EQ-{branch_name}-{self.__type.value}-{uuid.uuid4()}"
-        self.__quota = quota
+        self.__id = f"EQ-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
+        self.__size = quota
+        self.__rate = rate
         self.__price = price
         self.__time_slot = []
 
@@ -352,14 +387,26 @@ class Equipment():
         return self.__id
     
     @property
-    def type_(self):
+    def type(self):
         return self.__type.value
     
     @property
-    def time_slot(self):
+    def size(self):
+        return self.__size
+    
+    @property
+    def rate(self):
+        return self.__rate
+    
+    @property
+    def price(self):
+        return self.__price
+    
+    @property
+    def timeslot(self):
         return self.__time_slot
     
-    @time_slot.setter
+    @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
 
@@ -368,43 +415,50 @@ class Equipment():
 # StockEquipment
 # ===========================================================================
 class StockEquipment:
-    def __init__(self,type_ : EquipmentType):
+    def __init__(self,type_ : EquipmentType, branch_name):
         self.__type = type_
-        self.__SE_id =  f"SE-{self.__type.value}-{str(uuid.uuid4())[:8]}"
+        self.__SE_id =  f"SE-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__equipment_ls = []   
 
     @property
-    def SE_id(self):
+    def id(self):
         return self.__SE_id
     
-    def check_stock(self,eq_id):
+    @property
+    def type(self):
+        return self.__type
+    
+    @property
+    def equipment(self):
+        return self.__equipment_ls
+    
+    def check_stock(self, eq_id):
         for eq in self.__equipment_ls:
             if eq.eq_id == eq_id:
                 return True
         return False
     
-    def add_eq(self,type_,size):
-        eq = Equipment(type_,size)
+    def add_eq(self,eq):
         self.__equipment_ls.append(eq)
         return eq
 
     def reduce_eq(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id ==eq_id:
+            if eq.id ==eq_id:
                 self.__equipment_ls.remove(eq)
                 return True
         return False
 
     def find_and_get_size(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id == eq_id:
+            if eq.id == eq_id:
                 verify = eq.verify_eq(eq_id)
                 if verify :
                     size = eq.get_size(eq_id)
                     return  size
         return 0
     
-    def verify_available(self,eq_id,day,s_time,e_time):
+    def verify_available(self, eq_id, day, s_time, e_time):
         eq = self.get_eq(eq_id)
         status = eq.check_status(day,s_time,e_time)
 
@@ -414,7 +468,7 @@ class StockEquipment:
     
     def get_eq(self,eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id == eq_id:
+            if eq.id == eq_id:
                 return eq
         return None
     
@@ -425,7 +479,7 @@ class Products():
     def __init__(self, branch_name, type_: ProductType, price):
         self.__type = type_
         self.__price = price
-        self.__id = f"PR-{branch_name}-{self.__type.value}-{uuid.uuid4()}"
+        self.__id = f"PR-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
 
 
     @property
@@ -447,7 +501,7 @@ class Products():
 class StockProduct():
     def __init__(self, type_: ProductType, branch_name):
         self.__type = type_
-        self.__id = f"ST-{branch_name}-{self.__type.value}-{uuid.uuid4()}"
+        self.__id = f"ST-{branch_name}-{self.__type.value}-{str(uuid.uuid4())[:8]}"
         self.__product_list = []
 
     def add_stock(self, new_product):
@@ -480,11 +534,13 @@ class StockProduct():
 
 class Booking():
     def __init__(self, branch_name, room, eq_list, customer, timeslot):
-        self.__id = f"BK-{branch_name}-{uuid.uuid4()}"
+        self.__id = f"BK-{branch_name}-{str(uuid.uuid4())[:8]}"
         self.__room = room
         self.__eq_list = eq_list
         self.__customer = customer
         self.__timeslot: TimeSlot = timeslot
+        self.__price = 0.0
+        self.__duration = timeslot.duration
 
     @property
     def id(self):
@@ -509,6 +565,19 @@ class Booking():
     @property
     def eq_list(self):
         return self.__eq_list
+    
+    @property
+    def price(self):
+        return self.__price
+    
+    def calculate_price(self):
+        room_price = self.__room.rate * self.__duration
+        eq_price = 0
+        for eq in self.__eq_list:
+            eq_price += eq.rate
+        self.__price = room_price + eq_price
+
+
     
 
 # ===========================================================================
@@ -744,9 +813,9 @@ class Payment:
 # ===========================================================================
     
     
-class Service_IN:
-    def __init__(self, service_in_id: str, first_booking: Booking):
-        self.service_in_id = service_in_id
+class ServiceIN:
+    def __init__(self, first_booking: Booking):
+        self.service_in_id = f"SI-{str(uuid.uuid4())[:8]}"
         self.booking_list  = [first_booking]
         self.status        = ServiceStatus.PENDING_PAYMENT
         self.total_price   = 0.0
@@ -841,7 +910,7 @@ class Service_IN:
 class RhythmReserve():
 
     def __init__(self, name):
-        self.__id = f"St-{name}-{uuid.uuid4()}"
+        self.__id = f"St-{name}-{str(uuid.uuid4())[:8]}"
         self.__name: str = name
         self.__branch_list = []
         self.__customer_list = []
@@ -935,7 +1004,7 @@ class RhythmReserve():
                 return branch
         return None
 
-    def check_selected_eq(self,customer_id,branch_id,room_id,stock_id,day,s_time,e_time,eq_list):
+    def check_selected_eq(self, customer_id, branch_id, room_id, stock_id, day, s_time, e_time, eq_list):
         customer = self.search_customer(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
@@ -954,11 +1023,11 @@ class RhythmReserve():
         price = room.rate
 
         for eq_id in eq_list:
-            can_reserve = branch.check_can_reserve(stock_id,eq_id,day,s_time,e_time)
+            can_reserve = branch.check_can_reserve(eq_id, day, s_time, e_time)
             if can_reserve:
                 branch.get_size_eq(eq_id)
             else:
-                return "Don't have Equipment in Stock"
+                raise Exception("Don't have Equipment in Stock")
             
         total_requested_size = 0
         for eq_id in eq_list:
@@ -968,9 +1037,12 @@ class RhythmReserve():
             total_requested_size += size
 
         if total_requested_size <= max_quota:
-            return "Can Reserve Equipment - Add to Booking Successfully"
+            for eq_id in eq_list:
+                eq = branch.get_eq_by_id(eq_id)
+                eq.add_timeslot = TimeSlot(day, s_time, e_time, TimeSlotStatus.PENDING)
+            return True
         else:
-            return "Exceed Room Quota Limit"
+            raise Exception("Exceed Room Quota Limit")
         
 
     def add_customer(self, username, password):
@@ -999,25 +1071,47 @@ class RhythmReserve():
         branch.room = room
         return room
     
-    def add_equipment(self, branch_id, type_: EquipmentType):
+    def create_equipment_stock(self, branch_id, type_: EquipmentType):
         branch = self.get_branch_by_id(branch_id)
         match type_:
             case EquipmentType.ELECTRICGUITAR:
-                equipment = Equipment(branch.name, type_, 1, 5000)
+                stock = StockEquipment(type_, branch.name)
             case EquipmentType.ACOUSTICGUITAR:
-                equipment = Equipment(branch.name, type_, 1, 3000)
+                stock = StockEquipment(type_, branch.name)
             case EquipmentType.DRUM:
-                equipment = Equipment(branch.name, type_, 2, 10000)
+                stock = StockEquipment(type_, branch.name)
             case EquipmentType.MICROPHONE:
-                equipment = Equipment(branch.name, type_, 1, 500)
+                stock = StockEquipment(type_, branch.name)
             case EquipmentType.KEYBOARD:
-                equipment = Equipment(branch.name, type_, 2, 20000)
+                stock = StockEquipment(type_, branch.name)
             case EquipmentType.BASS:
-                equipment = Equipment(branch.name, type_, 1, 5000)
-        #add equipment to branch
-        branch.equipment = equipment
-        return equipment
-        
+                stock = StockEquipment(type_, branch.name)
+        #add stock to branch
+        branch.equipment = stock
+        return stock
+    
+    def add_equipment(self, branch_id, type_: EquipmentType, amount):
+        branch = self.get_branch_by_id(branch_id)
+        stock = self.get_equipment_stock_by_id(branch, type_)
+        equipment_list = []
+        for i in range(amount):
+            match type_:
+                case EquipmentType.ELECTRICGUITAR:
+                    equipment = Equipment(branch.name, type_, 1, 5000, 300)
+                case EquipmentType.ACOUSTICGUITAR:
+                    equipment = Equipment(branch.name, type_, 1, 3000, 200)
+                case EquipmentType.DRUM:
+                    equipment = Equipment(branch.name, type_, 2, 10000, 500)
+                case EquipmentType.MICROPHONE:
+                    equipment = Equipment(branch.name, type_, 1, 500, 50)
+                case EquipmentType.KEYBOARD:
+                    equipment = Equipment(branch.name, type_, 2, 20000, 500)
+                case EquipmentType.BASS:
+                    equipment = Equipment(branch.name, type_, 1, 5000, 300)
+            equipment_list.append(equipment)
+            stock.add_eq(equipment)
+        return equipment_list
+    
     def create_product_stock(self, branch_id, type_: ProductType):
         branch = self.get_branch_by_id(branch_id)
         match type_:
@@ -1039,6 +1133,7 @@ class RhythmReserve():
     
     def add_product(self, branch_id, type_: ProductType, amount):
         branch = self.get_branch_by_id(branch_id)
+        stock = self.get_product_stock_by_id(branch, type_)
         product_list = []
         for i in range(amount):
             match type_:
@@ -1055,9 +1150,7 @@ class RhythmReserve():
                 case ProductType.TARO:
                     product = Products(branch.name, type_, 15)
             product_list.append(product)
-            for stock in branch.product:
-                if stock.type == type_:
-                    stock.add_stock(product)
+            stock.add_stock(product)
         return product_list
         
     def get_room_by_id(self, room_id):
@@ -1065,29 +1158,63 @@ class RhythmReserve():
             for room in branch.room:
                 if room.id == room_id:
                     return room
-        return "room not found"
+        raise Exception("room not found")
     
     def get_customer_by_id(self, customer_id):
         for customer in self.__customer_list:
             if customer.id == customer_id:
                 return customer
-        return "customer not found"
+        raise Exception("customer not found")
     
     def get_branch_by_id(self, branch_id):
         for branch in self.__branch_list:
             if branch.id == branch_id:
                 return branch
-        return "branch not found"
+        raise Exception("branch not found")
     
     def get_equipment_by_id(self, equipment_id):
         for branch in self.__branch_list:
             for eq in branch.equipment:
                 if eq.id == equipment_id:
                     return eq
-        return "equipment not found"        
-        
+        raise Exception("equipment not found")    
+
+    def get_product_stock_by_id(self, branch, type_):
+        for stock in branch.product:
+            if stock.type == type_:
+                return stock
+        raise Exception(f"{type_.value} stock not found")  
+
+    def get_equipment_stock_by_id(self, branch, type_):
+        for stock in branch.equipment:
+            if stock.type == type_:
+                return stock
+        raise Exception(f"{type_} stock not found" ) 
+
+    def get_available_equipment(self, branch_id, day, start, end):
+        branch = self.get_branch_by_id(branch_id)
+        available = []
+
+        for stock in branch.equipment:
+            for eq in stock.equipment:
+                conflict = False
+                for slot in eq.timeslot:
+                    if slot.date == day:
+                        if start < slot.end and end > slot.start:
+                            conflict = True
+                            break
+                if not conflict:
+                    available.append(eq)
+        summary = []
+        for eq in available:
+            line = f"{eq.type}: {sum(1 for e in available if e.type == eq.type)}"
+            if line not in summary:
+                summary.append(line)
+
+        return available, summary
     
-    def get_available_slots(self, branch_id, day, room_size):
+    
+    def get_available_room_slots(self, branch_id, day, room_size):
 
         branch = self.get_branch_by_id(branch_id)
         rooms = [r for r in branch.room if r.sizeII == room_size]
@@ -1138,48 +1265,61 @@ class RhythmReserve():
         for rm in branch.room:
             if not self._has_conflict(rm, start_time, end_time):
                 return rm
-        return "Don't have available room in that time"
+        raise Exception("Don't have available room in that time")
     
-    def create_service_in(self, customer, branch_id, date, start_time, duration, room_size: RoomType, eq_list):
-        branch = self.get_branch_by_id(branch_id)
-        first_booking = self.create_booking(customer.id, branch_id, room_size, eq_list, date, start_time, start_time + timedelta(hours=duration))
-
-    def select_eq(self, eq_list:list, eq):
-        eq_list.append(eq)
-        return eq_list
-
-
-    def create_booking(self, customer_id, branch_id, room_size, day, start, end):
+    def create_service_in(self, customer_id, branch_id, room_size, day, start, end, eq_list):
         customer = self.get_customer_by_id(customer_id)
-        if customer == "customer not found":
-            return "customer not found"
+        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
+        if isinstance(booking, str):
+            return booking
+
+        service = ServiceIN(booking)
+        customer.add_reserve_list = service
+        service.total_price += booking.total_price
+        return service
+
+    
+    def create_booking(self, customer_id, branch_id, room_size, day, start, end, eq_list):
+        customer = self.get_customer_by_id(customer_id)
 
         branch = self.get_branch_by_id(branch_id)
-        if branch == "branch not found":
-            return "branch not found"
 
         room = self.get_available_room(branch, room_size, start, end)
-        
-        timeslot = TimeSlot(day, start, end, RoomEquipmentStatus.PENDING)
-        room.add_timeslot = timeslot
-        eq_list = []
 
-        for i in range(15):
-            self.select_eq()
+        available = self.get_available_equipment(branch_id, day, start, end)
+        available_ids = [eq.id for eq in available]
 
-        
-        
+        for eq_id in eq_list:
+            if eq_id not in available_ids:
+                raise Exception(f"equipment {eq_id} is not available at this time")
+            
+        self.check_selected_eq(customer_id, branch_id, room.id, day, start, end, eq_list)
 
-        booking = Booking(room, eq_list, customer, timeslot)
-        booking.make_booking_id(branch_id)
-        service_in = Service_IN(booking)
-        service_in.make_service_in_id(branch_id)
+        room_slot = TimeSlot(day, start, end, RoomEquipmentStatus.PENDING)
+        room.add_timeslot(room_slot)
 
-        service_in.add_booking = booking
+        selected_eqs = []
+        for eq_id in eq_list:
+            eq = branch.get_eq_by_id(eq_id)
+            selected_eqs.append(eq)
 
-        customer.notification = Notification("Booking", booking)
-        return f"booking_id :{booking.id} -> date:{booking.day}, size:{room.size}, equipment:{', '.join(eq.type_ for eq in booking.eq_list)}, duration:{booking.start}-{booking.end}"
-        
+        booking = Booking(customer_id, room, day, start, end, selected_eqs)
+        return booking
+    
+    def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
+        service = next((s for s in self.service_in_list if s.service_in_id == service_id), None)
+        if service is None:
+            raise Exception("service not found")
+
+        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
+        if isinstance(booking, str):
+            return booking
+
+        service.booking_list.append(booking)
+        service.total_price += booking.total_price
+        return service
+
+
 
   
 
