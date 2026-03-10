@@ -96,7 +96,7 @@ class Penalty:
     def change_penalty_status(self, new_status: PenaltyStatus):
         self.__status = new_status
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "penalty_id": self.__penalty_id,
             "type":       self.__type.value,
@@ -143,7 +143,7 @@ class Customer(ABC):
                     return bk
         return None
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "customer_id": self.customer_id,
             "name":        self.name,
@@ -245,7 +245,7 @@ class Room:
     def add_timeslot(self, ts: TimeSlot):
         self.__timeslot_list.append(ts)
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "room_id": self.__id,
             "size":    self.__size.value,
@@ -290,7 +290,7 @@ class Equipment:
     def add_timeslot(self, ts: TimeSlot):
         self.__timeslot_list.append(ts)
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "equipment_id": self.__id,
             "type":         self.__type.value,
@@ -339,7 +339,7 @@ class Products:
     @property
     def name(self):  return self.__type.value
 
-    def  to_format(self):
+    def to_dict(self):
         return {"name": self.__type.value, "price": self.__price}
 
 class StockProduct:
@@ -399,12 +399,12 @@ class Booking:
         self.__price = room_price + eq_price
         return self.__price
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "booking_id": self.__id,
-            "customer":   self.__customer. to_format(),
-            "room":       self.__room. to_format(),
-            "equipment":  [eq. to_format() for eq in self.__eq_list],
+            "customer":   self.__customer.to_dict(),
+            "room":       self.__room.to_dict(),
+            "equipment":  [eq.to_dict() for eq in self.__eq_list],
             "day":        str(self.__timeslot.date),
             "start":      str(self.__timeslot.start),
             "end":        str(self.__timeslot.end),
@@ -446,12 +446,12 @@ class Service_IN:
     def cancel(self):
         self.__status = ServiceStatus.CANCELLED
 
-    def  to_format(self):
+    def to_dict(self):
         return {
             "service_id":  self.__id,
             "status":      self.__status.value,
             "total_price": self.__total_price,
-            "bookings":    [b. to_format() for b in self.__booking_list],
+            "bookings":    [b.to_dict() for b in self.__booking_list],
         }
 
 # ===========================================================================
@@ -460,13 +460,12 @@ class Service_IN:
 
 class Service_OUT:
     def __init__(self):
-        self.__id           = f"SOUT-{str(uuid.uuid4())[:8]}"
+        self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
         self.__product_list: List[Products] = []
         self.__penalty_list: List[Penalty]  = []
+        self.__status = ServiceStatus.PENDING
         self.__total_price  = 0.0
 
-    @property
-    def id(self):           return self.__id
     @property
     def penalty_list(self): return self.__penalty_list
 
@@ -480,146 +479,16 @@ class Service_OUT:
         self.__total_price = product_sum + penalty_sum
         return self.__total_price
 
-    def  to_format(self):
+    def to_dict(self):
         return {
-            "products":    [p. to_format() for p in self.__product_list],
-            "penalties":   [p. to_format() for p in self.__penalty_list],
+            "products":    [p.to_dict() for p in self.__product_list],
+            "penalties":   [p.to_dict() for p in self.__penalty_list],
             "total_price": self.__total_price,
         }
 
-# ===========================================================================
-# PAYMENT CHANNEL
-# ===========================================================================
-
-class TXNType(Enum):
-    CHARGE  = "CHARGE"
-    REFUND  = "REFUND"
-    PENALTY = "PENALTY"
-
-class PaymentChannel(ABC):
-    @abstractmethod
-    def process(self, amount: float, ref: str = "TXN") -> bool: pass
-    @abstractmethod
-    def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool: pass
-
-class QrScan(PaymentChannel):
-    def process(self, amount: float, ref: str = "TXN") -> bool:
-        print(f"[QrScan] QR Payment {amount:.2f} THB | REF:{ref} → confirmed!")
-        return True
-    def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool:
-        print(f"[QrScan] Refund {amount:.2f} THB (original:{original_ref}, refund:{refund_ref})")
-        return True
-
-class CreditCard(PaymentChannel):
-    def __init__(self, card_number: str, cvv: str, expiry: str):
-        self.__card_number = card_number
-        self.__cvv         = cvv
-        self.__expiry      = expiry
-
-    def process(self, amount: float, ref: str = "TXN") -> bool:
-        print(f"[CreditCard] Charging {amount:.2f} THB to *{self.__card_number[-4:]} | REF:{ref}")
-        return True
-
-    def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool:
-        print(f"[CreditCard] Refund {amount:.2f} THB → *{self.__card_number[-4:]}")
-        return True
-
-class TransactionRecord:
-    def __init__(self, txn_id: str, sout_id: str, txn_type: TXNType,
-                 amount: float, channel_type: str, ref_txn_id: Optional[str] = None):
-        self.__txn_id       = txn_id
-        self.__sout_id      = sout_id
-        self.__txn_type     = txn_type
-        self.__amount       = amount
-        self.__channel_type = channel_type
-        self.__ref_txn_id   = ref_txn_id
-        self.__timestamp    = datetime.now()
-
-    @property
-    def txn_id(self):     return self.__txn_id
-    @property
-    def txn_type(self):   return self.__txn_type
-    @property
-    def ref_txn_id(self): return self.__ref_txn_id
-    @property
-    def amount(self):     return self.__amount
-
-    def  to_format(self):
-        return {
-            "txn_id":       self.__txn_id,
-            "sout_id":      self.__sout_id,
-            "type":         self.__txn_type.value,
-            "amount":       self.__amount,
-            "channel":      self.__channel_type,
-            "ref_txn_id":   self.__ref_txn_id,
-            "timestamp":    self.__timestamp.strftime("%Y-%m-%d %H:%M:%S"),
-        }
-
-# ===========================================================================
-# PAYMENT SERVICE OUT
-# รับยอดจาก ServiceOUT (products + penalties) แล้วให้ลูกค้าจ่าย
-# ===========================================================================
-
-class PaymentServiceOut:
-    def __init__(self, service_out: "Service_OUT", channel: PaymentChannel):
-        self.__service_out          = service_out   # id ใช้จาก Service_OUT เลย
-        self.__channel              = channel
-        self.__total_price          = 0.0
-        self.__is_paid              = False
-        self.__is_calculated        = False
-        self.__transaction_history: List[TransactionRecord] = []
-
-    @property
-    def id(self):         return self.__service_out.id   # ใช้ SOUT id ของ Service_OUT
-    @property
-    def is_paid(self):    return self.__is_paid
-    @property
-    def total_price(self): return self.__total_price
-    @property
-    def transaction_history(self): return self.__transaction_history
-
-    def calculate_total(self) -> float:
-        """คำนวณยอดรวม products + penalties แจ้งลูกค้าก่อนจ่าย"""
-        self.__total_price    = self.__service_out.calculate_total_price()
-        self.__is_calculated  = True
-        print(f"[PaymentServiceOut] ยอดที่ต้องชำระ: {self.__total_price:.2f} THB")
-        print(f"[PaymentServiceOut]   - {self.__service_out. to_format()}")
-        return self.__total_price
-
-    def process_payment(self) -> bool:
-        """ลูกค้าจ่ายเงิน หลังจากเห็นยอดแล้ว"""
-        if not self.__is_calculated:
-            raise Exception("ยังไม่ได้คำนวณยอด กรุณาเรียก calculate_total() ก่อน")
-
-        txn_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
-        success = self.__channel.process(self.__total_price, ref=txn_id)
-
-        if success:
-            record = TransactionRecord(
-                txn_id       = txn_id,
-                sout_id      = self.__service_out.id,
-                txn_type     = TXNType.CHARGE,
-                amount       = self.__total_price,
-                channel_type = type(self.__channel).__name__,
-            )
-            self.__transaction_history.append(record)
-            self.__is_paid = True
-            print(f"[PaymentServiceOut] APPLIED TXN:{txn_id}")
-            return True
-        raise Exception("Payment Failed")
-
-    def get_transaction_history(self) -> List[TransactionRecord]:
-        return self.__transaction_history
-
-    def  to_format(self):
-        return {
-            "sout_id":      self.__service_out.id,
-            "total_price":   self.__total_price,
-            "is_paid":       self.__is_paid,
-            "service_out":   self.__service_out. to_format(),
-            "transactions":  [t. to_format() for t in self.__transaction_history],
-        }
-
+class PaymentServiceOut :
+    def __init__(self,):
+        pass
 
 # ===========================================================================
 # POLICY
@@ -668,7 +537,7 @@ class PenaltySummary:
         self.total = round(self.total + amount, 2)
         self.count += 1
 
-    def  to_format(self):
+    def to_dict(self):
         return {"type": self.type, "total": self.total, "count": self.count}
 
 # ===========================================================================
@@ -706,7 +575,7 @@ class DailyReport:
             "total_bookings":    len(self.__bookings),
             "total_revenue":     round(self.__total_revenue, 2),
             "penalties_count":   len(self.__penalties),
-            "penalty_breakdown": [s. to_format() for s in summary],
+            "penalty_breakdown": [s.to_dict() for s in summary],
         }
 
 # ===========================================================================
@@ -719,10 +588,9 @@ class Staff:
 
     def customer_check_out(self, service_out: Service_OUT, actual_time: datetime,
                             expected_time: datetime, policy: Policy, booking: Booking,
-                            report: DailyReport, channel: "PaymentChannel",
-                            is_room_damaged: bool = False,
+                            report: DailyReport, is_room_damaged: bool = False,
                             room_damage_cost: float = 0.0,
-                            damaged_eq_ids: List[str] = None) -> "PaymentServiceOut":
+                            damaged_eq_ids: List[str] = None) -> dict:
         if damaged_eq_ids is None:
             damaged_eq_ids = []
 
@@ -731,47 +599,48 @@ class Staff:
             actual_time, expected_time, booking.id, booking.room_rate)
         if late_pen:
             service_out.add_penalty(late_pen)
+            report.add_penalty(late_pen)
 
-        # 2. room damage
+        # 2. room damage — เปลี่ยน status ตามโค้ดเดิม
         if is_room_damaged and room_damage_cost > 0:
             booking.room.status = RoomEquipmentStatus.MAINTENANCE
             r_pen = policy.check_damage_penalty(
-                booking.id, room_damage_cost, f"Room damage {room_damage_cost}")
+                booking.id, room_damage_cost, f"Room damage ฿{room_damage_cost}")
             if r_pen:
                 service_out.add_penalty(r_pen)
+                report.add_penalty(r_pen)
         else:
             booking.room.status = RoomEquipmentStatus.AVAILABLE
 
-        # 3. equipment damage
+        # 3. equipment damage — ปรับตาม eq.price + เปลี่ยน status ตามโค้ดเดิม
         for eq in booking.eq_list:
             if eq.id in damaged_eq_ids:
                 eq.status = RoomEquipmentStatus.MAINTENANCE
                 e_pen = policy.check_damage_penalty(
                     booking.id, eq.price,
-                    f"Equipment damage: {eq.type_} ({eq.id}) {eq.price}")
+                    f"Equipment damage: {eq.type_} ({eq.id}) ฿{eq.price}")
                 if e_pen:
                     service_out.add_penalty(e_pen)
+                    report.add_penalty(e_pen)
             else:
                 eq.status = RoomEquipmentStatus.AVAILABLE
 
-        # 4. สร้าง PaymentServiceOut คำนวณยอดให้ลูกค้าดูก่อน
-        payment_sout = PaymentServiceOut(service_out, channel)
-        payment_sout.calculate_total()
-
-        # 5. เปลี่ยน status penalty PENDING -> APPLIED
+        # 4. คำนวณ + เปลี่ยน status penalty → APPLIED
+        total = service_out.calculate_total_price()
         for pen in service_out.penalty_list:
             if pen.status == PenaltyStatus.PENDING:
                 pen.change_penalty_status(PenaltyStatus.APPLIED)
-                report.add_penalty(pen)
 
+        # 5. บันทึก report
+        report.add_revenue(total)
         report.add_booking_record(booking)
-        return payment_sout
 
-    def confirm_checkout(self, payment_sout: "PaymentServiceOut", report: DailyReport)  :
-        success = payment_sout.process_payment()
-        if success:
-            report.add_revenue(payment_sout.total_price)
-        return payment_sout. to_format()
+        return {
+            "booking_id":    booking.id,
+            "customer":      booking.customer.to_dict(),
+            "service_out":   service_out.to_dict(),
+            "total_charged": round(total, 2),
+        }
 
 # ===========================================================================
 # BRANCH
@@ -825,7 +694,7 @@ class Branch:
             result.extend(stock.equipment)
         return result
 
-    def  to_format(self):
+    def to_dict(self):
         return {"branch_id": self.__id, "branch_name": self.__name}
 
 # ===========================================================================
@@ -839,15 +708,13 @@ class RhythmReserve:
         self.__branch_list:   List[Branch]   = []
         self.__customer_list: List[Customer] = []
         self.__policy          = Policy()
-        self.__daily_report: Optional[DailyReport] = None  # สร้างพร้อม add_branch แรก
+        self.__daily_reports   = []   # list of DailyReport per branch per day
 
     # ── branch ──────────────────────────────────────────────────────────────
 
     def add_branch(self, name: str) -> Branch:
         branch = Branch(name)
         self.__branch_list.append(branch)
-        if self.__daily_report is None:
-            self.__daily_report = DailyReport(str(date.today()), branch)
         return branch
 
     def get_branch(self, branch_id: str) -> Branch:
@@ -857,7 +724,7 @@ class RhythmReserve:
         raise Exception(f"Branch '{branch_id}' not found")
 
     def list_branches(self):
-        return [b. to_format() for b in self.__branch_list]
+        return [b.to_dict() for b in self.__branch_list]
 
     # ── room ────────────────────────────────────────────────────────────────
 
@@ -967,7 +834,7 @@ class RhythmReserve:
         raise Exception(f"Customer '{customer_id}' not found")
 
     def list_customers(self):
-        return [c. to_format() for c in self.__customer_list]
+        return [c.to_dict() for c in self.__customer_list]
 
     # ── room availability ───────────────────────────────────────────────────
 
@@ -1061,21 +928,18 @@ class RhythmReserve:
         result   = []
         for svc in customer.get_all_services():
             for bk in svc.booking_list:
-                result.append(bk. to_format())
+                result.append(bk.to_dict())
         return result
 
     # ── checkout / cancel ───────────────────────────────────────────────────
 
     def checkout(self, customer_id: str, booking_id: str,
                   actual_dt: datetime, expected_dt: datetime,
-                  branch_id: str, channel: "PaymentChannel",
-                  product_types: List[ProductType] = None,
+                  branch_id: str, product_types: List[ProductType] = None,
                   is_room_damaged: bool = False, room_damage_cost: float = 0.0,
-                  damaged_eq_ids: List[str] = None) -> "PaymentServiceOut":
-        """
-        return PaymentServiceOut พร้อมยอดที่คำนวณแล้ว
-        ลูกค้าเห็นยอด แล้วค่อยเรียก confirm_checkout() เพื่อจ่ายจริง
-        """
+                  damaged_eq_ids: List[str] = None,
+                  report: "DailyReport" = None) -> dict:
+
         booking     = self.get_booking(customer_id, booking_id)
         branch      = self.get_branch(branch_id)
         staff       = Staff(branch)
@@ -1086,32 +950,23 @@ class RhythmReserve:
                 price = self.get_product_price(branch_id, ptype)
                 service_out.add_product(Products(ptype, price))
 
+        if report is None:
+            report = DailyReport(str(date.today()), branch)
+
         return staff.customer_check_out(
             service_out      = service_out,
             actual_time      = actual_dt,
             expected_time    = expected_dt,
             policy           = self.__policy,
             booking          = booking,
-            report           = self.__daily_report,
-            channel          = channel,
+            report           = report,
             is_room_damaged  = is_room_damaged,
             room_damage_cost = room_damage_cost,
             damaged_eq_ids   = damaged_eq_ids or [],
         )
 
-    def confirm_checkout(self, payment_sout: "PaymentServiceOut")  :
-        """ลูกค้าจ่ายเงินจริง หลังจากเห็นยอดแล้ว"""
-        branch = self.__branch_list[0]
-        staff  = Staff(branch)
-        return staff.confirm_checkout(payment_sout, self.__daily_report)
-
-    def get_report_data(self)  :
-        if self.__daily_report is None:
-            raise Exception("No branch added yet")
-        return self.__daily_report.generate_report_data()
-
     def cancel_booking(self, customer_id: str, booking_id: str,
-                        cancel_dt: datetime)  :
+                        cancel_dt: datetime) -> dict:
         booking  = self.get_booking(customer_id, booking_id)
         start_dt = datetime.combine(booking.day, booking.start)
         refund, pen = self.__policy.check_cancellation(
@@ -1121,7 +976,7 @@ class RhythmReserve:
             return {
                 "status":  "NO_REFUND",
                 "detail":  pen.reason,
-                "penalty": pen. to_format(),
+                "penalty": pen.to_dict(),
             }
         return {
             "status":        "REFUND",
