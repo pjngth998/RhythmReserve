@@ -750,30 +750,33 @@ class CreditCard(PaymentChannel):
 # ===========================================================================
 # TRANSACTION RECORD & PAYMENT
 # ===========================================================================
-
-class TransactionRecord:
-    def __init__(self, txn_id: str, service_in_id: str, txn_type: str,
-                 amount: float, channel_type: str, ref_txn_id: Optional[str] = None):
-        self.txn_id        = txn_id
-        self.__servicein_id = service_in_id
-        self.txn_type      = txn_type
-        self.amount        = amount
-        self.__channel_type  = channel_type
-        self.ref_txn_id    = ref_txn_id
-        self.timestamp     = datetime.now()
-
-    def __repr__(self):
-        ref = f" ref={self.ref_txn_id}" if self.ref_txn_id else ""
-        return (f"<TXN {self.txn_id} | {self.txn_type} | "
-                f"{self.amount:.2f} THB | {self.__channel_type}{ref} | {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
-
-class PaymentServiceOut:
-    def __init__(self):
-
 class TXNType(Enum):
     CHARGE = "CHARGE"
     REFUND = "REFUND"
     PENALTY = "PENALTY"
+
+class TransactionRecord:
+    def __init__(self, txn_id: str, servicein_id: str, txn_type: TXNType,
+                 amount: float, channel_type: str, ref_txn_id: Optional[str] = None):
+        self.__txn_id        = txn_id
+        self.__servicein_id = servicein_id
+        self.__txn_type      = txn_type
+        self.__amount        = amount
+        self.__channel_type  = channel_type
+        self.__ref_txn_id    = ref_txn_id
+        self.__timestamp     = datetime.now()
+
+    @property
+    def amount(self):
+        return self.__amount
+
+    def __repr__(self):
+        ref = f" ref={self.__ref_txn_id}" if self.__ref_txn_id else ""
+        return (f"<TXN {self.__txn_id} | {self.txn_type} | "
+                f"{self.__amount:.2f} THB | {self.__channel_type}{ref} | {self.__timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
+
+class PaymentServiceOut:
+    def __init__(self):
 
 class PaymentServiceIn:
     def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
@@ -819,7 +822,7 @@ class PaymentServiceIn:
 
         if txn_id:
             for record in self.__transaction_history:
-                if record.txn_id == txn_id and record.txn_type == "CHARGE":
+                if record.txn_id == txn_id and record.txn_type == TXNType.CHARGE:
                     if record.txn_id in refunded_ids:
                         print(f"[Payment] TXN {txn_id} has already been refunded")
                         return None
@@ -828,7 +831,7 @@ class PaymentServiceIn:
             return None
 
         for record in reversed(self.__transaction_history):
-            if record.txn_type == "CHARGE" and record.txn_id not in refunded_ids:
+            if record.txn_type == TXNType.CHARGE and record.txn_id not in refunded_ids:
                 return record
         print("[Payment] No eligible CHARGE transaction found")
         return None
@@ -895,7 +898,38 @@ class Penalty:
     def change_penalty_status(self, new_status: PenaltyStatus):
         self.__status = new_status
 
+# ===========================================================================
+# COUPON
+# ===========================================================================
 
+class Coupon:
+    EXPIRE_MONTHS = 1
+
+    def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
+        self.__coupon_id    = coupon_id
+        self.__discount      = discount
+        self.__expired_date = expired_date
+
+    @classmethod
+    def create_coupon(cls, discount: float) -> "Coupon":
+        expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
+        date_part = expired_date.strftime("%y%m%d")
+        coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
+        print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
+        return cls(coupon_id, discount, expired_date)
+
+    def get_coupon_id(self) -> str:
+        return self.__coupon_id
+
+    def get_discount(self) -> float:
+        return self.__discount 
+
+    def get_expired_date(self) -> datetime:
+        return self.__expired_date
+
+    def is_expired(self) -> bool:
+        return datetime.now() > self.__expired_date
+    
 # ===========================================================================
 # ServiceIN
 # ===========================================================================
@@ -987,15 +1021,24 @@ class ServiceIN:
 
         if payment_success:
             self.change_status(ServiceStatus.PAID)
-            for booking in self.booking_list:
+            for booking in self.__booking_list:
                 booking.confirm()
         else:
             self.change_status(ServiceStatus.PENDING)
 
         return payment_success
     
+    def _calculate_refund(self,booking : Booking):
+        propotion = booking.price/self.__total_price
+        refund_amount = self.__final_price * propotion
+        return refund_amount
+    
+    def cancel_b(self,booking_id,original_txn_id: Optional[str] = None):
+        for booking in self.__booking_list:
+            if booking.id == booking_id:
+                refund_amount =self._calculate_refund(booking)
 
-    def cancel(self,  original_txn_id: Optional[str] = None) -> bool:
+    def cancel(self,original_txn_id: Optional[str] = None) -> bool:
         if self.status == ServiceStatus.CANCELLED:
             print(f"[Service_IN] {self.__servicein_id} already cancelled")
             return False
@@ -1484,7 +1527,7 @@ class RhythmReserve():
         if service_in != ServiceStatus.PENDING:
             raise Exception("Cannot refund: Service not paid yet")\
             
-        cancel = service_in.cancel()
+        cancel = service_in.cancel(booking_id)
         
 
   
