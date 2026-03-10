@@ -1055,8 +1055,8 @@ class QrScan(PaymentChannel):
 
         buffer = io.BytesIO()
         qr.save(buffer, format="PNG")
-        self.qr_image = base64.b64encode(buffer.getvalue()).decode()
-        return self.qr_image
+        self.__qr_image = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{self.__qr_image}"
 
     def process(self, amount: float, ref: str = "TXN") -> bool:
         self.generate_qr(amount, ref)
