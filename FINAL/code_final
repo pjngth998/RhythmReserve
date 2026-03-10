@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timedelta, time, date
 from dateutil.relativedelta import relativedelta
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional,List
 from enum import Enum
 import qrcode
 import io
@@ -74,7 +74,7 @@ class ServiceStatus(Enum):
 
 class PenaltyType(Enum):
     NO_SHOW = "NO_SHOW"
-    CANCEL_LATE = "CANCEL_LATE" 
+    CANCEL_LATE = "CANCEL_LATE"
     DAMAGE = "DAMAGE"
     LATE = "LATE"
 
@@ -90,6 +90,11 @@ class UserField(Enum):
 class PaymentChannelType(Enum):
     QRSCAN = "Qr"
     CREDITCARD = "Cr"
+
+class TXNType(Enum):
+    CHARGE = "CHARGE"
+    REFUND = "REFUND"
+    PENALTY = "PENALTY"
 
 
 OPEN_TIME = time(9, 0)
@@ -144,7 +149,6 @@ class User():
     def password(self,value):
         self.__password = value
     
-    # def login(self, username, pasword):
     def verify_password(self,username,password):
         if username == self.__username:
             if password == self.__password:
@@ -219,10 +223,6 @@ class Customer(User) :
     def get_cancellation_limit_hours(self):
         pass
 
-# ===========================================================================
-# Member
-# ===========================================================================
-
 class PendingCustomer():
     def __init__(self, name, username, password, email, phone, birthday, membership):
         self.__name = name
@@ -259,6 +259,92 @@ class Premium(Customer):
 class Diamond(Customer):
     pass
 
+# ===========================================================================
+# Member
+# ===========================================================================
+class Standard(Customer):
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.STANDARD, name, password)
+    def get_cancellation_limit_hours(self) -> int: return 24
+    def get_tier_discount(self) -> float:          return 0.0
+    def get_points_per_hr(self) -> int:            return 3
+
+class Premium(Customer):
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.PREMIUM, name, password)
+    def get_cancellation_limit_hours(self) -> int: return 12
+    def get_tier_discount(self) -> float:          return 0.03
+    def get_points_per_hr(self) -> int:            return 5
+
+class Diamond(Customer):
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.DIAMOND, name, password)
+    def get_cancellation_limit_hours(self) -> int: return 6
+    def get_tier_discount(self) -> float:          return 0.05
+    def get_points_per_hr(self) -> int:            return 8
+
+# ===========================================================================
+# Staff
+# ===========================================================================
+class Staff:
+    def __init__(self, branch):
+        self.__branch = branch
+
+    def customer_check_out(self, service_out: Service_OUT, actual_time: datetime,
+                            expected_time: datetime, policy: Policy, booking: Booking,
+                            report: DailyReport, channel: "PaymentChannel",
+                            is_room_damaged: bool = False,
+                            room_damage_cost: float = 0.0,
+                            damaged_eq_ids: List[str] = None) -> "PaymentServiceOut":
+        if damaged_eq_ids is None:
+            damaged_eq_ids = []
+
+        # 1. late checkout
+        late_pen = policy.check_late_checkout(
+            actual_time, expected_time, booking.id, booking.room_rate)
+        if late_pen:
+            service_out.add_penalty(late_pen)
+
+        # 2. room damage
+        if is_room_damaged and room_damage_cost > 0:
+            booking.room.status = RoomEquipmentStatus.MAINTENANCE
+            r_pen = policy.check_damage_penalty(
+                booking.id, room_damage_cost, f"Room damage {room_damage_cost}")
+            if r_pen:
+                service_out.add_penalty(r_pen)
+        else:
+            booking.room.status = RoomEquipmentStatus.AVAILABLE
+
+        # 3. equipment damage
+        for eq in booking.eq_list:
+            if eq.id in damaged_eq_ids:
+                eq.status = RoomEquipmentStatus.MAINTENANCE
+                e_pen = policy.check_damage_penalty(
+                    booking.id, eq.price,
+                    f"Equipment damage: {eq.type_} ({eq.id}) {eq.price}")
+                if e_pen:
+                    service_out.add_penalty(e_pen)
+            else:
+                eq.status = RoomEquipmentStatus.AVAILABLE
+
+        # 4. สร้าง PaymentServiceOut คำนวณยอดให้ลูกค้าดูก่อน
+        payment_sout = PaymentServiceOut(service_out, channel)
+        payment_sout.calculate_total()
+
+        # 5. เปลี่ยน status penalty PENDING -> APPLIED
+        for pen in service_out.penalty_list:
+            if pen.status == PenaltyStatus.PENDING:
+                pen.change_penalty_status(PenaltyStatus.APPLIED)
+                report.add_penalty(pen)
+
+        report.add_booking_record(booking)
+        return payment_sout
+
+    def confirm_checkout(self, payment_sout: "PaymentServiceOut", report: DailyReport)  :
+        success = payment_sout.process_payment()
+        if success:
+            report.add_revenue(payment_sout.total_price)
+        return payment_sout. to_format()
 
 
 # ===========================================================================
@@ -786,12 +872,8 @@ class CreditCard(PaymentChannel):
 
 
 # ===========================================================================
-# TRANSACTION RECORD & PAYMENT
+# TRANSACTION RECORD
 # ===========================================================================
-class TXNType(Enum):
-    CHARGE = "CHARGE"
-    REFUND = "REFUND"
-    PENALTY = "PENALTY"
 
 class TransactionRecord:
     def __init__(self, txn_id: str, servicein_id: str, txn_type: TXNType,
@@ -810,153 +892,46 @@ class TransactionRecord:
 
     def __repr__(self):
         ref = f" ref={self.__ref_txn_id}" if self.__ref_txn_id else ""
-        return (f"<TXN {self.__txn_id} | {self.txn_type} | "
+        return (f"<TXN {self.__txn_id} | {self.__txn_type} | "
                 f"{self.__amount:.2f} THB | {self.__channel_type}{ref} | {self.__timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
 
-class PaymentServiceOut:
-    def __init__(self):
-
-class TXNType(Enum):
-    CHARGE = "CHARGE"
-    REFUND = "REFUND"
-    PENALTY = "PENALTY"
-
-class PaymentServiceIn:
-    def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
-        self.__servicein_id  = service_in_id
-        self.__username = username
-        self.__total_price    = total_price
-        self.__channel        = channel
-        self.__is_success     = False
-        self.__refund_amount  = 0.0
-        self.__transaction_history: list[TransactionRecord] = []
-
-    def process_payment(self, final_price: float) -> bool:
-        self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
-        print(f"[Payment] Gen Transaction ID: {self.__transaction_id}")
-        self.__is_success = self.__channel.process(final_price, ref=self.__transaction_id)
-
-        if self.__is_success:
-            record = TransactionRecord(
-                txn_id        = self.__transaction_id,
-                service_in_id = self.__servicein_id,
-                txn_type      = TXNType.CHARGE,
-                amount        = final_price,
-                channel_type  = type(self.__channel).__name__,
-            )
-            self.__transaction_history.append(record)
-            print(f"[Payment] Recorded: {record}")
-
-            self._send_confirm(self.__username)
-
-        noti = Notification(self.__username)
-        noti.noti_send("Payment Successful!")
-        return self.__is_success
-
-
-    #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
-    def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
-        refunded_ids = {r.ref_txn_id for r in self.__transaction_history if r.txn_type == TXNType.REFUND}
-
-        if txn_id:
-            for record in self.__transaction_history:
-                if record.txn_id == txn_id and record.txn_type == TXNType.CHARGE:
-                    if record.txn_id in refunded_ids:
-                        print(f"[Payment] TXN {txn_id} has already been refunded")
-                        return None
-                    return record
-            print(f"[Payment] TXN {txn_id} not found in history")
-            return None
-
-        for record in reversed(self.__transaction_history):
-            if record.txn_type == TXNType.CHARGE and record.txn_id not in refunded_ids:
-                return record
-        print("[Payment] No eligible CHARGE transaction found")
-        return None
-
-    def payment_refund(self, refund_amount: float, original_txn_id: Optional[str] = None) -> bool:
-        print(f"[Payment] Looking up charge transaction (ref={original_txn_id or 'latest'})...")
-        charge_record = self.lookup_charge_transaction(original_txn_id)
-
-        if charge_record is None:
-            print("[Payment] Refund aborted: no valid charge transaction found")
-            return False
-
-        if refund_amount > charge_record.amount:
-            print(f"[Payment] Refund amount {refund_amount:.2f} exceeds "
-                  f"original charge {charge_record.amount:.2f} THB → aborted")
-            return False
-
-        refund_txn_id = f"RFD-{uuid.uuid4().hex[:8].upper()}"
-        print(f"[Payment] Gen Refund ID: {refund_txn_id}")
-
-        success = self.__channel.refund(refund_amount, charge_record.txn_id, refund_txn_id)
-
-        if success:
-            refund_record = TransactionRecord(
-                txn_id        = refund_txn_id,
-                service_in_id = self.__servicein_id,
-                txn_type      = TXNType.REFUND,
-                amount        = refund_amount,
-                channel_type  = type(self.__channel).__name__,
-                ref_txn_id    = charge_record.txn_id,
-            )
-            self.__transaction_history.append(refund_record)
-            self.__refund_amount += refund_amount
-            print(f"[Payment] Recorded: {refund_record}")
-
-        print(f"[Payment] Refund {'success' if success else 'failed'}: {refund_amount:.2f} THB")
-        return success
-
-    def get_transaction_history(self) -> list[TransactionRecord]:
-        return self.__transaction_history
-    
-# ===========================================================================
-# PaymentRegister
-# ===========================================================================
-
-class PaymentRegister():
-    def __init__(self, username, membership : Membership, channel):
-        self.__username = username
-        self.__member = membership
-        self.__cost = self.__member.price
-        self.__channel = channel
-        self.__is_success = False
-
-
-    def process_payment(self) -> bool:
-        self.__is_success = True
-
-        print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
-        return self.__is_success
-
-    
         
 
 # ===========================================================================
 # Penalty
 # ===========================================================================
 class Penalty:
-    def __init__(self, penalty_id: str, type_: PenaltyType, amount: float, reason: str, booking_id: str):
+    def __init__(self, type_: PenaltyType, amount: float, reason: str, booking_id: str):
+        self.__type       = type_
         self.__penalty_id = f"PN-{self.__type.value}-{str(uuid.uuid4())[:8]}"
-        self.__reason = reason
-        self.__type = type_
-        self.__amount = amount
-        self.__status = PenaltyStatus.PENDING
+        self.__reason     = reason
+        self.__amount     = amount
+        self.__status     = PenaltyStatus.PENDING
         self.__booking_id = booking_id
 
     @property
-    def amount(self): return self.__amount
+    def amount(self):     return self.__amount
     @property
-    def status(self): return self.__status
+    def status(self):     return self.__status
     @property
-    def reason(self): return self.__reason
+    def reason(self):     return self.__reason
     @property
-    def type(self) -> PenaltyType: return self.__type 
+    def type(self):       return self.__type
+    @property
+    def booking_id(self): return self.__booking_id
 
     def change_penalty_status(self, new_status: PenaltyStatus):
         self.__status = new_status
 
+    def  to_format(self):
+        return {
+            "penalty_id": self.__penalty_id,
+            "type":       self.__type.value,
+            "amount":     self.__amount,
+            "reason":     self.__reason,
+            "status":     self.__status.value,
+            "booking_id": self.__booking_id,
+        }
 # ===========================================================================
 # COUPON
 # ===========================================================================
@@ -1142,6 +1117,183 @@ class ServiceOUT:
             "penalties":   [p.to_dict() for p in self.__penalty_list],
             "total_price": round(self.__total_price, 2),
         }
+    
+
+# ===========================================================================
+# PAYMENT SERVICEIN
+# ===========================================================================
+class PaymentServiceIn:
+    def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
+        self.__servicein_id  = service_in_id
+        self.__username = username
+        self.__total_price    = total_price
+        self.__channel        = channel
+        self.__is_success     = False
+        self.__refund_amount  = 0.0
+        self.__transaction_history: list[TransactionRecord] = []
+
+    def process_payment(self, final_price: float) -> bool:
+        self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        print(f"[Payment] Gen Transaction ID: {self.__transaction_id}")
+        self.__is_success = self.__channel.process(final_price, ref=self.__transaction_id)
+
+        if self.__is_success:
+            record = TransactionRecord(
+                txn_id        = self.__transaction_id,
+                service_in_id = self.__servicein_id,
+                txn_type      = TXNType.CHARGE,
+                amount        = final_price,
+                channel_type  = type(self.__channel).__name__,
+            )
+            self.__transaction_history.append(record)
+            print(f"[Payment] Recorded: {record}")
+
+            self._send_confirm(self.__username)
+
+        noti = Notification(self.__username)
+        noti.noti_send("Payment Successful!")
+        return self.__is_success
+
+
+    #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
+    def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
+        refunded_ids = {r.ref_txn_id for r in self.__transaction_history if r.txn_type == TXNType.REFUND}
+
+        if txn_id:
+            for record in self.__transaction_history:
+                if record.txn_id == txn_id and record.txn_type == TXNType.CHARGE:
+                    if record.txn_id in refunded_ids:
+                        print(f"[Payment] TXN {txn_id} has already been refunded")
+                        return None
+                    return record
+            print(f"[Payment] TXN {txn_id} not found in history")
+            return None
+
+        for record in reversed(self.__transaction_history):
+            if record.txn_type == TXNType.CHARGE and record.txn_id not in refunded_ids:
+                return record
+        print("[Payment] No eligible CHARGE transaction found")
+        return None
+
+    def payment_refund(self, refund_amount: float, original_txn_id: Optional[str] = None) -> bool:
+        print(f"[Payment] Looking up charge transaction (ref={original_txn_id or 'latest'})...")
+        charge_record = self.lookup_charge_transaction(original_txn_id)
+
+        if charge_record is None:
+            print("[Payment] Refund aborted: no valid charge transaction found")
+            return False
+
+        if refund_amount > charge_record.amount:
+            print(f"[Payment] Refund amount {refund_amount:.2f} exceeds "
+                  f"original charge {charge_record.amount:.2f} THB → aborted")
+            return False
+
+        refund_txn_id = f"RFD-{uuid.uuid4().hex[:8].upper()}"
+        print(f"[Payment] Gen Refund ID: {refund_txn_id}")
+
+        success = self.__channel.refund(refund_amount, charge_record.txn_id, refund_txn_id)
+
+        if success:
+            refund_record = TransactionRecord(
+                txn_id        = refund_txn_id,
+                service_in_id = self.__servicein_id,
+                txn_type      = TXNType.REFUND,
+                amount        = refund_amount,
+                channel_type  = type(self.__channel).__name__,
+                ref_txn_id    = charge_record.txn_id,
+            )
+            self.__transaction_history.append(refund_record)
+            self.__refund_amount += refund_amount
+            print(f"[Payment] Recorded: {refund_record}")
+
+        print(f"[Payment] Refund {'success' if success else 'failed'}: {refund_amount:.2f} THB")
+        return success
+
+    def get_transaction_history(self) -> list[TransactionRecord]:
+        return self.__transaction_history
+    
+# ===========================================================================
+# PAYMENT SERVICEIN
+# ===========================================================================
+class PaymentServiceOut:
+    def __init__(self, service_out: ServiceOUT, channel: PaymentChannel):
+        self.__service_out          = service_out   
+        self.__channel              = channel
+        self.__total_price          = 0.0
+        self.__is_paid              = False
+        self.__is_calculated        = False
+        self.__transaction_history: List[TransactionRecord] = []
+
+    @property
+    def id(self):         return self.__service_out.id   
+    @property
+    def is_paid(self):    return self.__is_paid
+    @property
+    def total_price(self): return self.__total_price
+    @property
+    def transaction_history(self): return self.__transaction_history
+
+    def calculate_total(self) -> float:
+        self.__total_price    = self.__service_out.calculate_total_price()
+        self.__is_calculated  = True
+        print(f"[PaymentServiceOut] ยอดที่ต้องชำระ: {self.__total_price:.2f} THB")
+        print(f"[PaymentServiceOut]   - {self.__service_out. to_format()}")
+        return self.__total_price
+
+    def process_payment(self) -> bool:
+        """ลูกค้าจ่ายเงิน หลังจากเห็นยอดแล้ว"""
+        if not self.__is_calculated:
+            raise Exception("ยังไม่ได้คำนวณยอด กรุณาเรียก calculate_total() ก่อน")
+
+        txn_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        success = self.__channel.process(self.__total_price, ref=txn_id)
+
+        if success:
+            record = TransactionRecord(
+                txn_id       = txn_id,
+                sout_id      = self.__service_out.id,
+                txn_type     = TXNType.CHARGE,
+                amount       = self.__total_price,
+                channel_type = type(self.__channel).__name__,
+            )
+            self.__transaction_history.append(record)
+            self.__is_paid = True
+            print(f"[PaymentServiceOut] APPLIED TXN:{txn_id}")
+            return True
+        raise Exception("Payment Failed")
+
+    def get_transaction_history(self) -> List[TransactionRecord]:
+        return self.__transaction_history
+
+    def  to_format(self):
+        return {
+            "sout_id":      self.__service_out.id,
+            "total_price":   self.__total_price,
+            "is_paid":       self.__is_paid,
+            "service_out":   self.__service_out. to_format(),
+            "transactions":  [t. to_format() for t in self.__transaction_history],
+        }
+    
+# ===========================================================================
+# PaymentRegister
+# ===========================================================================
+
+class PaymentRegister():
+    def __init__(self, username, membership : Membership, channel):
+        self.__username = username
+        self.__member = membership
+        self.__cost = self.__member.price
+        self.__channel = channel
+        self.__is_success = False
+
+
+    def process_payment(self) -> bool:
+        self.__is_success = True
+
+        print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
+        return self.__is_success
+
+    
 
 # ===========================================================================
 # RhythmReserve
@@ -1604,7 +1756,7 @@ class RhythmReserve():
         
 
         if service_in != ServiceStatus.PENDING:
-            raise Exception("Cannot refund: Service not paid yet")\
+            raise Exception("Cannot refund: Service not paid yet")
             
         cancel = service_in.cancel_b(booking_id)
 
@@ -1612,12 +1764,3 @@ class RhythmReserve():
             return "Cancel Booking Successfully"
         raise Exception("Can't Cancle This Booking")
         
-
-  
-
-
-
-
-
-            
-    
