@@ -460,8 +460,10 @@ class Service_IN:
 
 class Service_OUT:
     def __init__(self):
+        self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
         self.__product_list: List[Products] = []
         self.__penalty_list: List[Penalty]  = []
+        self.__status = ServiceStatus.PENDING
         self.__total_price  = 0.0
 
     @property
@@ -483,6 +485,10 @@ class Service_OUT:
             "penalties":   [p.to_dict() for p in self.__penalty_list],
             "total_price": self.__total_price,
         }
+
+class PaymentServiceOut :
+    def __init__(self,):
+        pass
 
 # ===========================================================================
 # POLICY
