@@ -213,6 +213,10 @@ class Customer(User) :
     def points(self):
         return self.__points
     
+    @points.setter
+    def points(self, value):
+        self.__points = value
+    
     def get_coupon_list(self) -> list:
         return self.__coupon_list
     
@@ -313,7 +317,7 @@ class PendingCustomer():
 # ===========================================================================
 class Standard(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.STANDARD, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.STANDARD)
 
     def get_cancellation_limit_hours(self) -> int: return 24
     def get_tier_discount(self) -> float:          return 0.0
@@ -327,7 +331,7 @@ class Standard(Customer):
 
 class Premium(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.PREMIUM, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.PREMIUM)
 
     def get_cancellation_limit_hours(self) -> int: return 12
     def get_tier_discount(self) -> float:          return 0.03
@@ -344,7 +348,7 @@ class Premium(Customer):
 
 class Diamond(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.DIAMOND, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.DIAMOND)
 
     def get_cancellation_limit_hours(self) -> int: return 6
     def get_tier_discount(self) -> float:          return 0.05
@@ -455,10 +459,10 @@ class Booking():
         return self.__price
 
     def booking_cancel(self):
-        set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+        set_room_success =  self.__room.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
 
         for eq in self.__eq_list:
-            set_eq_success =  eq.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+            set_eq_success =  eq.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
 
         if set_room_success and set_eq_success:
             return True
@@ -594,11 +598,10 @@ class ServiceIN:
 
 
     def change_status(self, status: ServiceStatus):
-        status = self.set_status(status)
-        if status:
-            print(f"[Service_IN] {self.__servicein_id} status → {status.value}")
-            return True
-        raise Exception("Can't Change Status")
+        self.set_status(status)
+        print(f"[Service_IN] {self.__servicein_id} status → {status.value}")
+        return True
+
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
         total_price      = self.calculate_total()
@@ -683,7 +686,7 @@ class ServiceOUT:
 
     def calculate_total_price(self):
         product_sum = sum(p.price for p in self.__product_list)
-        penalty_sum = sum(p.amount for p in self.__penalty_list if p.status == PenaltyStatus.PENDING)
+        penalty_sum = sum(p.amount for p in self.__penalty_list)
         self.__total_price = product_sum + penalty_sum
         return self.__total_price
     
@@ -993,7 +996,6 @@ class Equipment():
     def timeslot(self):
         return self.__timeslot
     
-    @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__timeslot.append(new_timeslot)
 
@@ -1388,7 +1390,7 @@ class PaymentServiceOut:
         self.__total_price    = self.__service_out.calculate_total_price()
         self.__is_calculated  = True
         print(f"[PaymentServiceOut] ยอดที่ต้องชำระ: {self.__total_price:.2f} THB")
-        print(f"[PaymentServiceOut]   - {self.__service_out. to_format()}")
+        print(f"[PaymentServiceOut]   - sout_id: {self.__service_out.id}, total: {self.__total_price}")
         return self.__total_price
 
     def process_payment(self) -> bool:
@@ -1402,7 +1404,7 @@ class PaymentServiceOut:
         if success:
             record = TransactionRecord(
                 txn_id       = txn_id,
-                sout_id      = self.__service_out.id,
+                servicein_id  = self.__service_out.id, 
                 txn_type     = TXNType.CHARGE,
                 amount       = self.__total_price,
                 channel_type = type(self.__channel).__name__,
@@ -1421,7 +1423,11 @@ class PaymentServiceOut:
             "sout_id":      self.__service_out.id,
             "total_price":   self.__total_price,
             "is_paid":       self.__is_paid,
-            "service_out":   self.__service_out. to_format(),
+            "service_out": {
+                "id": self.__service_out.id,
+                "products": [f"{p.type.value}: {p.price}" for p in self.__service_out.product_list],
+                "penalties": [f"{p.amount}" for p in self.__service_out.penalty_list],
+                    },
             "transactions":  [t. to_format() for t in self.__transaction_history],
         }
     
@@ -1446,7 +1452,7 @@ class PaymentRegister():
         if self.__is_success:
             record = TransactionRecord(
                 txn_id        = self.__transaction_id,
-                service_in_id = self.__servicein_id,
+                servicein_id  = self.__username,
                 txn_type      = TXNType.REGISTER,
                 amount        = self.__cost,
                 channel_type  = type(self.__channel).__name__,
@@ -1494,7 +1500,7 @@ class RhythmReserve():
             raise Exception("Have Account Already")
         
         if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN)
             self.add_customer_ls(customer)
             return customer
     
@@ -1524,9 +1530,9 @@ class RhythmReserve():
         
         match pending.membership:
             case Membership.PREMIUM:
-                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN)
             case Membership.DIAMOND:
-                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN)
 
         self.__pending_register.remove(pending)
         self.add_customer_ls(customer)
@@ -1565,7 +1571,7 @@ class RhythmReserve():
 
         protected_fields = ["password", "username", "customer_id", "staff_id"]
         if user and hasattr(user,data.value):
-            if data != protected_fields:
+            if data.value not in protected_fields:
                 setattr(user,data.value,new_info)
                 return f"Edit {data.value} Success"
             raise Exception(f"{data.value} can't edit")
@@ -1614,15 +1620,11 @@ class RhythmReserve():
         customer_info = customer.get_customer_info(customer_id)
         
         branch = self.get_branch_by_id(branch_id)
-        if not branch:
-            return "Branch Not Found"
 
         room = self.get_room_by_id(room_id)
         max_quota = room.quota
 
-        if not room: 
-            return "Room Not Found"
-        # max_quota = room.get_eq_quota(room_id)
+        
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
         status = "PENDING"
@@ -1643,7 +1645,7 @@ class RhythmReserve():
         if total_requested_size <= max_quota:
             for eq_id in eq_list:
                 eq = branch.get_eq_by_id(eq_id)
-                eq.add_timeslot = TimeSlot(day, s_time, e_time, TimeSlotStatus.PENDING)
+                eq.add_timeslot(TimeSlot(day, s_time, e_time, TimeSlotStatus.PENDING))
             return True
         else:
             raise Exception("Exceed Room Quota Limit")
@@ -1861,7 +1863,7 @@ class RhythmReserve():
                 continue
 
             slot_start = datetime.combine(slot.date, slot.start)
-            slot_end = datetime.combine(slot.date, slot.end) + BUFFER
+            slot_end   = datetime.combine(slot.date, slot.end) + BUFFER
 
             if start < slot_end and slot_start < end:
                 return True
@@ -1922,7 +1924,7 @@ class RhythmReserve():
             return booking
 
         service.add_booking(booking)
-        service.total_price = booking.price
+        service.calculate_total()
         return service
     
 
@@ -1989,7 +1991,7 @@ class RhythmReserve():
     def get_available_products(self, branch_id):
         branch = self.get_branch_by_id(branch_id)
         summary = []
-        for stock in branch.stock_product:
+        for stock in branch.product:
             count = len(stock.get_stock)
             if count > 0:
                 line = f"{stock.type.value}: {count}"
