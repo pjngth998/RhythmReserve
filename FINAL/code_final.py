@@ -53,14 +53,16 @@ class ProductType(Enum):
     TARO = "TR"
 
 class Membership(str, Enum):
-    STANDARD = ("STD", 0)
-    PREMIUM = ("PRM", 599)
-    DIAMOND = ("DMN", 999)
+    STANDARD = ("STD", 0, 0.0, 3)
+    PREMIUM  = ("PRM", 599, 0.03, 5)
+    DIAMOND  = ("DMN", 999, 0.05, 8)
 
-    def __new__(cls, code, price):
+    def __new__(cls, code, price, discount, points_per_hr):
         obj = str.__new__(cls, code)
-        obj._value_ = code
-        obj.price = price
+        obj._value_       = code
+        obj.price         = price
+        obj.discount      = discount
+        obj.points_per_hr = points_per_hr
         return obj
 
 class UserStatus(Enum):
@@ -103,6 +105,47 @@ CLOSE_TIME = time(23, 0)
 
 SLOT_STEP = timedelta(minutes=30)
 BUFFER = timedelta(minutes=15)
+
+# ===========================================================================
+# COUPON
+# ===========================================================================
+
+class Coupon:
+    EXPIRE_MONTHS = 1
+
+    def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
+        self.__coupon_id    = coupon_id
+        self.__discount     = discount
+        self.__expired_date = expired_date
+        self.__used         = False
+
+    @classmethod
+    def create_coupon(cls, discount: float) -> "Coupon":
+        expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
+        date_part = expired_date.strftime("%y%m%d")
+        coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
+        print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
+        return cls(coupon_id, discount, expired_date)
+    
+    @property
+    def id(self) :
+        return self.__coupon_id
+
+    def get_discount(self) -> float:
+        return self.__discount 
+
+    def get_expired_date(self) -> datetime:
+        return self.__expired_date
+
+    def is_expired(self) -> bool:
+        return datetime.now() > self.__expired_date
+    
+    def mark_used(self):
+        self.__used = True
+
+    @property
+    def used(self) :
+        return self.__used
 
 
 # ===========================================================================
@@ -154,8 +197,9 @@ class Customer(User) :
         self.__id = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.__points:int = None
         self.__reserve_list = []
-        self.__coupon_list = None
+        self.__coupon_list = []
         self.__notification_list = []
+        self.__points = 0
 
     @property
     def reserve_list(self):
@@ -165,7 +209,17 @@ class Customer(User) :
     def id(self):
         return self.__id
     
-    def get_customer_info(self,customer_id):
+    @property
+    def points(self):
+        return self.__points
+    
+    def get_coupon_list(self) -> list:
+        return self.__coupon_list
+    
+    def add_points(self, duration_hrs: int):
+        self.points += self.get_points_per_hr() * duration_hrs
+    
+    def get_customer_info(self, customer_id):
         if self.__id == customer_id:
             return self.__name, self.__id, self.__reserve_list
         
@@ -192,6 +246,12 @@ class Customer(User) :
                 if booking.id == booking_id:
                     return booking
         raise Exception("booking not found")
+    
+    def get_coupon(self, coupon_id) :
+        for coupon in self.__coupon_list:
+            if coupon.id == coupon_id:
+                return coupon
+        raise Exception(f"Coupon {coupon_id} not found")
 
     @property
     def notification(self):
@@ -201,9 +261,12 @@ class Customer(User) :
     def notification(self, new_notification):
         self.__notification_list.append(new_notification)
 
+    @abstractmethod
+    def get_tier_discount(self) :
+        pass
 
     @abstractmethod
-    def recieve_point_per_hr(self):
+    def get_points_per_hr(self):
         pass
 
     @abstractmethod
@@ -250,24 +313,54 @@ class PendingCustomer():
 # ===========================================================================
 class Standard(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.STANDARD, name, password)
+        super().__init__(Membership.STANDARD, username, password, name, email, phone, birthday, status)
+
     def get_cancellation_limit_hours(self) -> int: return 24
     def get_tier_discount(self) -> float:          return 0.0
     def get_points_per_hr(self) -> int:            return 3
 
+    def redeem_coupon(self) -> Coupon:
+        if self.points >= 20:
+            self.points -= 20
+            return Coupon.create_coupon(0.05)
+        raise Exception("Not enough points")
+
 class Premium(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.PREMIUM, name, password)
+        super().__init__(Membership.PREMIUM, username, password, name, email, phone, birthday, status)
+
     def get_cancellation_limit_hours(self) -> int: return 12
     def get_tier_discount(self) -> float:          return 0.03
     def get_points_per_hr(self) -> int:            return 5
 
+    def redeem_coupon(self, points: int) -> Coupon:
+        if points == 20 and self.points >= 20:
+            self.points -= 20
+            return Coupon.create_coupon(0.10)
+        elif points == 30 and self.points >= 30:
+            self.points -= 30
+            return Coupon.create_coupon(0.15)
+        raise Exception("Not enough points or invalid option")
+
 class Diamond(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.DIAMOND, name, password)
+        super().__init__(Membership.DIAMOND, username, password, name, email, phone, birthday, status)
+
     def get_cancellation_limit_hours(self) -> int: return 6
     def get_tier_discount(self) -> float:          return 0.05
     def get_points_per_hr(self) -> int:            return 8
+
+    def redeem_coupon(self, points: int) -> Coupon:
+        if points == 20 and self.points >= 20:
+            self.points -= 20
+            return Coupon.create_coupon(0.10)
+        elif points == 30 and self.points >= 30:
+            self.points -= 30
+            return Coupon.create_coupon(0.15)
+        elif points == 40 and self.points >= 40:
+            self.points -= 40
+            return Coupon.create_coupon(0.20)
+        raise Exception("Not enough points or invalid option")
 
 # ===========================================================================
 # Penalty
@@ -463,6 +556,17 @@ class ServiceIN:
     def status(self):
         return self.__status
     
+    @property
+    def booking_list(self):
+        return self.__booking_list
+    
+    def set_payment(self, payment):
+        self.__payment = payment
+
+    @property
+    def payment(self):
+        return self.__payment
+        
     def set_status(self, status:ServiceStatus):
         self.__status = status
         return True
@@ -473,17 +577,14 @@ class ServiceIN:
                 return booking
         return booking
     
-    def cal_total_price(self, add_price):
-        self.__total_price += add_price
-
     def add_booking(self, booking: Booking):
         self.__booking_list.append(booking)
 
     def remove_booking(self, booking_id: str) -> bool:
-        print(f"\n[Service_IN] remove_booking({booking_id})")
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 self.__booking_list.remove(booking)
+        print(f"\n[Service_IN] remove_booking({booking_id})")
 
     def calculate_total(self):
         for booking in self.__booking_list:
@@ -545,7 +646,7 @@ class ServiceIN:
 # ServiceOUT
 # ===========================================================================
 class ServiceOUT:
-    def __init__(self, booking:Booking):
+    def __init__(self, booking: Booking):
         self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
         self.__booking = booking
         self.__product_list = []
@@ -556,13 +657,22 @@ class ServiceOUT:
     @property
     def id(self):
         return self.__sout_id
-    
+
     @property
     def status(self):
         return self.__status
-    
+
     @property
-    def penalty_list(self): return self.__penalty_list
+    def product_list(self):
+        return self.__product_list
+
+    @property
+    def penalty_list(self):
+        return self.__penalty_list
+
+    @property
+    def total_price(self):
+        return self.__total_price
 
     def add_product(self, product: Products):
         self.__product_list.append(product)
@@ -575,13 +685,6 @@ class ServiceOUT:
         penalty_sum = sum(p.amount for p in self.__penalty_list if p.status == PenaltyStatus.PENDING)
         self.__total_price = product_sum + penalty_sum
         return self.__total_price
-    
-    def to_dict(self):
-        return {
-            "products":    [p.to_dict() for p in self.__product_list],
-            "penalties":   [p.to_dict() for p in self.__penalty_list],
-            "total_price": round(self.__total_price, 2),
-        }
     
 # ===========================================================================
 # POLICY
@@ -1052,29 +1155,64 @@ class PaymentChannel(ABC):
         pass
 
 
-class QrScan(PaymentChannel):
-    def __init__(self):
-        self.qr_image: Optional[str] = None
+class CreditCard(PaymentChannel):
+    MOCK_CARD   = "4111111111111111"
+    MOCK_CVV    = "123"
+    MOCK_EXPIRY = "12/30"
 
-    def generate_qr(self, amount: float, ref: str) -> str:
-        payload = f"Payment completed | REF:{ref} | AMT:{amount:.2f} THB"
-        
-        qr = qrcode.make(payload)
-        qr.save("qr_output.png")
-        print(f"[QrScan] QR saved → qr_output.png")
+    def __init__(self, 
+                 card_number: str = MOCK_CARD, 
+                 cvv: str = MOCK_CVV, 
+                 expiry: str = MOCK_EXPIRY):
+        self.__card_number = card_number
+        self.__cvv         = cvv
+        self.__expiry      = expiry
 
-        buffer = io.BytesIO()
-        qr.save(buffer, format="PNG")
-        self.__qr_image = base64.b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64,{self.__qr_image}"
+    def validate_card(self) -> bool:
+        if not self._luhn_check(self.__card_number):
+            print("[CreditCard] Invalid card number (Luhn check failed)")
+            return False
+        if not re.fullmatch(r"\d{3,4}", self.__cvv):
+            print("[CreditCard] Invalid CVV")
+            return False
+        if not self._check_expiry(self.__expiry):
+            print("[CreditCard] Card expired")
+            return False
+        print(f"[CreditCard] Card *{self.__card_number[-4:]} validated ✓")
+        return True
+
+    @staticmethod
+    def _luhn_check(number: str) -> bool:
+        digits = [int(d) for d in number if d.isdigit()]
+        if len(digits) < 13:
+            return False
+        total = 0
+        for i, d in enumerate(reversed(digits)):
+            total += d if i % 2 == 0 else (d * 2 - 9 if d * 2 > 9 else d * 2)
+        return total % 10 == 0
+
+    @staticmethod
+    def _check_expiry(expiry: str) -> bool:
+        try:
+            month, year = expiry.split("/")
+            exp = datetime(2000 + int(year), int(month), 1)
+            return exp >= datetime.now().replace(day=1)
+        except Exception:
+            return False
 
     def process(self, amount: float, ref: str = "TXN") -> bool:
-        self.generate_qr(amount, ref)
-        print(f"[QrScan] Waiting for scan... Payment {amount:.2f} THB confirmed!")
+        if not self.validate_card():
+            print("[CreditCard] Payment rejected: invalid card")
+            return False
+        print(f"[CreditCard] Charging {amount:.2f} THB to *{self.__card_number[-4:]}... Success!")
         return True
 
     def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool:
-        print(f"[QrScan] Refund {amount:.2f} THB → PromptPay (original TXN: {original_ref}, refund ID: {refund_ref})")
+        if not self.validate_card():
+            print("[CreditCard] Refund rejected: invalid card")
+            return False
+        print(f"[CreditCard] Refund {amount:.2f} THB → *{self.__card_number[-4:]} "
+              f"(original TXN: {original_ref}, refund ID: {refund_ref})")
         return True
 
 
@@ -1156,80 +1294,60 @@ class TransactionRecord:
         return (f"<TXN {self.__txn_id} | {self.__txn_type} | "
                 f"{self.__amount:.2f} THB | {self.__channel_type}{ref} | {self.__timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
 
-        
-
-
-# ===========================================================================
-# COUPON
-# ===========================================================================
-
-class Coupon:
-    EXPIRE_MONTHS = 1
-
-    def __init__(self, coupon_id: str, discount: float, expired_date: datetime):
-        self.__coupon_id    = coupon_id
-        self.__discount      = discount
-        self.__expired_date = expired_date
-
-    @classmethod
-    def create_coupon(cls, discount: float) -> "Coupon":
-        expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
-        date_part = expired_date.strftime("%y%m%d")
-        coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
-        print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
-        return cls(coupon_id, discount, expired_date)
-
-    def get_coupon_id(self) -> str:
-        return self.__coupon_id
-
-    def get_discount(self) -> float:
-        return self.__discount 
-
-    def get_expired_date(self) -> datetime:
-        return self.__expired_date
-
-    def is_expired(self) -> bool:
-        return datetime.now() > self.__expired_date
     
-
 
 # ===========================================================================
 # PAYMENT SERVICEIN
 # ===========================================================================
 class PaymentServiceIn:
-    def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
-        self.__servicein_id  = service_in_id
-        self.__username = username
-        self.__total_price    = total_price
-        self.__channel        = channel
-        self.__is_success     = False
-        self.__refund_amount  = 0.0
+    def __init__(self, service_in_id: str, customer, total_price: float, channel: PaymentChannel, coupon: Coupon = None):
+        self.__servicein_id         = service_in_id
+        self.__customer             = customer
+        self.__channel              = channel
+        self.__is_success           = False
+        self.__refund_amount        = 0.0
         self.__transaction_history: list[TransactionRecord] = []
+        self.__final_price          = self.__apply_discount(total_price, coupon)
 
-    def process_payment(self, final_price: float) -> bool:
+    def __apply_discount(self, total_price: float, coupon: Coupon = None) -> float:
+        membership_discount = total_price * self.__customer.membership.discount
+        final = total_price - membership_discount
+        print(f"[Payment] Membership discount: {membership_discount:.2f} THB ({self.__customer.membership.value})")
+
+        if coupon:
+            if coupon.is_expired():
+                print(f"[Payment] Coupon {coupon.id} is expired")
+            elif coupon.used:
+                print(f"[Payment] Coupon {coupon.id} has already been used")
+            else:
+                coupon_discount = coupon.get_discount() * total_price
+                final -= coupon_discount
+                coupon.mark_used()
+                print(f"[Payment] Coupon discount: {coupon.get_discount()*100:.0f}% → {coupon_discount:.2f} THB")
+
+        print(f"[Payment] Final price after discount: {final:.2f} THB")
+        return final
+
+    def process_payment(self) -> bool:
         self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
         print(f"[Payment] Gen Transaction ID: {self.__transaction_id}")
-        self.__is_success = self.__channel.process(final_price, ref=self.__transaction_id)
+        self.__is_success = self.__channel.process(self.__final_price, ref=self.__transaction_id)
 
         if self.__is_success:
             record = TransactionRecord(
                 txn_id        = self.__transaction_id,
                 service_in_id = self.__servicein_id,
                 txn_type      = TXNType.CHARGE,
-                amount        = final_price,
+                amount        = self.__final_price,
                 channel_type  = type(self.__channel).__name__,
             )
             self.__transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
 
-            self._send_confirm(self.__username)
-
-        noti = Notification(self.__username)
+        noti = Notification(self.__customer.username)
         noti.noti_send("Payment Successful!")
         return self.__is_success
 
-
-    #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
         refunded_ids = {r.ref_txn_id for r in self.__transaction_history if r.txn_type == TXNType.REFUND}
 
@@ -1846,30 +1964,169 @@ class RhythmReserve():
         service.total_price = booking.price
         return service
     
-    def pay_service_in(self, customer_id, service_in_id, channel):
+
+    def pay_service_in(self, customer_id, reserve_id, channel, coupon_id=None):
         customer = self.get_customer_by_id(customer_id)
-        service_in = customer.get_reserve(service_in_id)
+        service_in = customer.get_reserve(reserve_id)
         
-        if service_in.total_price == 0:
-            self.calculate_service_in_price(customer_id, service_in_id)
+        coupon = None
+        if coupon_id:
+            coupon = customer.get_coupon(coupon_id)
         
-        payment = PaymentServiceIn(service_in.total_price, channel)
+        total = service_in.calculate_total()
+        payment = PaymentServiceIn(reserve_id, customer, total, channel, coupon)
+        
         if payment.process_payment():
-            service_in.status = ServiceStatus.PAID
+            service_in.set_status(ServiceStatus.PAID)
+            service_in.set_payment(payment)
+            for booking in service_in.booking_list:
+                booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
+                for eq in booking.eq_list:
+                    eq.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
+            
+            self._auto_redeem_coupon(customer)
+            
             return service_in
         
         raise Exception("Payment failed")
 
 
+    def _auto_redeem_coupon(self, customer):
+        try:
+            if isinstance(customer, Diamond):
+                if customer.points >= 40:
+                    coupon = customer.redeem_coupon(40)
+                elif customer.points >= 30:
+                    coupon = customer.redeem_coupon(30)
+                elif customer.points >= 20:
+                    coupon = customer.redeem_coupon(20)
+                else:
+                    return
+            elif isinstance(customer, Premium):
+                if customer.points >= 30:
+                    coupon = customer.redeem_coupon(30)
+                elif customer.points >= 20:
+                    coupon = customer.redeem_coupon(20)
+                else:
+                    return
+            elif isinstance(customer, Standard):
+                if customer.points >= 20:
+                    coupon = customer.redeem_coupon()
+                else:
+                    return
+            
+            customer.add_coupon(coupon)
+            print(f"[Coupon] Auto redeemed: {coupon.id}")
+        
+        except Exception as e:
+            print(f"[Coupon] Auto redeem failed: {e}")
     
-    def search_custoemr(self,customer_id):
-        for customer in self.__customer_list:
-            if customer.id == customer_id:
-                return customer
-        return None
+    def get_my_coupons(self, customer_id):
+        customer = self.get_customer_by_id(customer_id)
+        return customer.get_coupon_list()
+    
+    def get_available_products(self, branch_id):
+        branch = self.get_branch_by_id(branch_id)
+        summary = []
+        for stock in branch.stock_product:
+            count = len(stock.get_stock)
+            if count > 0:
+                line = f"{stock.type.value}: {count}"
+                summary.append(line)
+        return summary
+    
+    def add_product_to_service_out(self, branch_id, customer_id, reserve_id, booking_id, product_type: ProductType, amount: int):
+        branch = self.get_branch_by_id(branch_id)
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
+
+        stock = None
+        for s in branch.stock_product:
+            if s.type == product_type:
+                stock = s
+                break
+
+        if stock is None:
+            raise Exception(f"Product type {product_type.value} not found")
+
+        if len(stock.get_stock) < amount:
+            raise Exception(f"Not enough stock: only {len(stock.get_stock)} {product_type.value} left")
+
+        for i in range(amount):
+            product = stock.get_stock[0]
+            service_out.add_product(product)
+            stock.del_stock(product.id)
+
+        return {
+            "sout_id": service_out.id,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "total_price": service_out.calculate_total_price()
+        }
+
+    def get_service_out_summary(self, customer_id, reserve_id, booking_id):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
+
+        return {
+            "sout_id": service_out.id,
+            "status": service_out.status.value,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "penalties": [f"{p.amount} THB" for p in service_out.penalty_list],
+            "total_price": service_out.total_price
+        }
+    
+    def pay_service_out(self, customer_id, reserve_id, booking_id, channel,
+                    is_room_damaged: bool = False, room_damage_cost: float = 0.0,
+                    damaged_eq_ids: list = []):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
+
+        actual_time = datetime.now()
+        expected_time = datetime.combine(booking.day, booking.end)
+
+        branch = self.get_branch_by_id(booking.room.branch_id)
+        staff = Staff(branch)
+        report = self.get_daily_report(booking.day)
+
+        payment_sout = staff.customer_check_out(
+            service_out, actual_time, expected_time,
+            self.policy, booking, report, channel,
+            is_room_damaged, room_damage_cost, damaged_eq_ids
+        )
+        booking.set_payment_sout(payment_sout)
+        return {
+            "sout_id": service_out.id,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "penalties": [f"{p.amount} THB" for p in service_out.penalty_list],
+            "total_price": payment_sout.total_price
+        }
+    
+    def confirm_pay_service_out(self, customer_id, reserve_id, booking_id):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+
+        branch = self.get_branch_by_id(booking.room.branch_id)
+        staff = Staff(branch)
+        report = self.get_daily_report(booking.day)
+
+        payment_sout = booking.payment_sout
+        result = staff.confirm_checkout(payment_sout, report)
+
+        customer.add_points(booking.duration)
+        reserve.set_status(ServiceStatus.COMPLETED)
+        return result
+
+
 
     def cancel_booking(self,customer_id,servicein_id,booking_id):
-        customer = self.search_custoemr(customer_id)
+        customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
