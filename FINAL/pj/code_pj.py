@@ -1106,6 +1106,10 @@ class ServiceIN:
                 refund_success = self.__payment.payment_refund(refund_amount,original_txn_id)
 
                 if refund_success:
+                    set_status= booking.booking_cancel()
+                    if set_status :
+                        return True
+        return False
     
 
 # ===========================================================================
@@ -1612,7 +1616,11 @@ class RhythmReserve():
         if service_in != ServiceStatus.PENDING:
             raise Exception("Cannot refund: Service not paid yet")\
             
-        cancel = service_in.cancel(booking_id)
+        cancel = service_in.cancel_b(booking_id)
+
+        if cancel:
+            return "Cancel Booking Successfully"
+        raise Exception("Can't Cancle This Booking")
         
 
   
