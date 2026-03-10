@@ -123,7 +123,6 @@ class CheckoutRequest(BaseModel):
     is_room_damaged:       bool                  = False
     room_damage_cost:      float                 = 0.0
     damaged_eq_ids:        List[str]             = []
-    eq_damage_cost:        float                 = 0.0
     manual_penalty_type:   Optional[PenaltyType] = None
     manual_penalty_amount: float                 = 0.0
     manual_penalty_reason: str                   = ""
@@ -227,7 +226,6 @@ def api_checkout(req: CheckoutRequest):
         is_room_damaged  = req.is_room_damaged,
         room_damage_cost = req.room_damage_cost,
         damaged_eq_ids   = req.damaged_eq_ids,
-        eq_damage_cost   = req.eq_damage_cost,
     )
 
     return {"message": "CHECK-OUT SUCCESSFULLY!", "receipt": receipt}

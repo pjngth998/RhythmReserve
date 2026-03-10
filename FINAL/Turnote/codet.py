@@ -356,6 +356,24 @@ class Branch:
 
 
 # ===========================================================================
+# PENALTY SUMMARY  (ใช้ใน DailyReport แทน dict)
+# ===========================================================================
+
+class PenaltySummary:
+    def __init__(self, type_: str, amount: float):
+        self.type  = type_
+        self.total = round(amount, 2)
+        self.count = 1
+
+    def add(self, amount: float):
+        self.total = round(self.total + amount, 2)
+        self.count += 1
+
+    def to_dict(self):
+        return {"type": self.type, "total": self.total, "count": self.count}
+
+
+# ===========================================================================
 # DAILY REPORT
 # ===========================================================================
 
@@ -377,18 +395,17 @@ class DailyReport:
         self.__bookings.append(booking)
 
     def generate_report_data(self) -> dict:
-        # สรุปค่าปรับแยกตามประเภท — ใช้ list แทน dict ตามกฎ
-        summary: List[dict] = []
+        # สรุปค่าปรับแยกตามประเภท — ใช้ PenaltySummary class แทน dict
+        summary: List[PenaltySummary] = []
         for p in self.__penalties:
             found = False
             for s in summary:
-                if s["type"] == p.type.value:
-                    s["total"] = round(s["total"] + p.amount, 2)
-                    s["count"] += 1
+                if s.type == p.type.value:
+                    s.add(p.amount)
                     found = True
                     break
             if not found:
-                summary.append({"type": p.type.value, "total": p.amount, "count": 1})
+                summary.append(PenaltySummary(p.type.value, p.amount))
 
         return {
             "date":              self.__date,
@@ -397,7 +414,7 @@ class DailyReport:
             "total_bookings":    len(self.__bookings),
             "total_revenue":     round(self.__total_revenue, 2),
             "penalties_count":   len(self.__penalties),
-            "penalty_breakdown": summary,
+            "penalty_breakdown": [s.to_dict() for s in summary],
             "penalties":         [p.to_dict() for p in self.__penalties],
             "bookings":          [b.to_dict() for b in self.__bookings],
         }
@@ -427,12 +444,11 @@ class Staff:
         is_room_damaged:  bool      = False,
         room_damage_cost: float     = 0.0,
         damaged_eq_ids:   List[str] = None,
-        eq_damage_cost:   float     = 0.0,
     ) -> dict:
         if damaged_eq_ids is None:
             damaged_eq_ids = []
 
-        # 1. late checkout — ✅ ใช้ room_rate ของห้องนั้นเลย
+        # 1. late checkout — ใช้ room_rate ของห้องนั้นเลย
         late_pen = policy.check_late_checkout(
             actual_time, expected_time, booking.id, booking.room_rate
         )
@@ -449,15 +465,17 @@ class Staff:
                 service_out.add_penalty(r_pen)
                 report.add_penalty(r_pen)
 
-        # 3. ความเสียหายอุปกรณ์
-        if eq_damage_cost > 0:
-            desc = f"Equipment damage ฿{eq_damage_cost}"
-            if damaged_eq_ids:
-                desc += f" ({', '.join(damaged_eq_ids)})"
-            e_pen = policy.check_damage_penalty(booking.id, eq_damage_cost, desc)
-            if e_pen:
-                service_out.add_penalty(e_pen)
-                report.add_penalty(e_pen)
+        # 3. ความเสียหายอุปกรณ์ — ปรับตาม eq.price ของแต่ละชิ้นที่เสียหาย
+        for eq in booking.eq_list:
+            if eq.id in damaged_eq_ids:
+                e_pen = policy.check_damage_penalty(
+                    booking.id,
+                    eq.price,
+                    f"Equipment damage: {eq.type_} ({eq.id}) ฿{eq.price}"
+                )
+                if e_pen:
+                    service_out.add_penalty(e_pen)
+                    report.add_penalty(e_pen)
 
         # 4. คำนวณยอดรวม + เปลี่ยนสถานะ penalty → APPLIED
         total = service_out.calculate_total_price()
