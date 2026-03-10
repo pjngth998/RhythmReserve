@@ -2,170 +2,207 @@
 left to right direction
 skinparam packageStyle rectangle
 skinparam actorStyle awesome
+skinparam backgroundColor #FEFEFE
 
-actor User
-actor Customer as C
-actor Staff as S
+skinparam usecase {
+  BackgroundColor #FFFDE7
+  BorderColor     #E6AC00
+  FontSize        12
+}
+skinparam actor {
+  BackgroundColor #E8F5E9
+  BorderColor     #2E7D32
+  FontSize        13
+}
+skinparam ArrowColor #555555
+skinparam NoteBackgroundColor #F3E5F5
+skinparam NoteBorderColor     #9C27B0
+
+' ─── Actors ───────────────────────────────────────────────
+actor  Customer        as C
+actor  Staff           as S
 actor "Payment System" as Pay
 
-User <|-- Customer
-User <|-- Staff
-
+' ═══════════════════════════════════════════════════════════
 rectangle "RhythmReserve System" {
 
+  ' ── 1. Account Management ─────────────────────────────
   package "Account Management" {
-    (Register Account) #LightYellow
-    C -- (Register Account)
 
-    (Login) #LightYellow
-    C -- (Login)
+    usecase "Register Account"    as REG  #LightYellow
+    usecase "Pay Registration Fee" as PRF  #LightBlue
+    usecase "Login"               as LGN  #LightYellow
+    usecase "Logout"              as LGT  #LightYellow
+    usecase "Manage Profile\n(email / phone / address)" as MP  #LightYellow
+    usecase "Change Password"     as CHPW #LightYellow
+    usecase "View Notifications"  as VN   #LightYellow
 
-    (Logout) #LightYellow
-    C -- (Logout) 
+    C -- REG
+    C -- LGN
+    C -- LGT
+    C -- MP
+    C -- CHPW
+    C -- VN
 
-    (Manage Profile) #LightYellow
-    C -- (Manage Profile)
-
-    (Change Password) #LightYellow
-    (Manage Profile) #LightYellow
-    (Change Password) ..> (Manage Profile) : <<extend>>
-
-    (View Notifications) #LightYellow
-    C -- (View Notifications)
-
+    REG  ..> PRF  : <<include>>\n[Premium / Diamond]
+    CHPW ..> MP   : <<extend>>
   }
 
-  package "Room Reservation (Service_IN)" {
-    (Search Available Rooms) #LightYellow
-    C -- (Search Available Rooms)
+  ' ── 2. Room & Equipment Search ────────────────────────
+  package "Room & Equipment Search" {
 
-    (Search Available Rooms) #LightYellow
-    (Filter by Date and Time) #LightYellow
-    (Search Available Rooms) ..> (Filter by Date and Time) : <<include>>
+    usecase "Search Available Room Slots"  as SAR #LightYellow
+    usecase "Filter by Date and Time"      as FDT #LightYellow
+    usecase "Filter by Room Size"          as FRS #LightYellow
+    usecase "Search Available Equipment"   as SAE #LightYellow
 
-    (Search Available Rooms)#LightYellow
-   (Filter by Room Size) #LightYellow
-    (Search Available Rooms) ..> (Filter by Room Size) : <<include>>
+    C -- SAR
+    C -- SAE
 
-    (Create Reservation) #LightBlue
-    C -- (Create Reservation)
-
-    (Create Reservation) #LightBlue
-    (Select Room) #LightYellow
-    (Create Reservation) ..> (Select Room) : <<include>>
-
-    (Create Reservation) #LightBlue
-    (Select Time Slot) #LightYellow
-    (Create Reservation) ..> (Select Time Slot) : <<include>>
-
-    (Create Reservation) #LightBlue
-    (Add Equipment) #LightYellow
-    (Create Reservation) ..> (Add Equipment) : <<include>>
-
-    (Create Reservation) #LightBlue
-   (Calculate Booking Price) #LightYellow
-    (Create Reservation) ..> (Calculate Booking Price) : <<include>>
-
-    (View Reservation Summary) #LightYellow
-    C -- (View Reservation Summary)
-
-    (Apply Coupon) #LightYellow
-    (View Reservation Summary) #LightYellow
-    (Apply Coupon) ..> (View Reservation Summary) : <<extend>>
-
-    (Checkout Reservation) #LightBlue
-    (Process Payment) #LightBlue
-    C -- (Checkout Reservation)
-    (Checkout Reservation) ..> (Process Payment) : <<include>>
-
-    (Cancel Reservation) #LightBlue
-    C -- (Cancel Reservation)
-    (Check Cancellation Policy) #LightYellow
-    (Cancel Reservation) ..> (Check Cancellation Policy) : <<include>>
-
-    (Refund Payment) #LightBlue
-    (Cancel Reservation) #LightBlue
-    (Refund Payment) ..> (Cancel Reservation) : <<extend>>
-
+    SAR ..> FDT : <<include>>
+    SAR ..> FRS : <<include>>
+    SAE ..> FDT : <<include>>
   }
 
-  package "Snacks and Penalty (Service_OUT)" {
+  ' ── 3. Room Reservation (Service_IN) ─────────────────
+  package "Room Reservation  (Service_IN)" {
 
-    (Browse Snacks and Drinks) #LightYellow
-    C -- (Browse Snacks and Drinks)
+    usecase "Create Reservation\n(Service_IN)"   as CR  #LightBlue
+    usecase "Select Available Room"              as SR  #LightYellow
+    usecase "Select Time Slot"                   as STS #LightYellow
+    usecase "Add Equipment to Booking"           as AEQ #LightYellow
+    usecase "Check Equipment Quota"              as CEQ #LightYellow
+    usecase "Calculate Booking Price\n(room rate × duration + eq rate)" as CBP #LightYellow
 
-    (Buy Snacks and Drinks) #LightBlue
-    C -- (Buy Snacks and Drinks)
-    (Select Items) #LightYellow
-    (Process Payment) #LightBlue
-    (Buy Snacks and Drinks) ..> (Select Items) : <<include>>
-    (Buy Snacks and Drinks) ..> (Process Payment) : <<include>>
+    usecase "Add Booking to Existing Service"    as ABS #LightBlue
 
-    (View Penalties) #LightYellow
-    C -- (View Penalties)
-    (Pay Penalty) #LightBlue
-    C -- (Pay Penalty)
+    usecase "View Reservation Summary"           as VRS #LightYellow
+    usecase "Apply Coupon Discount"              as ACD #LightYellow
 
-    (Pay Penalty)#LightBlue
-    (Process Payment) #LightBlue
-    (Pay Penalty) ..> (Process Payment) : <<include>>
+    usecase "Checkout Reservation"               as CHK #LightBlue
+    usecase "Apply Tier Discount\n(STD 0% / PRM 3% / DMN 5%)" as ATD #LightYellow
+    usecase "Process Payment"                    as PP  #LightBlue
 
+    usecase "Cancel Booking"                     as CB  #LightBlue
+    usecase "Check Cancellation Policy\n(STD 24h / PRM 12h / DMN 6h)" as CCP #LightYellow
+    usecase "Calculate Proportional Refund"      as CPR #LightYellow
+    usecase "Refund Payment"                     as RP  #LightBlue
+
+    C -- CR
+    C -- ABS
+    C -- VRS
+    C -- CHK
+    C -- CB
+
+    CR  ..> SR  : <<include>>
+    CR  ..> STS : <<include>>
+    CR  ..> AEQ : <<include>>
+    CR  ..> CEQ : <<include>>
+    CR  ..> CBP : <<include>>
+
+    ABS ..> SR  : <<include>>
+    ABS ..> STS : <<include>>
+    ABS ..> AEQ : <<include>>
+    ABS ..> CEQ : <<include>>
+
+    ACD ..> VRS : <<extend>>
+
+    CHK ..> ATD : <<include>>
+    ACD ..> CHK : <<extend>>
+    CHK ..> PP  : <<include>>
+
+    CB  ..> CCP : <<include>>
+    CB  ..> CPR : <<include>>
+    RP  ..> CB  : <<extend>>
+    RP  ..> PP  : <<include>>
   }
 
+  ' ── 4. Service_OUT  (Snacks & Penalty) ───────────────
+  package "Service_OUT\n(Snacks & Penalty)" {
+
+    usecase "Browse Snacks and Drinks"  as BSD #LightYellow
+    usecase "Buy Snacks and Drinks"     as BUY #LightBlue
+    usecase "Select Items"              as SI  #LightYellow
+
+    usecase "View Penalties"            as VP  #LightYellow
+    usecase "Pay Penalty"               as PAP #LightBlue
+
+    C -- BSD
+    C -- BUY
+    C -- VP
+    C -- PAP
+
+    BUY ..> SI  : <<include>>
+    BUY ..> PP  : <<include>>
+    PAP ..> PP  : <<include>>
+  }
+
+  ' ── 5. Support ────────────────────────────────────────
   package "Support" {
-
-    (Report Room or Equipment Issue) #LightYellow
-    C -- (Report Room or Equipment Issue)
-
+    usecase "Report Room or\nEquipment Issue" as RI #LightYellow
+    C -- RI
   }
 
+  ' ── 6. Staff Operations ───────────────────────────────
   package "Staff Operations" {
 
-    (Staff Login) #LightYellow
-    S -- (Staff Login)
+    usecase "Staff Login"             as SL  #LightYellow
+    usecase "View Booking Schedule"   as VBS #LightYellow
 
-    (View Booking Schedule) #LightYellow
-    S -- (View Booking Schedule)
+    usecase "Customer Check-in"       as CCI #LightBlue
+    usecase "Verify Reservation"      as VR  #LightYellow
+    usecase "Update Room/EQ Status"   as URS #LightYellow
 
-    (Customer Check-in) #LightBlue
-    S -- (Customer Check-in)
+    usecase "Customer Check-out"      as CCO #LightBlue
+    usecase "Check Late Checkout\n(grace 15 min → LATE penalty)" as CLC #LightYellow
+    usecase "Record Damage"           as RD  #LightBlue
+    usecase "Create Penalty\n(LATE / DAMAGE / CANCEL_LATE / NO_SHOW)" as CPN #LightBlue
+    usecase "Set to Maintenance"      as STM #LightYellow
+    usecase "Confirm Checkout\n& Collect Payment" as CCP2 #LightYellow
+    usecase "Update Daily Report"     as UDR #LightYellow
 
-    (Verify Reservation)  #LightYellow
-    (Update Room Status) #LightYellow
-    (Customer Check-in) ..> (Verify Reservation) : <<include>>
-    (Customer Check-in) ..> (Update Room Status) : <<include>>
+    usecase "Generate Daily Report"   as GDR #LightYellow
+    usecase "View Penalty Breakdown"  as VPB #LightYellow
 
-    (Customer Check-out)#LightBlue
-    S -- (Customer Check-out)
-    (Customer Check-out) #LightBlue
-    (Update Room Status) #LightYellow
-    (Customer Check-out) ..> (Update Room Status) : <<include>>
+    usecase "Manage Rooms"      as MR   #LightYellow
+    usecase "Manage Equipment"  as ME   #LightYellow
+    usecase "Manage Products"   as MPR  #LightYellow
+    usecase "Manage Pricing"    as MPRC #LightYellow
+    usecase "Manage Coupons"    as MC   #LightYellow
+    usecase "Manage Policies"   as MPOL #LightYellow
 
-    (Record Damage)#LightBlue
-    (Customer Check-out) #LightBlue
-    (Record Damage) ..> (Customer Check-out) : <<extend>>
-    (Create Penalty) #LightBlue
-    (Record Damage) #LightBlue
-    (Create Penalty) ..> (Record Damage) : <<include>>
+    S -- SL
+    S -- VBS
+    S -- CCI
+    S -- CCO
+    S -- CCP2
+    S -- GDR
+    S -- MR
+    S -- ME
+    S -- MPR
+    S -- MPRC
+    S -- MC
+    S -- MPOL
 
-    (Manage Rooms) #LightYellow
-    (Manage Equipment) #LightYellow
-    (Manage Products) #LightYellow
-    (Manage Pricing) #LightYellow
-    (Manage Coupons) #LightYellow
-    (Manage Policies) #LightYellow
-    S -- (Manage Rooms)
-    S -- (Manage Equipment)
-    S -- (Manage Products)
-    S -- (Manage Pricing)
-    S -- (Manage Coupons)
-    S -- (Manage Policies)
+    CCI  ..> VR  : <<include>>
+    CCI  ..> URS : <<include>>
 
+    CCO  ..> URS : <<include>>
+    CCO  ..> CLC : <<include>>
+    RD   ..> CCO : <<extend>>
+    RD   ..> CPN : <<include>>
+    RD   ..> STM : <<include>>
+
+    CCP2 ..> PP  : <<include>>
+    CCP2 ..> UDR : <<include>>
+
+    GDR  ..> VPB : <<include>>
   }
 
-  (Process Payment) #LightBlue
-  (Process Payment) --> Pay
-
+  ' ── Payment System connection ─────────────────────────
+  PP  --> Pay
+  PRF --> Pay
+  RP  --> Pay
 }
 
 @enduml

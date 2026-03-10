@@ -1,0 +1,112 @@
+@startuml
+autoactivate on
+
+actor "Customer" as Program
+participant "ReserveSystem\n(Controller)" as System
+participant "Customer\n(Standard / Premium / Diamond)" as Customer
+participant "Service_IN" as ServiceIN
+participant "Booking" as Booking
+participant "Room" as Room
+participant "Equipment" as Equipment
+participant "Coupon" as Coupon
+
+title View Service_IN Summary (Before Checkout)
+
+Program -> System : view_service_in_summary(customer_id, service_in_id)
+activate System
+
+    loop [search customer_id]
+        System -> Customer : get_id()
+        Customer --> System : return {customer_id}
+    end
+
+    alt [Customer Not Found]
+        System --> Program : return "Error: Customer Not Found"
+    end
+
+    alt [Customer Match Found]
+
+        System -> Customer : get_service_in(service_in_id)
+
+            loop [search service_in_id]
+                Customer -> Customer : match service_in_id
+            end
+
+        Customer --> System : return {Service_IN}
+
+        alt [Service_IN Not Found]
+            System --> Program : return "Error: Service_IN Not Found"
+        end
+
+        System -> ServiceIN : calculate_total()
+            loop [for booking in booking_list]
+                ServiceIN -> Booking : get price()
+                Booking --> ServiceIN : return {price: float}
+            end
+        ServiceIN --> System : return {total_price: float}
+
+        System -> Customer : get_tier_discount()
+        Customer --> System : return {tier_discount: float}
+
+        System -> System : preview_discounted_price(total_price, tier_discount)
+        System --> System : return {discounted_price: float}
+        note right
+            preview only
+        end note
+
+        System -> ServiceIN : get booking_list
+        ServiceIN --> System : return {booking_list: list[Booking]}
+
+        loop [for booking in booking_list]
+
+            System -> Booking : get room, eq_list, day, start, end
+                Booking -> Room : get id(), size(), rate()
+                Room --> Booking : return {room_id, size, rate}
+                loop [for eq in eq_list]
+                    Booking -> Equipment : get id(), type_(), price()
+                    Equipment --> Booking : return {eq_id, eq_type, eq_price}
+                end
+            Booking --> System : return {booking_detail}
+
+        end
+
+        System -> Customer : coupon_list
+        Customer --> System : return {coupon_list: list[Coupon]}
+
+        loop [for coupon in coupon_list]
+            System -> Coupon : is_expired()
+            Coupon --> System : return {is_expired: bool}
+
+            alt [not expired]
+                System -> Coupon : get_coupon_id(), get_discount(), get_expired_date()
+                Coupon --> System : return {coupon_id, discount, expired_date}
+            end
+        end
+
+        System --> Program : return summary
+        note right of Program
+            {
+                service_in_id,
+                status,
+                booking_list: [
+                    {
+                        booking_id,
+                        room_id, room_size, room_rate,
+                        equipment_list: [{eq_id, eq_type}],
+                        date, start_time, end_time
+                    }
+                ],
+                total_price,
+                tier_discount,
+                discounted_price (preview),
+                available_coupons: [{coupon_id, discount, expired_date}]
+            }
+
+        end note 
+            
+
+    end
+
+deactivate System
+
+@enduml
