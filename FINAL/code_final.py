@@ -92,6 +92,7 @@ class PaymentChannelType(Enum):
     CREDITCARD = "Cr"
 
 class TXNType(Enum):
+    REGISTER = "REGISTER"
     CHARGE = "CHARGE"
     REFUND = "REFUND"
     PENALTY = "PENALTY"
@@ -211,6 +212,9 @@ class Customer(User) :
     def get_cancellation_limit_hours(self):
         pass
 
+# ===========================================================================
+# PendingCustomer
+# ===========================================================================
 class PendingCustomer():
     def __init__(self, name, username, password, email, phone, birthday, membership):
         self.__name = name
@@ -238,14 +242,6 @@ class PendingCustomer():
     def membership(self):
         return self.__membership
 
-class Standard(Customer):
-    pass
-    
-class Premium(Customer):
-    pass
-
-class Diamond(Customer):
-    pass
 
 # ===========================================================================
 # Member
@@ -271,7 +267,7 @@ class Diamond(Customer):
     def get_tier_discount(self) -> float:          return 0.05
     def get_points_per_hr(self) -> int:            return 8
 
-    # ===========================================================================
+# ===========================================================================
 # Penalty
 # ===========================================================================
 class Penalty:
@@ -407,65 +403,6 @@ class DailyReport:
         }
  
     
-# ===========================================================================
-# Booking
-# ===========================================================================
-
-class Booking():
-    def __init__(self, branch_name, room, eq_list, customer, timeslot):
-        self.__id = f"BK-{branch_name}-{str(uuid.uuid4())[:8]}"
-        self.__room = room
-        self.__eq_list = eq_list
-        self.__customer = customer
-        self.__timeslot: TimeSlot = timeslot
-        self.__price = 0.0
-        self.__duration = timeslot.duration
-
-    @property
-    def id(self):
-        return self.__id
-    
-    @property
-    def room(self):
-        return self.__room
-    
-    @property
-    def day(self):
-        return self.__timeslot.date
-    
-    @property
-    def start(self):
-        return self.__timeslot.start
-    
-    @property
-    def end(self):
-        return self.__timeslot.end
-    
-    @property
-    def eq_list(self):
-        return self.__eq_list
-    
-    @property
-    def price(self):
-        return self.__price
-    
-    def calculate_price(self):
-        room_price = self.__room.rate * self.__duration
-        eq_price = 0
-        for eq in self.__eq_list:
-            eq_price += eq.rate
-        self.__price = room_price + eq_price
-
-    def booking_cancel(self):
-        set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
-
-        for eq in self.__eq_list:
-            set_eq_success =  eq.timeslot.set_status(TimeSlotStatus.AVAILABLE)
-
-        if set_room_success and set_eq_success:
-            return True
-        return False
-
    
 # ===========================================================================
 # Product
@@ -525,7 +462,6 @@ class ServiceIN:
                 return booking
         return booking
     
-    # @total_price.setter
     def cal_total_price(self, add_price):
         self.__total_price += add_price
 
@@ -789,33 +725,28 @@ class Branch():
         self.__stock_equipment_list.append(new_stock)
 
     def get_eq_by_id(self, eq_id):
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        return eq
-    
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:
+                if eq.id == eq_id:
+                    return eq
+        return None
+
     def get_eq_stock_by_id(self, eq_id):
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        return st
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:
+                if eq.id == eq_id:
+                    return stock
+        return None
                         
 
     def check_can_reserve(self, eq_id, day, s_time, e_time):
-        stock = None
-        for stock_eq in self.__stock_equipment_list:
-            for st in stock_eq:
-                for eq in st:
-                    if eq.id == eq_id:
-                        stock = st
-        c_stock = stock.check_stock(eq_id)
-        if c_stock:
-            verify = stock.verify_available(eq_id, day, s_time, e_time)
-            if verify:
-                return True
-            return False
+        for stock in self.__stock_equipment_list:
+            for eq in stock.equipment:  
+                if eq.id == eq_id:
+                    c_stock = stock.check_stock(eq_id)
+                    if c_stock:
+                        return stock.verify_available(eq_id, day, s_time, e_time)
+        return False
         
     def get_size_eq(self, eq_id):
         eq = self.get_eq_by_id(eq_id)
@@ -910,6 +841,10 @@ class Room():
     def rate(self):
         return self.__rate
     
+    @property
+    def quota(self):
+        return self.__equipment_quota
+    
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
     
@@ -955,6 +890,11 @@ class Equipment():
     def add_timeslot(self, new_timeslot):
         self.__time_slot.append(new_timeslot)
 
+    def check_status(self, day, s_time, e_time):
+        for timeslot in self.__time_slot:
+            if timeslot.date == day and timeslot.start == s_time and timeslot.end == e_time:
+                return timeslot.get_status()
+        return RoomEquipmentStatus.AVAILABLE
     
 # ===========================================================================
 # StockEquipment
@@ -1005,8 +945,9 @@ class StockEquipment:
     
     def verify_available(self, eq_id, day, s_time, e_time):
         eq = self.get_eq(eq_id)
-        status = eq.check_status(day,s_time,e_time)
-
+        if eq is None:
+            return False
+        status = eq.check_status(day, s_time, e_time)
         if status == RoomEquipmentStatus.AVAILABLE:
             return True
         return False
@@ -1408,13 +1349,27 @@ class PaymentRegister():
         self.__cost = self.__member.price
         self.__channel = channel
         self.__is_success = False
+        self.__transaction_history = []
 
+    def process_payment(self) :
+        self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        print(f"[Payment] Gen Transaction ID: {self.__transaction_id}")
+        self.__is_success = self.__channel.process(self.__cost, ref=self.__transaction_id)
 
-    def process_payment(self) -> bool:
-        self.__is_success = True
+        if self.__is_success:
+            record = TransactionRecord(
+                txn_id        = self.__transaction_id,
+                service_in_id = self.__servicein_id,
+                txn_type      = TXNType.REGISTER,
+                amount        = self.__cost,
+                channel_type  = type(self.__channel).__name__,
+            )
+            self.__transaction_history.append(record)
+            print(f"[Payment] Recorded: {record}")
 
-        print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
-        return self.__is_success
+            print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
+            return self.__is_success
+        raise Exception("Process Payment Failed")
 
 # ===========================================================================
 # PENALTY SUMMARY (ใช้ใน DailyReport แทน dict)
@@ -1452,7 +1407,7 @@ class RhythmReserve():
             raise Exception("Have Account Already")
         
         if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
             self.add_customer_ls(customer)
             return customer
     
@@ -1482,9 +1437,9 @@ class RhythmReserve():
         
         match pending.membership:
             case Membership.PREMIUM:
-                customer = Premium(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
             case Membership.DIAMOND:
-                customer = Diamond(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
+                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
 
         self.__pending_register.remove(pending)
         self.add_customer_ls(customer)
@@ -1563,7 +1518,7 @@ class RhythmReserve():
                 return branch
         return None
 
-    def check_selected_eq(self, customer_id, branch_id, room_id, stock_id, day, s_time, e_time, eq_list):
+    def check_selected_eq(self, customer_id, branch_id, room_id, day, s_time, e_time, eq_list):
         customer = self.search_customer(customer_id)
         customer_info = customer.get_customer_info(customer_id)
         
@@ -1571,8 +1526,9 @@ class RhythmReserve():
         if not branch:
             return "Branch Not Found"
 
-        max_quota = branch.get_room_quota(room_id)
-        room = branch.search_room(room_id)
+        room = self.get_room_by_id(room_id)
+        max_quota = room.quota
+
         if not room: 
             return "Room Not Found"
         # max_quota = room.get_eq_quota(room_id)
@@ -1590,9 +1546,7 @@ class RhythmReserve():
             
         total_requested_size = 0
         for eq_id in eq_list:
-            stock =  branch.stock
-            size = stock.get_size_eq(eq_id)
-
+            size = branch.get_size_eq(eq_id)
             total_requested_size += size
 
         if total_requested_size <= max_quota:
@@ -1809,20 +1763,21 @@ class RhythmReserve():
 
 
     def _has_conflict(self, room, start, end):
-     
         for slot in room.timeslot:
             if slot.status == TimeSlotStatus.AVAILABLE:
                 continue
 
-            buffered_end = slot.end + BUFFER
-            if start < buffered_end and slot.start < end:
+            slot_start = datetime.combine(date.today(), slot.start)
+            slot_end = datetime.combine(date.today(), slot.end) + BUFFER
+
+            if start < slot_end and slot_start < end:
                 return True
 
         return False
     
     def get_available_room(self, branch, size, start_time, end_time):
         for rm in branch.room:
-            if not self._has_conflict(rm, start_time, end_time):
+            if rm.sizeII == size and not self._has_conflict(rm, start_time, end_time):
                 return rm
         raise Exception("Don't have available room in that time")
     
@@ -1845,7 +1800,7 @@ class RhythmReserve():
 
         room = self.get_available_room(branch, room_size, start, end)
 
-        available = self.get_available_equipment(branch_id, day, start, end)
+        available, summary = self.get_available_equipment(branch_id, day, start, end)
         available_ids = [eq.id for eq in available]
 
         for eq_id in eq_list:
@@ -1862,7 +1817,7 @@ class RhythmReserve():
             eq = branch.get_eq_by_id(eq_id)
             selected_eqs.append(eq)
 
-        booking = Booking(customer_id, room, day, start, end, selected_eqs)
+        booking = Booking(branch.name, room, selected_eqs, customer, room_slot)
         return booking
     
     def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
@@ -1878,7 +1833,7 @@ class RhythmReserve():
         return service
     
     def pay(self, service_in_id, customer, channel):
-        payment = Payment()
+        pass
 
 
     
