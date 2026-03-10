@@ -1,147 +1,171 @@
 @startuml
 left to right direction
 skinparam packageStyle rectangle
+skinparam actorStyle awesome
 
+actor User
 actor Customer as C
 actor Staff as S
 actor "Payment System" as Pay
 
+User <|-- Customer
+User <|-- Staff
+
 rectangle "RhythmReserve System" {
 
-  package "Account & Profile" {
-    C -- (Register)
-    (Register) ..> (Provide Personal Info) : <<include>>
+  package "Account Management" {
+    (Register Account) #LightYellow
+    C -- (Register Account)
 
+    (Login) #LightYellow
     C -- (Login)
-    (Login) ..> (Verify Password) : <<include>>
 
+    (Logout) #LightYellow
+    C -- (Logout) 
+
+    (Manage Profile) #LightYellow
     C -- (Manage Profile)
-    C -- (Change Password)
 
-    C -- (View Membership and Points)
-    (Redeem Points) ..> (View Membership and Points) : <<extend>>
+    (Change Password) #LightYellow
+    (Manage Profile) #LightYellow
+    (Change Password) ..> (Manage Profile) : <<extend>>
 
-    C -- (View Booking History)
+    (View Notifications) #LightYellow
     C -- (View Notifications)
-    (View Notifications) ..> (Mark Notification as Read) : <<include>>
+
   }
 
-  package "Service_IN - Room Reservation (Pay at Booking)" {
-
+  package "Room Reservation (Service_IN)" {
+    (Search Available Rooms) #LightYellow
     C -- (Search Available Rooms)
-    (Search Available Rooms) ..> (Select Date and Time Range) : <<include>>
-    (Search Available Rooms) ..> (Select Room Size) : <<include>>
-    (Search Available Rooms) ..> (Check Room TimeSlot Conflicts) : <<include>>
-    (Check Room TimeSlot Conflicts) ..> (Detect Overlap) : <<include>>
-    (Search Available Rooms) ..> (Show Available Rooms and Time Slots) : <<include>>
 
-    C -- (Start Service_IN Cart)
+    (Search Available Rooms) #LightYellow
+    (Filter by Date and Time) #LightYellow
+    (Search Available Rooms) ..> (Filter by Date and Time) : <<include>>
 
-    C -- (View Service_IN Summary)
-    (View Service_IN Summary) ..> (Calculate Service_IN Total) : <<include>>
-    (Apply Coupon) ..> (View Service_IN Summary) : <<extend>>
+    (Search Available Rooms)#LightYellow
+   (Filter by Room Size) #LightYellow
+    (Search Available Rooms) ..> (Filter by Room Size) : <<include>>
 
-    C -- (Add Booking Room+Equipment to Service_IN)
-    (Add Booking Room+Equipment to Service_IN) ..> (Select Room) : <<include>>
-    (Add Booking Room+Equipment to Service_IN) ..> (Select Date and Time Range) : <<include>>
+    (Create Reservation) #LightBlue
+    C -- (Create Reservation)
 
-    (Add Booking Room+Equipment to Service_IN) ..> (Select Equipment for This Room) : <<include>>
-    (Select Equipment for This Room) ..> (Validate Equipment Quota eq_quota) : <<include>>
-    (Select Equipment for This Room) ..> (Check Equipment TimeSlot Conflicts) : <<include>>
-    (Check Equipment TimeSlot Conflicts) ..> (Detect Overlap) : <<include>>
+    (Create Reservation) #LightBlue
+    (Select Room) #LightYellow
+    (Create Reservation) ..> (Select Room) : <<include>>
 
-    (Add Booking Room+Equipment to Service_IN) ..> (Lock Room Time_slot) : <<include>>
-    (Lock Room Time_slot) ..> (Create Room Time_slot RESERVED) : <<include>>
+    (Create Reservation) #LightBlue
+    (Select Time Slot) #LightYellow
+    (Create Reservation) ..> (Select Time Slot) : <<include>>
 
-    (Add Booking Room+Equipment to Service_IN) ..> (Lock Equipment Time_slot) : <<include>>
-    (Lock Equipment Time_slot) ..> (Create Equipment Time_slot RESERVED) : <<include>>
+    (Create Reservation) #LightBlue
+    (Add Equipment) #LightYellow
+    (Create Reservation) ..> (Add Equipment) : <<include>>
 
-    (Add Booking Room+Equipment to Service_IN) ..> (Create Booking) : <<include>>
-    (Add Booking Room+Equipment to Service_IN) ..> (Add Booking into Service_IN) : <<include>>
-    (Add Booking Room+Equipment to Service_IN) ..> (Calculate Booking Price) : <<include>>
+    (Create Reservation) #LightBlue
+   (Calculate Booking Price) #LightYellow
+    (Create Reservation) ..> (Calculate Booking Price) : <<include>>
 
-    C -- (Remove Booking from Service_IN)
-    (Remove Booking from Service_IN) ..> (Release Room and Equipment Time_slot) : <<include>>
+    (View Reservation Summary) #LightYellow
+    C -- (View Reservation Summary)
 
-    C -- (Cancel Booking)
-    (Cancel Booking) ..> (Check Cancellation Policy) : <<include>>
-    (Cancel Booking) ..> (Update Time_slot to AVAILABLE) : <<include>>
-    (Refund if Allowed) ..> (Cancel Booking) : <<extend>>
-    (Refund if Allowed) ..> Pay : <<include>>
+    (Apply Coupon) #LightYellow
+    (View Reservation Summary) #LightYellow
+    (Apply Coupon) ..> (View Reservation Summary) : <<extend>>
 
-    C -- (Checkout Service_IN)
-    (Checkout Service_IN) ..> (Process Payment for Service_IN Total) : <<include>>
-    (Process Payment for Service_IN Total) ..> Pay : <<include>>
-    (Checkout Service_IN) ..> (Confirm All Bookings) : <<include>>
-    (Checkout Service_IN) ..> (Send Notification) : <<include>>
+    (Checkout Reservation) #LightBlue
+    (Process Payment) #LightBlue
+    C -- (Checkout Reservation)
+    (Checkout Reservation) ..> (Process Payment) : <<include>>
+
+    (Cancel Reservation) #LightBlue
+    C -- (Cancel Reservation)
+    (Check Cancellation Policy) #LightYellow
+    (Cancel Reservation) ..> (Check Cancellation Policy) : <<include>>
+
+    (Refund Payment) #LightBlue
+    (Cancel Reservation) #LightBlue
+    (Refund Payment) ..> (Cancel Reservation) : <<extend>>
+
   }
 
-  package "Service_OUT - Snacks/Drinks and Penalties (Pay Later)" {
+  package "Snacks and Penalty (Service_OUT)" {
 
-    C -- (Browse Stock)
-    (Browse Stock) ..> (View Product List) : <<include>>
+    (Browse Snacks and Drinks) #LightYellow
+    C -- (Browse Snacks and Drinks)
 
+    (Buy Snacks and Drinks) #LightBlue
     C -- (Buy Snacks and Drinks)
+    (Select Items) #LightYellow
+    (Process Payment) #LightBlue
     (Buy Snacks and Drinks) ..> (Select Items) : <<include>>
-    (Buy Snacks and Drinks) ..> (Create Service_OUT Order) : <<include>>
-    (Buy Snacks and Drinks) ..> (Calculate Service_OUT Total) : <<include>>
-    (Buy Snacks and Drinks) ..> (Process Payment - Service_OUT) : <<include>>
-    (Process Payment - Service_OUT) ..> Pay : <<include>>
-    (Buy Snacks and Drinks) ..> (Send Notification) : <<include>>
+    (Buy Snacks and Drinks) ..> (Process Payment) : <<include>>
 
+    (View Penalties) #LightYellow
     C -- (View Penalties)
-    C -- (Pay Penalty or Damage Charge)
-    (Pay Penalty or Damage Charge) ..> (View Penalties) : <<include>>
-    (Pay Penalty or Damage Charge) ..> (Process Payment - Service_OUT) : <<include>>
+    (Pay Penalty) #LightBlue
+    C -- (Pay Penalty)
+
+    (Pay Penalty)#LightBlue
+    (Process Payment) #LightBlue
+    (Pay Penalty) ..> (Process Payment) : <<include>>
+
   }
 
-  package "Issue and Support" {
+  package "Support" {
+
+    (Report Room or Equipment Issue) #LightYellow
     C -- (Report Room or Equipment Issue)
+
   }
 
   package "Staff Operations" {
 
+    (Staff Login) #LightYellow
     S -- (Staff Login)
-    (Staff Login) ..> (Verify Password) : <<include>>
 
-    S -- (View Daily Booking List)
+    (View Booking Schedule) #LightYellow
+    S -- (View Booking Schedule)
 
+    (Customer Check-in) #LightBlue
     S -- (Customer Check-in)
-    (Customer Check-in) ..> (Verify Booking) : <<include>>
-    (Customer Check-in) ..> (Update Time_slot to OCCUPIED) : <<include>>
+
+    (Verify Reservation)  #LightYellow
+    (Update Room Status) #LightYellow
+    (Customer Check-in) ..> (Verify Reservation) : <<include>>
     (Customer Check-in) ..> (Update Room Status) : <<include>>
-    (Update Equipment Status) ..> (Customer Check-in) : <<extend>>
 
+    (Customer Check-out)#LightBlue
     S -- (Customer Check-out)
-    (Customer Check-out) ..> (Update Time_slot to AVAILABLE) : <<include>>
+    (Customer Check-out) #LightBlue
+    (Update Room Status) #LightYellow
     (Customer Check-out) ..> (Update Room Status) : <<include>>
-    (Update Equipment Status) ..> (Customer Check-out) : <<extend>>
-    (Record Damage or Issue) ..> (Customer Check-out) : <<extend>>
-    (Record Damage or Issue) ..> (Create Penalty) : <<include>>
-    (Create Penalty) ..> (Send Notification) : <<include>>
 
+    (Record Damage)#LightBlue
+    (Customer Check-out) #LightBlue
+    (Record Damage) ..> (Customer Check-out) : <<extend>>
+    (Create Penalty) #LightBlue
+    (Record Damage) #LightBlue
+    (Create Penalty) ..> (Record Damage) : <<include>>
+
+    (Manage Rooms) #LightYellow
+    (Manage Equipment) #LightYellow
+    (Manage Products) #LightYellow
+    (Manage Pricing) #LightYellow
+    (Manage Coupons) #LightYellow
+    (Manage Policies) #LightYellow
     S -- (Manage Rooms)
-    (Manage Rooms) ..> (Add Room) : <<include>>
-    (Manage Rooms) ..> (Set Room Maintenance) : <<include>>
-
     S -- (Manage Equipment)
-    (Manage Equipment) ..> (Add Equipment) : <<include>>
-    (Manage Equipment) ..> (Set Equipment Maintenance) : <<include>>
-
-    S -- (Manage Stock)
-    (Manage Stock) ..> (Add Product) : <<include>>
-    (Manage Stock) ..> (Remove Product) : <<include>>
-
-    S -- (Manage Policy)
-    (Manage Policy) ..> (Manage Cancellation Rules) : <<include>>
-    (Manage Policy) ..> (Manage Penalty Rules) : <<include>>
-
+    S -- (Manage Products)
     S -- (Manage Pricing)
-
     S -- (Manage Coupons)
-    (Manage Coupons) ..> (Add Coupon) : <<include>>
-    (Manage Coupons) ..> (Remove Coupon) : <<include>>
-    (Add Coupon) ..> (Set Expire Date) : <<include>>
+    S -- (Manage Policies)
+
   }
+
+  (Process Payment) #LightBlue
+  (Process Payment) --> Pay
+
 }
+
 @enduml
