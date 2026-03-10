@@ -742,31 +742,49 @@ class Staff:
 
         # 1. late checkout
         late_pen = policy.check_late_checkout(
-            actual_time, expected_time, booking.id, booking.room_rate)
+            actual_time, expected_time, booking.id, booking.room.rate)
         if late_pen:
             service_out.add_penalty(late_pen)
 
+        # บรรทัด 749-769 ใน customer_check_out แก้เป็น:
+
         # 2. room damage
         if is_room_damaged and room_damage_cost > 0:
-            booking.room.status = RoomEquipmentStatus.MAINTENANCE
+            # ✅ เปลี่ยน timeslot ของ booking นี้เป็น MAINTENANCE แทนการ set .status
+            booking.room.update_timeslot_status(
+                booking.day, booking.start, booking.end,
+                RoomEquipmentStatus.MAINTENANCE
+            )
             r_pen = policy.check_damage_penalty(
                 booking.id, room_damage_cost, f"Room damage {room_damage_cost}")
             if r_pen:
                 service_out.add_penalty(r_pen)
         else:
-            booking.room.status = RoomEquipmentStatus.AVAILABLE
+            # ✅ คืน timeslot กลับเป็น AVAILABLE หลัง checkout
+            booking.room.update_timeslot_status(
+                booking.day, booking.start, booking.end,
+                RoomEquipmentStatus.AVAILABLE
+            )
 
         # 3. equipment damage
         for eq in booking.eq_list:
             if eq.id in damaged_eq_ids:
-                eq.status = RoomEquipmentStatus.MAINTENANCE
+                # ✅ เปลี่ยน timeslot ของ eq นี้เป็น MAINTENANCE
+                eq.update_timeslot_status(
+                    booking.day, booking.start, booking.end,
+                    RoomEquipmentStatus.MAINTENANCE
+                )
                 e_pen = policy.check_damage_penalty(
                     booking.id, eq.price,
-                    f"Equipment damage: {eq.type_} ({eq.id}) {eq.price}")
+                    f"Equipment damage: {eq.type} ({eq.id}) {eq.price}")  # แก้ eq.type_ → eq.type ด้วย
                 if e_pen:
                     service_out.add_penalty(e_pen)
             else:
-                eq.status = RoomEquipmentStatus.AVAILABLE
+                # ✅ คืน timeslot กลับเป็น AVAILABLE
+                eq.update_timeslot_status(
+                    booking.day, booking.start, booking.end,
+                    RoomEquipmentStatus.AVAILABLE
+                )
 
         # 4. สร้าง PaymentServiceOut คำนวณยอดให้ลูกค้าดูก่อน
         payment_sout = PaymentServiceOut(service_out, channel)
@@ -1297,7 +1315,7 @@ class PaymentServiceIn:
         if self.__is_success:
             record = TransactionRecord(
                 txn_id        = self.__transaction_id,
-                service_in_id = self.__servicein_id,
+                servicein_id = self.__servicein_id,
                 txn_type      = TXNType.CHARGE,
                 amount        = self.__final_price,
                 channel_type  = type(self.__channel).__name__,
@@ -1884,7 +1902,7 @@ class RhythmReserve():
 
         service = ServiceIN(booking)
         customer.add_reserve_list = service
-        service.total_price += booking.total_price
+        service.calculate_total()
         return service
 
     
