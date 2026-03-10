@@ -969,7 +969,7 @@ class Coupon:
 # ===========================================================================
     
 class ServiceIN:
-    def __init__(self, first_booking: Booking, payment : PaymentServiceIn):
+    def __init__(self, first_booking: Booking):
         self.__servicein_id = f"SIN-{str(uuid.uuid4())[:8]}"
         self.__booking_list  = [first_booking]
         self.__status        = ServiceStatus.PENDING
@@ -1213,7 +1213,7 @@ class PaymentServiceIn:
         return self.__transaction_history
     
 # ===========================================================================
-# PAYMENT SERVICEIN
+# PAYMENT SERVICEOUT
 # ===========================================================================
 class PaymentServiceOut:
     def __init__(self, service_out: ServiceOUT, channel: PaymentChannel):
@@ -1293,7 +1293,61 @@ class PaymentRegister():
         print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {self.__cost:.2f} THB")
         return self.__is_success
 
-    
+# ===========================================================================
+# PENALTY SUMMARY (ใช้ใน DailyReport แทน dict)
+# ===========================================================================
+
+class PenaltySummary:
+    def __init__(self, type_: str, amount: float):
+        self.type  = type_
+        self.total = round(amount, 2)
+        self.count = 1
+
+    def add(self, amount: float):
+        self.total = round(self.total + amount, 2)
+        self.count += 1
+
+    def  to_format(self):
+        return {"type": self.type, "total": self.total, "count": self.count}
+
+# ===========================================================================
+# DAILY REPORT
+# ===========================================================================
+
+class DailyReport:
+    def __init__(self, report_date: str, branch):
+        self.__branch        = branch
+        self.__date          = report_date
+        self.__bookings:  List[Booking] = []
+        self.__penalties: List[Penalty] = []
+        self.__total_revenue = 0.0
+
+    def add_revenue(self, amount: float):      self.__total_revenue += amount
+    def add_penalty(self, p: Penalty):         self.__penalties.append(p)
+    def add_booking_record(self, b: Booking):  self.__bookings.append(b)
+
+    def generate_report_data(self):
+        summary: List[PenaltySummary] = []
+        for p in self.__penalties:
+            found = False
+            for s in summary:
+                if s.type == p.type.value:
+                    s.add(p.amount)
+                    found = True
+                    break
+            if not found:
+                summary.append(PenaltySummary(p.type.value, p.amount))
+
+        return {
+            "date":              self.__date,
+            "branch_id":         self.__branch.id,
+            "branch_name":       self.__branch.name,
+            "total_bookings":    len(self.__bookings),
+            "total_revenue":     round(self.__total_revenue, 2),
+            "penalties_count":   len(self.__penalties),
+            "penalty_breakdown": [s. to_format() for s in summary],
+        }
+ 
 
 # ===========================================================================
 # RhythmReserve
