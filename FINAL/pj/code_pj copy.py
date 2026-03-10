@@ -193,17 +193,6 @@ class Customer(User) :
 # Member
 # ===========================================================================
 
-class PendingCustomer():
-    def __init__(self, name, username, password, email, phone, birthday, membership):
-        self.__name = name
-        self.__username = username
-        self.__password = password
-        self.__email = email
-        self.__phone = phone
-        self.__birthday = birthday
-        self.__membership = membership
-        self.__paid = False
-
 class Standard(Customer):
     pass
     
@@ -942,42 +931,22 @@ class RhythmReserve():
         self.__name: str = name
         self.__branch_list = []
         self.__customer_list = []
-        self.__staff_list = []
-        self.__pending_register = []
-
-    def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership):
-        if self.search_user(username):
-            raise Exception("Have Account Already")
-        
-        if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
-            self.add_customer_ls(customer)
-            return customer
-        
-        pending = PendingCustomer(name, username, password, email, phone, birthday, membership)
-        self.__pending_register.append(pending)
-        
-    def pay_register(self, username):
-        pass
 
     
 
-    def customer_register(self, name, username, password, email, phone, birthday, membership: Membership):
+    def register(self,type,name,username,password,email,phone,birthday):
 
         if self.search_user(username):
-            raise Exception("Have Account Already")
+            return "Have Account Already"
         
-        if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, membership, UserStatus.LOGIN)
-            self.add_customer_ls(customer)
-            return customer
+        user_id = self.generate_user_id(type)
         
-
-
-        
-        
-        
-        
+        if type == 'C':
+            customer = Customer(user_id,name,username,password,email,phone,birthday)
+            self.__customer_list.add_customer_ls(customer)
+        else:
+            staff = Staff(user_id,name,username,password,email,phone,birthday)
+            self.__staff_list.add_staff_ls(staff)
         
     def add_customer_ls(self,cus):
         self.__customer_list.append(cus)
@@ -1024,7 +993,7 @@ class RhythmReserve():
         for user in self.__customer_list + self.__staff_list:
             if user.username == username:
                 return user
-        return False
+        return None
 
     def checkin(self,customer_id,reserve_id):
         customer = self.search_customer(customer_id)
