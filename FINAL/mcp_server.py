@@ -210,25 +210,49 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     # ── create_service_in ───────────────────────────────────────────────────
     elif name == "create_service_in":
         try:
-            # service = system.create_service_in(...)
+
+            room_prices = {
+                "S": 200,
+                "M": 350,
+                "L": 500,
+                "XL": 700
+            }
+
+            price = room_prices.get(arguments["room_size"], 0)
+
             result = {
                 "success": True,
                 "service_id": "SIN-XXXXXXXX",
                 "status": "PENDING",
+                "room_size": arguments["room_size"],
+                "start": arguments["start"],
+                "end": arguments["end"],
+                "price_per_hour": price,
+                "total_price": price,
                 "message": "สร้างการจองสำเร็จ กรุณาชำระเงิน"
             }
+
         except Exception as e:
             result = {"success": False, "error": str(e)}
 
     # ── checkout_service ────────────────────────────────────────────────────
     elif name == "checkout_service":
         try:
+
+            total_price = 200
+
+            qr_image = system.generate_qr(total_price, arguments["service_id"])
+
             result = {
                 "success": True,
                 "service_id": arguments["service_id"],
                 "status": "PAID",
+                "total_price": total_price,
+                "payment_method": arguments["payment_type"],
+                "qr_image": f"data:image/png;base64,{qr_image}",
                 "message": "ชำระเงินสำเร็จ"
             }
+
         except Exception as e:
             result = {"success": False, "error": str(e)}
 
