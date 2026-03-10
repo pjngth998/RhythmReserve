@@ -828,7 +828,6 @@ class Payment:
 # Service_IN
 # ===========================================================================
     
-    
 class ServiceIN:
     def __init__(self, first_booking: Booking):
         self.__service_in_id = f"SI-{str(uuid.uuid4())[:8]}"
@@ -973,11 +972,6 @@ class RhythmReserve():
             return customer
         
 
-
-        
-        
-        
-        
         
     def add_customer_ls(self,cus):
         self.__customer_list.append(cus)
@@ -989,13 +983,14 @@ class RhythmReserve():
         user = self.search_user(username)
 
         if user:
-            verify = user.verify_password(username,password)
+            verify = user.verify_password(password)
 
             if verify:
                 user.set_status_user(UserStatus.LOGIN)
                 return f"{username} logged in successfully"
             else:
-                return "Login Failed"
+                raise Exception("Login Failed")
+        raise Exception("User not found")
             
     def logout(self,username):
         user = self.search_user(username)
@@ -1003,37 +998,47 @@ class RhythmReserve():
         if user and user.status == UserStatus.LOGIN:
             user.set_status_user(UserStatus.LOGOUT)
             return f"{username} logged out successfully"
-        return "Logout Failed"
+        raise Exception("Logout Failed")
     
-    def edit_info(self,username,data,new_info):
+    class UserField(Enum):
+        EMAIL = "email"
+        PHONE = "phone"
+        ADDRESS = "address"
+    
+    def edit_info(self,username,data : UserField,new_info):
         user = self.search_user(username)
 
-        if user and hasattr(user,data):
-            if data != "password" and data != "user_id" and data != "username":
-                setattr(user,data,new_info)
-                return f"Edit {data} Success"
+        protected_fields = ["password", "username", "customer_id", "staff_id"]
+        if user and hasattr(user,data.value):
+            if data != protected_fields:
+                setattr(user,data.value,new_info)
+                return f"Edit {data.value} Success"
+            raise Exception(f"{data.value} can't edit")
+        raise Exception("Edit Information Falied")
     
     def change_password(self,username,old_password,n_password):
         user = self.search_user(username)
         if user and (user.password == old_password):
             user.password = n_password
             return f"Change Password for {username} Successfully"
+        raise Exception("Can't Change the password! please try it later.")
+
 
     
     def search_user(self,username):
         for user in self.__customer_list + self.__staff_list:
             if user.username == username:
                 return user
-        return False
+        return None
 
     def checkin(self,customer_id,reserve_id):
         customer = self.search_customer(customer_id)
         if not customer:
-            return "Not found Customer in System"
+            raise Exception("Not found Customer in System")
         
         reserve = customer.search_reserve(reserve_id)
         if not reserve:
-            return "Not Found Reserve"
+            raise Exception("Not Found Reserve")
 
         success = reserve.get_checkin()
         if success:
@@ -1086,11 +1091,11 @@ class RhythmReserve():
             raise Exception("Exceed Room Quota Limit")
         
 
-    def add_customer(self, username, password):
-        customer = Customer(username, password)
-        customer.make_customer_id()
-        self.__customer_list.append(customer)
-        return customer
+    # def add_customer(self, username, password):
+    #     customer = Customer(username, password)
+    #     customer.make_customer_id()
+    #     self.__customer_list.append(customer)
+    #     return customer
     
     def add_branch(self, name):
         branch = Branch(name)

@@ -70,24 +70,30 @@ class ReserveSystem():
         if user and user.status == UserStatus.LOGIN:
             user.set_status_user(UserStatus.LOGOUT)
             return f"{username} logged out successfully"
-            # return True
-        # return False
         return "Logout Failed"
     
-    def edit_info(self,username,data,new_info):
+    class UserField(Enum):
+        EMAIL = "email"
+        PHONE = "phone"
+        ADDRESS = "address"
+    
+    def edit_info(self,username,data : UserField,new_info):
         user = self.search_user(username)
 
         protected_fields = ["password", "username", "customer_id", "staff_id"]
-        if user and hasattr(user,data):
+        if user and hasattr(user,data.value):
             if data != protected_fields:
-                setattr(user,data,new_info)
-                return f"Edit {data} Success"
+                setattr(user,data.value,new_info)
+                return f"Edit {data.value} Success"
+            raise Exception(f"{data.value} can't edit")
+        return "Edit Information Falied"
     
     def change_password(self,username,old_password,n_password):
         user = self.search_user(username)
         if user and (user.password == old_password):
             user.password = n_password
             return f"Change Password for {username} Successfully"
+        raise Exception("Can't Change the password! please try it later.")
 
     
     def search_user(self,username):
@@ -103,8 +109,7 @@ class ReserveSystem():
         
         reserve = customer.search_reserve(reserve_id)
         if not reserve:
-            
-            return "Not Found Reserve"
+            raise Exception("Not Found Reserve")
 
         success = reserve.process_checkin()
         if success:
