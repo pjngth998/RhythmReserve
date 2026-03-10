@@ -580,7 +580,7 @@ class Service_IN:
                  payment: Payment, start_time: Optional[datetime] = None):
         self.service_in_id = service_in_id
         self.booking_list  = booking_list
-        self.payment       = 9
+        self.payment       = payment
         self.start_time    = start_time
         self.status        = ServiceStatus.PENDING_PAYMENT
         self.total_price   = 0.0
