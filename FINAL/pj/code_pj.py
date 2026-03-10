@@ -40,7 +40,7 @@ class TimeSlotStatus(Enum):
     MAINTENANCE = "Maintenance"
 
 class OrderStatus(Enum):
-    PENDING_PAYMENT = "Pending"
+    PENDING = "Pending"
     CONFIRM = "Confirmed"
     CANCEL =  "Canceled"
 
@@ -62,9 +62,24 @@ class UserStatus(Enum):
     LOGOUT = "LOGOUT"
 
 class ServiceStatus(Enum):
-    PENDING_PAYMENT = "PENDING_PAYMENT"
-    PAID            = "PAID"
-    CANCELLED       = "CANCELLED"
+    PENDING  = "PENDING"
+    PAID      = "PAID"
+    CANCELLED = "CANCELLED"
+
+class PenaltyType(Enum):
+    NO_SHOW = "NO_SHOW"
+    CANCEL_LATE = "CANCEL_LATE" 
+    DAMAGE = "DAMAGE"
+    LATE = "LATE"
+
+class PenaltyStatus(Enum):
+    PENDING = "PENDING"
+    APPLIED = "APPLIED"
+
+class UserField(Enum):
+    EMAIL = "email"
+    PHONE = "phone"
+    ADDRESS = "address"
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -130,10 +145,10 @@ class User():
 # ===========================================================================
 class Customer(User) :
 
-    def __init__(self, username, password, name, email, phone, birthday, memberhip, status):
+    def __init__(self, username, password, name, email, phone, birthday, membership, status):
         super().__init__(username, password, name, email, phone, birthday, status)
-        self.__id = "pasokdoas"
-        self.__memberhip = memberhip
+        self.__id =  f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
+        self.__membership = membership
         self.__points:int = None
         self.__reserve_list = []
         self.__coupon_list = None
@@ -166,7 +181,12 @@ class Customer(User) :
             if reserve.reserve_id == reserve_id:
                 return reserve
         raise Exception("service not found")
-
+    
+    def search_reserve(self,reserve_id):
+        for reserve in self.__reserve_list:
+            if reserve.id == reserve_id:
+                return reserve
+        return None
 
     @property
     def notification(self):
@@ -450,7 +470,7 @@ class StockEquipment:
     
     def check_stock(self, eq_id):
         for eq in self.__equipment_ls:
-            if eq.eq_id == eq_id:
+            if eq.id == eq_id:
                 return True
         return False
     
@@ -600,10 +620,38 @@ class Booking():
 # Notification
 # ===========================================================================
 
-class Notification():
-    def __init__(self, type, info):
-        self.__type = type
-        self.__info = info
+class NotiStatus(Enum):
+    PENDING = "PENDING"
+    SENT    = "SENT"
+    FAILED  = "FAILED"
+
+class Notification:
+    def __init__(self, username: str):
+        self.__username       = username
+        self.__noti_id = f"NT-{self.__username.upper()}-{str(uuid.uuid4())[:8]}"
+        self.__is_read         = False
+        self.__status          = NotiStatus.PENDING
+
+    @property
+    def noti_id(self):
+        return self.__noti_id
+    def format_message(self, message: str) -> str:
+        message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+                        f"Dear {self.__username}: {message}")
+        return message
+    
+    def set_status_noti(self, status : NotiStatus):
+        self.__status = status
+
+    def mark_as_read(self):
+        self.__is_read = True
+
+    def noti_send(self,message):
+        formatted = self.format_message(message)
+        print(f"[Email] Sending : \n" f"\t{formatted}")
+
+        self.set_status_noti(NotiStatus.SENT)
+        return True
 
 # ===========================================================================
 # PAYMENT CHANNEL
@@ -707,72 +755,70 @@ class TransactionRecord:
     def __init__(self, txn_id: str, service_in_id: str, txn_type: str,
                  amount: float, channel_type: str, ref_txn_id: Optional[str] = None):
         self.txn_id        = txn_id
-        self.service_in_id = service_in_id
+        self.__servicein_id = service_in_id
         self.txn_type      = txn_type
         self.amount        = amount
-        self.channel_type  = channel_type
+        self.__channel_type  = channel_type
         self.ref_txn_id    = ref_txn_id
         self.timestamp     = datetime.now()
 
     def __repr__(self):
         ref = f" ref={self.ref_txn_id}" if self.ref_txn_id else ""
         return (f"<TXN {self.txn_id} | {self.txn_type} | "
-                f"{self.amount:.2f} THB | {self.channel_type}{ref} | {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
+                f"{self.amount:.2f} THB | {self.__channel_type}{ref} | {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
 
+class PaymentServiceOut:
+    def __init__(self):
 
-class Payment:
+class TXNType(Enum):
+    CHARGE = "CHARGE"
+    REFUND = "REFUND"
+    PENALTY = "PENALTY"
+
+class PaymentServiceIn:
     def __init__(self, service_in_id: str, username,total_price: float, channel: PaymentChannel):
-        self.service_in_id  = service_in_id
+        self.__servicein_id  = service_in_id
         self.__username = username
-        self.total_price    = total_price
-        self.channel        = channel
-        self.is_success     = False
-        self.transaction_id = ""
-        self.refund_amount  = 0.0
-        self.transaction_history: list[TransactionRecord] = []
+        self.__total_price    = total_price
+        self.__channel        = channel
+        self.__is_success     = False
+        self.__refund_amount  = 0.0
+        self.__transaction_history: list[TransactionRecord] = []
 
     def process_payment(self, final_price: float) -> bool:
-        self.transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
-        print(f"[Payment] Gen Transaction ID: {self.transaction_id}")
-        self.is_success = self.channel.process(final_price, ref=self.transaction_id)
+        self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
+        print(f"[Payment] Gen Transaction ID: {self.__transaction_id}")
+        self.__is_success = self.__channel.process(final_price, ref=self.__transaction_id)
 
-        if self.is_success:
+        if self.__is_success:
             record = TransactionRecord(
-                txn_id        = self.transaction_id,
-                service_in_id = self.service_in_id,
-                txn_type      = "CHARGE",
+                txn_id        = self.__transaction_id,
+                service_in_id = self.__servicein_id,
+                txn_type      = TXNType.CHARGE,
                 amount        = final_price,
-                channel_type  = type(self.channel).__name__,
+                channel_type  = type(self.__channel).__name__,
             )
-            self.transaction_history.append(record)
+            self.__transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
 
             self._send_confirm(self.__username)
+            return self.__is_success
+        raise Exception("Process Payment Failed")
 
-        print(f"[Payment] Payment {'success' if self.is_success else 'failed'}: {final_price:.2f} THB")
-        return self.is_success
-    
-    # count_noti = 1
-    # @classmethod
-    # def gen_noti_id(cls):
-    #     date_format = date.today().strftime("%y%m%d")
-    #     count_str = str(cls.count_noti).zfill(3)
-    #     noti_id = f"{type.upper()}-{date_format}-{count_str}"
-    #     cls.count_noti += 1
-    #     return noti_id
-    
+        # print(f"[Payment] Payment {'success' if self.__is_success else 'failed'}: {final_price:.2f} THB")
+
+
     def _send_confirm(self,noti_id,username):
         noti = Notification(noti_id,username)
-
         msg = f"Payment Successful!"
-        noti.noti_send()
+        noti.noti_send(msg)
 
     #หาธุรกรรมนั้น ๆ ที่ต้องการให้ refund เพื่อไปเอาเลขบัญชีหรือใดใดเพื่อ refund เงินกลับอัตโนมัติ
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
-        refunded_ids = {r.ref_txn_id for r in self.transaction_history if r.txn_type == "REFUND"}
+        refunded_ids = {r.ref_txn_id for r in self.__transaction_history if r.txn_type == "REFUND"}
 
         if txn_id:
-            for record in self.transaction_history:
+            for record in self.__transaction_history:
                 if record.txn_id == txn_id and record.txn_type == "CHARGE":
                     if record.txn_id in refunded_ids:
                         print(f"[Payment] TXN {txn_id} has already been refunded")
@@ -781,7 +827,7 @@ class Payment:
             print(f"[Payment] TXN {txn_id} not found in history")
             return None
 
-        for record in reversed(self.transaction_history):
+        for record in reversed(self.__transaction_history):
             if record.txn_type == "CHARGE" and record.txn_id not in refunded_ids:
                 return record
         print("[Payment] No eligible CHARGE transaction found")
@@ -803,80 +849,108 @@ class Payment:
         refund_txn_id = f"RFD-{uuid.uuid4().hex[:8].upper()}"
         print(f"[Payment] Gen Refund ID: {refund_txn_id}")
 
-        success = self.channel.refund(refund_amount, charge_record.txn_id, refund_txn_id)
+        success = self.__channel.refund(refund_amount, charge_record.txn_id, refund_txn_id)
 
         if success:
+
             refund_record = TransactionRecord(
                 txn_id        = refund_txn_id,
-                service_in_id = self.service_in_id,
+                service_in_id = self.__servicein_id,
                 txn_type      = "REFUND",
                 amount        = refund_amount,
-                channel_type  = type(self.channel).__name__,
+                channel_type  = type(self.__channel).__name__,
                 ref_txn_id    = charge_record.txn_id,
             )
-            self.transaction_history.append(refund_record)
-            self.refund_amount = refund_amount
+            self.__transaction_history.append(refund_record)
+            self.__refund_amount = refund_amount
             print(f"[Payment] Recorded: {refund_record}")
 
         print(f"[Payment] Refund {'success' if success else 'failed'}: {refund_amount:.2f} THB")
         return success
 
     def get_transaction_history(self) -> list[TransactionRecord]:
-        return self.transaction_history
-    
+        return self.__transaction_history
+
 # ===========================================================================
-# Service_IN
+# Penalty
+# ===========================================================================
+class Penalty:
+    def __init__(self, penalty_id: str, type_: PenaltyType, amount: float, reason: str, booking_id: str):
+        self.__penalty_id = f"PN-{self.__type.value}-{str(uuid.uuid4())[:8]}"
+        self.__reason = reason
+        self.__type = type_
+        self.__amount = amount
+        self.__status = PenaltyStatus.PENDING
+        self.__booking_id = booking_id
+
+    @property
+    def amount(self): return self.__amount
+    @property
+    def status(self): return self.__status
+    @property
+    def reason(self): return self.__reason
+    @property
+    def type(self) -> PenaltyType: return self.__type 
+
+    def change_penalty_status(self, new_status: PenaltyStatus):
+        self.__status = new_status
+
+
+# ===========================================================================
+# ServiceIN
 # ===========================================================================
     
 class ServiceIN:
-    def __init__(self, first_booking: Booking):
-        self.__service_in_id = f"SI-{str(uuid.uuid4())[:8]}"
+    def __init__(self, first_booking: Booking, payment : PaymentServiceIn):
+        self.__servicein_id = f"SIN-{str(uuid.uuid4())[:8]}"
         self.__booking_list  = [first_booking]
-        self.__status        = ServiceStatus.PENDING_PAYMENT
+        self.__status        = ServiceStatus.PENDING
         self.__total_price   = 0.0
         self.__final_price   = 0.0
 
-    def get_id(self) -> str:
-        return self.service_in_id
-    
+
+    # def get_id(self) -> str:
+    #     return self.__servicein_id
+
     @property
     def id(self):
-        return self.__service_in_id
+        return self.__servicein_id
     
     @property
     def total_price(self):
         return self.__total_price
     
-    @total_price.setter
-    def total_price(self, add_price):
+    @property
+    def status(self):
+        return self.__status
+    
+    def set_status(self, status:ServiceStatus):
+        self.__status = status
+        return True
+    
+    def search_booking(self,booking_id):
+        for booking in self.__booking_list:
+            if booking.id == booking_id:
+                return booking
+        return booking
+    
+    # @total_price.setter
+    def cal_total_price(self, add_price):
         self.__total_price += add_price
 
     def add_booking(self, booking: Booking):
-        self.booking_list.append(booking)
+        self.__booking_list.append(booking)
 
     def remove_booking(self, booking_id: str) -> bool:
-
         print(f"\n[Service_IN] remove_booking({booking_id})")
-
-        target = None
-        for booking in self.booking_list:
-            if booking.get_id() == booking_id:
-                target = booking
-                break
-
-        if not target:
-            raise ValueError(f"Booking Not Found: '{booking_id}'")
-
-        target.cancel()
-        self.booking_list.remove(target)
-        self.total_price = sum(b.price for b in self.booking_list)
-        print(f"[Service_IN] booking {booking_id} removed from list")
-        return True
+        for booking in self.__booking_list:
+            if booking.id == booking_id:
+                self.__booking_list.remove(booking)
 
     def calculate_total(self) -> float:
-        self.total_price = sum(b.price for b in self.booking_list)
-        print(f"[Service_IN] Total calculated: {self.total_price:.2f} THB")
-        return self.total_price
+        total_price = self.cal_total_price(sum(b.price for b in self.__booking_list))
+        print(f"[Service_IN] Total calculated: {total_price:.2f} THB")
+        return total_price
 
     def apply_tier_discount(self, total_price: float, tier_discount: float) -> float:
         discounted_price = total_price * (1 - tier_discount)
@@ -889,8 +963,11 @@ class ServiceIN:
         return final_price
 
     def change_status(self, status: ServiceStatus):
-        self.status = status
-        print(f"[Service_IN] {self.service_in_id} status → {status.value}")
+        status = self.set_status(status)
+        if status:
+            print(f"[Service_IN] {self.__servicein_id} status → {status.value}")
+            return True
+        raise Exception("Can't Change Status")
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
         total_price      = self.calculate_total()
@@ -913,22 +990,64 @@ class ServiceIN:
             for booking in self.booking_list:
                 booking.confirm()
         else:
-            self.change_status(ServiceStatus.PENDING_PAYMENT)
+            self.change_status(ServiceStatus.PENDING)
 
         return payment_success
+    
 
-    def cancel(self, refund_amount: float, original_txn_id: Optional[str] = None) -> bool:
+    def cancel(self,  original_txn_id: Optional[str] = None) -> bool:
         if self.status == ServiceStatus.CANCELLED:
-            print(f"[Service_IN] {self.service_in_id} already cancelled")
+            print(f"[Service_IN] {self.__servicein_id} already cancelled")
             return False
 
         self.change_status(ServiceStatus.CANCELLED)
 
-        for booking in self.booking_list:
+        for booking in self.__booking_list:
             booking.cancel()
 
-        refund_success = self.payment.payment_refund(refund_amount, original_txn_id)
+        refund_success = self.__payment.payment_refund(original_txn_id)
         return refund_success
+
+# ===========================================================================
+# ServiceOUT
+# ===========================================================================
+class ServiceOUT:
+    def __init__(self):
+        self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
+        self.__product_list = []
+        self.__penalty_list = []
+        self.__status = ServiceStatus.PENDING
+        self.__total_price = 0.0
+
+    @property
+    def id(self):
+        return self.__sout_id
+    
+    @property
+    def status(self):
+        return self.__status
+    
+    @property
+    def penalty_list(self): return self.__penalty_list
+
+    def add_product(self, product: Products):
+        self.__product_list.append(product)
+
+    def add_penalty(self, penalty: Penalty):
+        self.__penalty_list.append(penalty)
+
+    def calculate_total_price(self):
+        product_sum = sum(p.price for p in self.__product_list)
+        penalty_sum = sum(p.amount for p in self.__penalty_list if p.status == PenaltyStatus.PENDING)
+        self.__total_price = product_sum + penalty_sum
+        return self.__total_price
+    
+    def to_dict(self):
+        return {
+            "products":    [p.to_dict() for p in self.__product_list],
+            "penalties":   [p.to_dict() for p in self.__penalty_list],
+            "total_price": round(self.__total_price, 2),
+        }
 
 # ===========================================================================
 # RhythmReserve
@@ -1000,11 +1119,6 @@ class RhythmReserve():
             return f"{username} logged out successfully"
         raise Exception("Logout Failed")
     
-    class UserField(Enum):
-        EMAIL = "email"
-        PHONE = "phone"
-        ADDRESS = "address"
-    
     def edit_info(self,username,data : UserField,new_info):
         user = self.search_user(username)
 
@@ -1022,8 +1136,6 @@ class RhythmReserve():
             user.password = n_password
             return f"Change Password for {username} Successfully"
         raise Exception("Can't Change the password! please try it later.")
-
-
     
     def search_user(self,username):
         for user in self.__customer_list + self.__staff_list:
@@ -1043,6 +1155,8 @@ class RhythmReserve():
         success = reserve.get_checkin()
         if success:
             return "CHECK-IN SUCCESSFULLY!"
+        raise Exception("CHECK_IN FAILED")
+        
 
     def search_branch(self,branch_id):
         for branch in self.__branch_list:
@@ -1089,13 +1203,6 @@ class RhythmReserve():
             return True
         else:
             raise Exception("Exceed Room Quota Limit")
-        
-
-    # def add_customer(self, username, password):
-    #     customer = Customer(username, password)
-    #     customer.make_customer_id()
-    #     self.__customer_list.append(customer)
-    #     return customer
     
     def add_branch(self, name):
         branch = Branch(name)
@@ -1363,8 +1470,22 @@ class RhythmReserve():
         service.add_booking(booking)
         service.total_price = booking.price
         return service
+    
+    def search_custoemr(self,customer_id):
+        for customer in self.__customer_list:
+            if customer.id == customer_id:
+                return customer
+        return None
 
+    def cancel_booking(self,customer_id,servicein_id,booking_id):
+        customer = self.search_custoemr(customer_id)
+        service_in = customer.search_reserve(servicein_id)
 
+        if service_in != ServiceStatus.PENDING:
+            raise Exception("Cannot refund: Service not paid yet")\
+            
+        cancel = service_in.cancel()
+        
 
   
 
