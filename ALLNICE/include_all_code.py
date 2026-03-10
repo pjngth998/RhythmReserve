@@ -1,3 +1,4 @@
+#final code here
 import base64
 import re
 import uuid
@@ -6,6 +7,8 @@ from dateutil.relativedelta import relativedelta
 from abc import ABC, abstractmethod
 from typing import Optional
 from enum import Enum
+import qrcode
+import io
 
 
 # ===========================================================================
@@ -295,7 +298,6 @@ class Booking:
         print(f"[Booking] {self.__id} status → {status.value}")
 
     def confirm(self):
-        """ใช้ใน checkout: เปลี่ยน status → CONFIRMED และ Reserve room/equipment"""
         self.change_booking_status(BookingStatus.CONFIRMED)
         self.__timeslot.status = RoomEquipmentStatus.RESERVED
 
@@ -309,7 +311,6 @@ class Booking:
         print(f"[Booking] {self.__id} confirmed → Room & Equipment reserved")
 
     def cancel(self):
-        """ใช้ใน cancel_booking / remove_booking: เปลี่ยน status → CANCELLED และ Release room/equipment"""
         self.change_booking_status(BookingStatus.CANCELLED)
         self.__timeslot.status = RoomEquipmentStatus.AVAILABLE
 
@@ -342,9 +343,13 @@ class QrScan(PaymentChannel):
         self.qr_image: Optional[str] = None
 
     def generate_qr(self, amount: float, ref: str) -> str:
-        payload = f"PROMPTPAY|REF:{ref}|AMT:{amount:.2f}|TS:{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        self.qr_image = base64.b64encode(payload.encode()).decode()
-        print(f"[QrScan] QR generated → {self.qr_image[:40]}...")
+        payload = f"Payment completed | REF:{ref} | AMT:{amount:.2f} THB"
+        qr = qrcode.make(payload)
+        qr.save("qr_output.png")
+        print(f"[QrScan] QR saved → qr_output.png")
+        buffer = io.BytesIO()
+        qr.save(buffer, format="PNG")
+        self.qr_image = base64.b64encode(buffer.getvalue()).decode()
         return self.qr_image
 
     def process(self, amount: float, ref: str = "TXN") -> bool:
@@ -564,7 +569,6 @@ class Service_IN:
         self.booking_list.append(booking)
 
     def remove_booking(self, booking_id: str) -> bool:
-        """ลบ Booking ออกจาก Service_IN และ release room/equipment (file4)"""
         print(f"\n[Service_IN] remove_booking({booking_id})")
 
         target = None
@@ -602,7 +606,6 @@ class Service_IN:
         print(f"[Service_IN] {self.service_in_id} status → {status.value}")
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
-        """คำนวณราคา ลดราคา และชำระเงิน (file3)"""
         total_price      = self.calculate_total()
         tier_discount    = customer.get_tier_discount()
         discounted_price = self.apply_tier_discount(total_price, tier_discount)
@@ -628,7 +631,6 @@ class Service_IN:
         return payment_success
 
     def cancel(self, refund_amount: float, original_txn_id: Optional[str] = None) -> bool:
-        """ยกเลิก Service_IN พร้อม refund (file2)"""
         if self.status == ServiceStatus.CANCELLED:
             print(f"[Service_IN] {self.service_in_id} already cancelled")
             return False
@@ -643,7 +645,7 @@ class Service_IN:
 
 
 # ===========================================================================
-# CUSTOMER 
+# CUSTOMER
 # ===========================================================================
 
 class Customer(ABC):
@@ -697,7 +699,6 @@ class Customer(ABC):
         return self.current_points
 
     def redeem_point(self, points_to_redeem: int) -> Coupon:
-        """แลกแต้มเป็น Coupon ตาม redeem_table ของ tier (file1)"""
         print(f"\n[Customer] {self.customer_id} redeem_point({points_to_redeem} pts)")
 
         redeem_table = self.get_redeem_table()
@@ -750,7 +751,6 @@ class Standard(Customer):
         self.receive_point_per_hr = 3
 
     def get_redeem_table(self) -> list:
-        # [แต้ม, ส่วนลด]
         return [20, 0.05]
 
     def get_cancellation_limit_hours(self) -> int:
@@ -836,6 +836,68 @@ class ReserveSystem:
             "expired_date",     coupon.get_expired_date().isoformat()
         ]
 
+    # -----------------------------------------------------------------------
+    # NEW: view_service_in_summary
+    # -----------------------------------------------------------------------
+    def view_service_in_summary(self, customer_id: str, service_in_id: str) -> list:
+        print(f"\n{'='*60}")
+        print(f"[ReserveSystem] view_service_in_summary(customer={customer_id}, service={service_in_id})")
+        print(f"{'='*60}")
+
+        customer = self.search_customer(customer_id)
+        if not customer:
+            raise ValueError(f"Customer Not Found: '{customer_id}'")
+
+        service = customer.get_service_in(service_in_id)
+        if not service:
+            raise ValueError(f"Service_IN Not Found: '{service_in_id}'")
+
+        # คำนวณราคาและ tier discount (preview เท่านั้น ยังไม่ apply จริง)
+        total_price   = service.calculate_total()
+        tier_discount = customer.get_tier_discount()
+        preview_price = total_price * (1 - tier_discount)
+
+        # รวบรวมรายละเอียด Booking ทุกรายการ
+        booking_details = []
+        for booking in service.booking_list:
+            eq_details = [
+                {"eq_id": eq.get_id(), "eq_type": eq.type_}
+                for eq in booking.eq_list
+            ]
+            booking_details.append({
+                "booking_id":     booking.get_id(),
+                "room_id":        booking.room.get_id(),
+                "room_size":      booking.room.size,
+                "room_rate":      booking.room.rate,
+                "equipment_list": eq_details,
+                "date":           str(booking.day),
+                "start_time":     str(booking.start),
+                "end_time":       str(booking.end),
+            })
+
+        # แสดงเฉพาะ coupon ที่ยังไม่หมดอายุ
+        available_coupons = []
+        for coupon in customer.coupon_list:
+            if not coupon.is_expired():
+                available_coupons.append({
+                    "coupon_id":    coupon.get_coupon_id(),
+                    "discount":     coupon.get_discount(),
+                    "expired_date": coupon.get_expired_date().strftime("%Y-%m-%d"),
+                })
+
+        print(f"[ReserveSystem] Summary ready: {len(booking_details)} booking(s), "
+              f"{len(available_coupons)} coupon(s) available")
+
+        return [
+            "service_in_id",     service_in_id,
+            "status",            service.status.value,
+            "booking_list",      booking_details,
+            "total_price",       total_price,
+            "tier_discount",     tier_discount,
+            "preview_price",     preview_price,
+            "available_coupons", available_coupons,
+        ]
+
     def checkout_service_in(self, customer_id: str, service_in_id: str,
                             coupon_id: Optional[str] = None) -> list:
         print(f"\n{'='*60}")
@@ -849,6 +911,9 @@ class ReserveSystem:
         service = customer.get_service_in(service_in_id)
         if not service:
             raise ValueError(f"Service_IN Not Found: '{service_in_id}'")
+
+        # แสดง summary ก่อนชำระเงินเสมอ
+        self.view_service_in_summary(customer_id, service_in_id)
 
         checkout_success = service.checkout(customer, coupon_id)
 
@@ -931,7 +996,7 @@ class ReserveSystem:
 
 
 # ===========================================================================
-#ทดสอบ 4 use case
+# ทดสอบ 4 use case + view_service_in_summary
 # ===========================================================================
 
 if __name__ == "__main__":
@@ -941,7 +1006,6 @@ if __name__ == "__main__":
     slot_start = time(14, 0)
     slot_end   = time(16, 0)
 
-    # สร้าง customers พร้อม coupon
     customers_data = [
         ("CUST-001", "Somchai Standard", "pass1", Standard, 40),
         ("CUST-002", "Somsri Premium",   "pass2", Premium,  50),
@@ -989,7 +1053,7 @@ if __name__ == "__main__":
         print(f"[Error] {e}")
 
     # -------------------------------------------------------------------
-    # USE CASE 2 : checkout_service_in
+    # USE CASE 2 : checkout_service_in (with view_service_in_summary before)
     # -------------------------------------------------------------------
     print("\n" + "="*60)
     print("USE CASE 2: CHECKOUT SERVICE_IN")
@@ -1004,6 +1068,7 @@ if __name__ == "__main__":
     bk1  = Booking("BK-001", room1, [eq1], cust1, ts1)
     svc1 = Service_IN("SRV-001", [bk1], Payment("SRV-001", room1.rate, QrScan()))
     cust1.add_service_in(svc1)
+
     print(system.checkout_service_in("CUST-001", "SRV-001"))
 
     cust2 = system.search_customer("CUST-002")
@@ -1016,6 +1081,7 @@ if __name__ == "__main__":
     card = CreditCard("4532015112830366", "123", "12/30")
     svc2 = Service_IN("SRV-002", [bk2], Payment("SRV-002", room2.rate, card))
     cust2.add_service_in(svc2)
+
     print(system.checkout_service_in("CUST-002", "SRV-002", coupon_id="CPN-CUST-002"))
 
     cust3    = system.search_customer("CUST-003")
@@ -1028,6 +1094,7 @@ if __name__ == "__main__":
     bad_card = CreditCard("1234567890123456", "99", "01/20")
     svc3     = Service_IN("SRV-003", [bk3], Payment("SRV-003", room3.rate, bad_card))
     cust3.add_service_in(svc3)
+
     print(system.checkout_service_in("CUST-003", "SRV-003"))
 
     # -------------------------------------------------------------------
@@ -1037,7 +1104,6 @@ if __name__ == "__main__":
     print("USE CASE 3: PROCESS CANCELLATION")
     print("="*60)
 
-    # สร้าง services สำหรับ cancellation test
     cancel_mock = [
         ("CUST-001", "Somchai Standard", "pass1", Standard,
          RoomType.SMALL,  500.0,  EquipmentType.ELECTRICGUITAR, QrScan()),
