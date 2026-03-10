@@ -7,22 +7,31 @@ from typing import Optional, Tuple, List
 # ===========================================================================
 # ENUMS
 # ===========================================================================
+from typing import Optional, Tuple, List
+
+# ===========================================================================
+# ENUMS
+# ===========================================================================
 
 class RoomType(Enum):
-    SMALL      = "S"
-    MEDIUM     = "M"
-    LARGE      = "L"
+    SMALL           = "S"
+    MEDIUM         = "M"
+    LARGE           = "L"
     EXTRALARGE = "XL"
 
 class EquipmentType(Enum):
     ELECTRICGUITAR = "EGTR"
     ACOUSTICGUITAR = "AGTR"
-    DRUM           = "DM"
-    MICROPHONE     = "MC"
-    BASS           = "BS"
-    KEYBOARD       = "KB"
+    DRUM                     = "DM"
+    MICROPHONE         = "MC"
+    BASS                     = "BS"
+    KEYBOARD             = "KB"
 
 class RoomEquipmentStatus(Enum):
+    AVAILABLE   = "Available"
+    PENDING     = "Pending"
+    RESERVED    = "Reserved"
+    OCCUPIED    = "Occupied"
     AVAILABLE   = "Available"
     PENDING     = "Pending"
     RESERVED    = "Reserved"
@@ -34,9 +43,17 @@ class TimeSlotStatus(Enum):
     PENDING     = "Pending"
     RESERVED    = "Reserved"
     OCCUPIED    = "Occupied"
+    AVAILABLE   = "Available"
+    PENDING     = "Pending"
+    RESERVED    = "Reserved"
+    OCCUPIED    = "Occupied"
     MAINTENANCE = "Maintenance"
 
 class PenaltyType(Enum):
+    NO_SHOW     = "NO_SHOW"
+    CANCEL_LATE = "CANCEL_LATE"
+    DAMAGE      = "DAMAGE"
+    LATE        = "LATE"
     NO_SHOW     = "NO_SHOW"
     CANCEL_LATE = "CANCEL_LATE"
     DAMAGE      = "DAMAGE"
@@ -50,12 +67,70 @@ class ProductType(Enum):
     WATER    = "Water"
     COFFEE   = "Coffee"
     COKE     = "Coke"
+    WATER    = "Water"
+    COFFEE   = "Coffee"
+    COKE     = "Coke"
     CHOCOPIE = "Chocopie"
+    LAY      = "Lay"
+    TARO     = "Taro"
     LAY      = "Lay"
     TARO     = "Taro"
 
 class Membership(Enum):
     STANDARD = "STD"
+    PREMIUM  = "PRM"
+    DIAMOND  = "DMN"
+
+class ServiceStatus(Enum):
+    PENDING_PAYMENT = "PENDING_PAYMENT"
+    PAID            = "PAID"
+    CANCELLED       = "CANCELLED"
+
+OPEN_TIME  = time(9, 0)
+CLOSE_TIME = time(23, 0)
+SLOT_STEP  = timedelta(minutes=30)
+BUFFER     = timedelta(minutes=15)
+
+# ===========================================================================
+# PENALTY
+# ===========================================================================
+
+class Penalty:
+    def __init__(self, type_: PenaltyType, amount: float, reason: str, booking_id: str):
+        self.__type       = type_
+        self.__penalty_id = f"PN-{self.__type.value}-{str(uuid.uuid4())[:8]}"
+        self.__reason     = reason
+        self.__amount     = amount
+        self.__status     = PenaltyStatus.PENDING
+        self.__booking_id = booking_id
+
+    @property
+    def amount(self):     return self.__amount
+    @property
+    def status(self):     return self.__status
+    @property
+    def reason(self):     return self.__reason
+    @property
+    def type(self):       return self.__type
+    @property
+    def booking_id(self): return self.__booking_id
+
+    def change_penalty_status(self, new_status: PenaltyStatus):
+        self.__status = new_status
+
+    def to_format(self):
+        return {
+            "penalty_id": self.__penalty_id,
+            "type":       self.__type.value,
+            "amount":     self.__amount,
+            "reason":     self.__reason,
+            "status":     self.__status.value,
+            "booking_id": self.__booking_id,
+        }
+
+# ===========================================================================
+# CUSTOMER
+# ===========================================================================
     PREMIUM  = "PRM"
     DIAMOND  = "DMN"
 
@@ -113,12 +188,17 @@ class Penalty:
 class Customer(ABC):
     def __init__(self, membership: Membership, name: str, password: str):
         self.__membership   = membership
+    def __init__(self, membership: Membership, name: str, password: str):
+        self.__membership   = membership
         self.customer_id    = f"C-{self.__membership.value}-{str(uuid.uuid4())[:8]}"
         self.name           = name
         self.__password     = password
         self.current_points = 0
         self.__service_list: List = []
+        self.__service_list: List = []
 
+    @property
+    def id(self): return self.customer_id
     @property
     def id(self): return self.customer_id
 
@@ -127,7 +207,13 @@ class Customer(ABC):
 
     def add_service(self, service):
         self.__service_list.append(service)
+    def add_service(self, service):
+        self.__service_list.append(service)
 
+    def get_service(self, service_id: str):
+        for s in self.__service_list:
+            if s.id == service_id:
+                return s
     def get_service(self, service_id: str):
         for s in self.__service_list:
             if s.id == service_id:
@@ -157,25 +243,43 @@ class Customer(ABC):
     def get_tier_discount(self) -> float: pass
     @abstractmethod
     def get_points_per_hr(self) -> int: pass
+    @abstractmethod
+    def get_points_per_hr(self) -> int: pass
 
 class Standard(Customer):
     def __init__(self, name: str, password: str):
         super().__init__(Membership.STANDARD, name, password)
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.STANDARD, name, password)
     def get_cancellation_limit_hours(self) -> int: return 24
+    def get_tier_discount(self) -> float:          return 0.0
+    def get_points_per_hr(self) -> int:            return 3
     def get_tier_discount(self) -> float:          return 0.0
     def get_points_per_hr(self) -> int:            return 3
 
 class Premium(Customer):
     def __init__(self, name: str, password: str):
         super().__init__(Membership.PREMIUM, name, password)
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.PREMIUM, name, password)
     def get_cancellation_limit_hours(self) -> int: return 12
+    def get_tier_discount(self) -> float:          return 0.03
+    def get_points_per_hr(self) -> int:            return 5
     def get_tier_discount(self) -> float:          return 0.03
     def get_points_per_hr(self) -> int:            return 5
 
 class Diamond(Customer):
     def __init__(self, name: str, password: str):
         super().__init__(Membership.DIAMOND, name, password)
+    def __init__(self, name: str, password: str):
+        super().__init__(Membership.DIAMOND, name, password)
     def get_cancellation_limit_hours(self) -> int: return 6
+    def get_tier_discount(self) -> float:          return 0.05
+    def get_points_per_hr(self) -> int:            return 8
+
+# ===========================================================================
+# TIMESLOT
+# ===========================================================================
     def get_tier_discount(self) -> float:          return 0.05
     def get_points_per_hr(self) -> int:            return 8
 
@@ -193,9 +297,21 @@ class TimeSlot:
             datetime.combine(day, end_time) - datetime.combine(day, start_time)
         ).seconds // 3600
 
+class TimeSlot:
+    def __init__(self, day: date, start_time: time, end_time: time, status: TimeSlotStatus):
+        self.__date       = day
+        self.__start_time = start_time
+        self.__end_time   = end_time
+        self.__status     = status
+        self.__duration   = (
+            datetime.combine(day, end_time) - datetime.combine(day, start_time)
+        ).seconds // 3600
+
     @property
     def date(self):     return self.__date
+    def date(self):     return self.__date
     @property
+    def start(self):    return self.__start_time
     def start(self):    return self.__start_time
     @property
     def end(self):      return self.__end_time
@@ -210,7 +326,20 @@ class TimeSlot:
     def check_overlap(self, s2: time, e2: time) -> bool:
         return s2 < self.__end_time and self.__start_time < e2
 
+    def end(self):      return self.__end_time
+    @property
+    def status(self):   return self.__status
+    @property
+    def duration(self): return self.__duration
+
+    @status.setter
+    def status(self, s): self.__status = s
+
+    def check_overlap(self, s2: time, e2: time) -> bool:
+        return s2 < self.__end_time and self.__start_time < e2
+
 # ===========================================================================
+# ROOM
 # ROOM
 # ===========================================================================
 
@@ -224,16 +353,31 @@ class Room:
         self.__timeslot_list: List[TimeSlot] = []
         self.__equipment_quota = equipment_quota
         self.__status          = RoomEquipmentStatus.AVAILABLE
+class Room:
+    def __init__(self, branch_name: str, size: RoomType, rate: float,
+                 equipment_quota: int, branch_id: str):
+        self.__size            = size
+        self.__id              = f"RM-{branch_name}-{self.__size.value}-{str(uuid.uuid4())[:8]}"
+        self.__branch_id       = branch_id
+        self.__rate            = rate
+        self.__timeslot_list: List[TimeSlot] = []
+        self.__equipment_quota = equipment_quota
+        self.__status          = RoomEquipmentStatus.AVAILABLE
 
     @property
     def id(self):              return self.__id
+    def id(self):              return self.__id
     @property
+    def size(self):            return self.__size.value
     def size(self):            return self.__size.value
     @property
     def size_enum(self):       return self.__size
+    def size_enum(self):       return self.__size
     @property
     def rate(self):            return self.__rate
+    def rate(self):            return self.__rate
     @property
+    def timeslot(self):        return self.__timeslot_list
     def timeslot(self):        return self.__timeslot_list
     @property
     def equipment_quota(self): return self.__equipment_quota
@@ -317,10 +461,19 @@ class StockEquipment:
     def equipment(self): return self.__equipment_ls
 
     def add_eq(self, eq: Equipment):
+    def id(self):   return self.__id
+    @property
+    def type(self): return self.__type
+    @property
+    def equipment(self): return self.__equipment_ls
+
+    def add_eq(self, eq: Equipment):
         self.__equipment_ls.append(eq)
 
     def get_eq(self, eq_id: str) -> Optional[Equipment]:
+    def get_eq(self, eq_id: str) -> Optional[Equipment]:
         for eq in self.__equipment_ls:
+            if eq.id == eq_id:
             if eq.id == eq_id:
                 return eq
         return None
@@ -329,14 +482,21 @@ class StockEquipment:
 # PRODUCTS / STOCK PRODUCT
 # ===========================================================================
 
+# ===========================================================================
+# PRODUCTS / STOCK PRODUCT
+# ===========================================================================
+
 class Products:
     def __init__(self, type_: ProductType, price: float):
         self.__type  = type_
+        self.__type  = type_
         self.__price = price
+
 
     @property
     def price(self): return self.__price
     @property
+    def name(self):  return self.__type.value
     def name(self):  return self.__type.value
 
     def  to_format(self):
@@ -350,7 +510,9 @@ class StockProduct:
 
     @property
     def id(self):   return self.__id
+    def id(self):   return self.__id
     @property
+    def type(self): return self.__type
     def type(self): return self.__type
     @property
     def stock(self): return self.__product_list
@@ -417,6 +579,20 @@ class Booking:
 # ===========================================================================
 
 class Service_IN:
+    def __init__(self, first_booking: Booking):
+        self.__id           = f"SI-{str(uuid.uuid4())[:8]}"
+        self.__booking_list: List[Booking] = [first_booking]
+        self.__status       = ServiceStatus.PENDING_PAYMENT
+        self.__total_price  = 0.0
+
+    @property
+    def id(self):           return self.__id
+    @property
+    def status(self):       return self.__status
+    @property
+    def total_price(self):  return self.__total_price
+    @property
+    def booking_list(self): return self.__booking_list
     def __init__(self, first_booking: Booking):
         self.__id           = f"SI-{str(uuid.uuid4())[:8]}"
         self.__booking_list: List[Booking] = [first_booking]
@@ -535,6 +711,8 @@ class TransactionRecord:
         self.__ref_txn_id   = ref_txn_id
         self.__timestamp    = datetime.now()
 
+    @property
+    def id(self):           return self.__id
     @property
     def txn_id(self):     return self.__txn_id
     @property
@@ -999,6 +1177,8 @@ class RhythmReserve:
         current   = day_start
         while current + timedelta(hours=1) <= day_end:
             for room in rooms:
+                if not self._has_conflict(room, current, current + timedelta(hours=1)):
+                    slots.append(current.strftime("%H:%M"))
                 if not self._has_conflict(room, current, current + timedelta(hours=1)):
                     slots.append(current.strftime("%H:%M"))
                     break
