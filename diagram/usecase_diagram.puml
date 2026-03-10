@@ -30,7 +30,7 @@ rectangle "RhythmReserve System" {
   package "Account Management" {
 
     usecase "Register Account"    as REG  #LightYellow
-    usecase "Pay Registration Fee" as PRF  #LightBlue
+    usecase "Pay Registration Fee" as PRF  #LightYellow
     usecase "Login"               as LGN  #LightYellow
     usecase "Logout"              as LGT  #LightYellow
     usecase "Manage Profile\n(email / phone / address)" as MP  #LightYellow
