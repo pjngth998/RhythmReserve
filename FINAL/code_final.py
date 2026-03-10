@@ -2124,7 +2124,6 @@ class RhythmReserve():
         return result
 
 
-
     def cancel_booking(self,customer_id,servicein_id,booking_id):
         customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(servicein_id)
