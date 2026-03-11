@@ -18,18 +18,51 @@ store     = RhythmReserve("RhythmReserve HQ")
 branch    = store.add_branch("Silom")
 branch_id = branch.id
 
+# Rooms
 store.add_room(branch_id, RoomType.SMALL)
 store.add_room(branch_id, RoomType.MEDIUM)
 store.add_room(branch_id, RoomType.LARGE)
 store.add_room(branch_id, RoomType.EXTRALARGE)
 
+# Equipment stocks + 3 ชิ้นต่อประเภท
 for eq_type in EquipmentType:
     store.create_equipment_stock(branch_id, eq_type)
     store.add_equipment(branch_id, eq_type, 3)
 
+# Product stocks + 10 ชิ้นต่อประเภท
 for p_type in ProductType:
     store.create_product_stock(branch_id, p_type)
     store.add_product(branch_id, p_type, 10)
+
+mock_channel = CreditCard()
+
+# ── Mock Customers ──────────────────────────────────────────────────────────
+from datetime import date
+
+_std = store.customer_register_request(
+    "Alice Standard", "alice", "pass1234",
+    "alice@email.com", "0812345678",
+    date(1995, 6, 15), Membership.STANDARD, None
+)
+
+_prm = store.customer_register_request(
+    "Bob Premium", "bob", "pass1234",
+    "bob@email.com", "0823456789",
+    date(1990, 3, 20), Membership.PREMIUM, mock_channel
+)
+
+_dmn = store.customer_register_request(
+    "Carol Diamond", "carol", "pass1234",
+    "carol@email.com", "0834567890",
+    date(1988, 11, 5), Membership.DIAMOND, mock_channel
+)
+
+print("=" * 50)
+print("[SEED] Customers ready:")
+print(f"  STANDARD → id={_std.id}  username=alice")
+print(f"  PREMIUM  → id={_prm.id}  username=bob")
+print(f"  DIAMOND  → id={_dmn.id}  username=carol")
+print("=" * 50)
 
 mock_channel = CreditCard()  # mock payment — เดียวที่ mcp เพิ่มเอง
 
@@ -773,39 +806,14 @@ def view_service_out_summary(customer_id: str, service_id: str, booking_id: str)
 @mcp.tool()
 def checkout(
     customer_id: str, service_id: str, booking_id: str,
+    payment_method: str,
     is_room_damaged: bool = False, room_damage_cost: float = 0.0,
     damaged_equipment_ids: str = "",
 ) -> dict:
     """
-    เช็คเอาท์ — คำนวณยอดทั้งหมด (สินค้า + penalty)
-    ⚠️ หลังได้ยอดแล้ว ต้องถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหน แล้วค่อยเรียก confirm_checkout
-    """
-    try:
-        damaged_ids = [x.strip() for x in damaged_equipment_ids.split(",") if x.strip()]
-        result = store.pay_service_out(customer_id, service_id, booking_id, mock_channel,
-                                       is_room_damaged, room_damage_cost, damaged_ids)
-        return {
-            "success": True,
-            "message": "คำนวณยอดสำเร็จ",
-            **result,
-            "payment_options": [
-                {"method": "credit", "label": "บัตรเครดิต"},
-                {"method": "qr",     "label": "QR Code"},
-            ],
-            "next_step": "ถามผู้ใช้ว่าเลือกวิธีไหน แล้วเรียก confirm_checkout พร้อม payment_method"
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
-
-
-@mcp.tool()
-def confirm_checkout(
-    customer_id: str, service_id: str, booking_id: str,
-    payment_method: str,
-) -> dict:
-    """
-    ยืนยันชำระเงิน Service OUT และปิด session (รับ points + อัปเดต report)
+    เช็คเอาท์ — คำนวณยอดและชำระเงิน Service OUT ในขั้นตอนเดียว
     payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
+    ⚠️ ต้องถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหนก่อนเรียก tool นี้เสมอ
     """
     try:
         if payment_method == "credit":
@@ -815,12 +823,29 @@ def confirm_checkout(
         else:
             return {"success": False, "error": "payment_method ต้องเป็น 'credit' หรือ 'qr'"}
 
-        # อัปเดต channel ใน payment_sout ก่อน confirm
-        customer    = store.get_customer_by_id(customer_id)
-        reserve     = customer.get_reserve(service_id)
-        booking     = reserve.search_booking(booking_id)
+        damaged_ids = [x.strip() for x in damaged_equipment_ids.split(",") if x.strip()]
+        result = store.pay_service_out(customer_id, service_id, booking_id, channel,
+                                       is_room_damaged, room_damage_cost, damaged_ids)
+        return {
+            "success": True,
+            "message": "คำนวณยอดสำเร็จ กรุณายืนยันการชำระเงิน",
+            **result,
+            "next_step": "เรียก confirm_checkout เพื่อปิด session"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def confirm_checkout(
+    customer_id: str, service_id: str, booking_id: str,
+) -> dict:
+    """ยืนยันปิด session — รับ points + อัปเดต report"""
+    try:
+        customer     = store.get_customer_by_id(customer_id)
+        reserve      = customer.get_reserve(service_id)
+        booking      = reserve.search_booking(booking_id)
         payment_sout = booking.payment_sout
-        payment_sout._PaymentServiceOut__channel = channel
 
         branch  = store.get_branch_by_id(booking.room.branch_id)
         staff   = Staff("system", "system", "System", branch)
