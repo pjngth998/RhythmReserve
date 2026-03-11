@@ -519,7 +519,7 @@ def create_reservation(
 
     หลังสร้างสำเร็จ ต้องถามผู้ใช้ก่อนเสมอว่า "ต้องการเพิ่ม Booking อีกไหม?"
     - ถ้าใช่ -> เรียก add_booking_to_reservation
-    - ถ้าไม่ -> เรียก select_payment_method แล้วค่อย pay_reservation
+    - ถ้าไม่ -> เรียก pay_reservation โดยถามผู้ใช้ก่อนว่าต้องการชำระด้วย 'credit' หรือ 'qr'
     """
     try:
         ru = room_size.upper()
