@@ -10,6 +10,8 @@ from fastmcp.utilities.types import Image
 
 from code_final import *
 
+
+
 # ════════════════════════════════════════════════════════════════════════════
 # SETUP + SEED DATA
 # ════════════════════════════════════════════════════════════════════════════
@@ -127,11 +129,16 @@ mcp = FastMCP("RhythmReserve")
 
 # ── Mock Time ───────────────────────────────────────────────────────────────
 from datetime import datetime, timedelta
+import code_final as _cf
 
 _time_offset = timedelta(0)
 
-def now() -> datetime:
-    return now() + _time_offset
+def _mock_now() -> datetime:
+    global _time_offset
+    return datetime.now() + _time_offset
+
+# inject mock now เข้า code_final เพื่อให้ทุก call ใช้เวลาเดียวกัน
+_cf._now_func = _mock_now
 
 
 @mcp.tool()
@@ -140,9 +147,9 @@ def advance_time(hours: int = 0, minutes: int = 0) -> dict:
     global _time_offset
     _time_offset += timedelta(hours=hours, minutes=minutes)
     return {
-        "success":      True,
-        "advanced_by":  f"{hours}h {minutes}m",
-        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+        "success":           True,
+        "advanced_by":       f"{hours}h {minutes}m",
+        "current_mock_time": _mock_now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
@@ -153,7 +160,7 @@ def reset_time() -> dict:
     _time_offset = timedelta(0)
     return {
         "success":           True,
-        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+        "current_mock_time": _mock_now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
 
@@ -162,7 +169,7 @@ def get_current_time() -> dict:
     """ดูเวลา mock ปัจจุบัน"""
     return {
         "success":           True,
-        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+        "current_mock_time": _mock_now().strftime("%Y-%m-%d %H:%M:%S"),
         "offset":            str(_time_offset),
     }
 
@@ -577,11 +584,30 @@ def add_booking_to_reservation(
 
 @mcp.tool()
 def view_my_reservations(customer_id: str) -> dict:
-    """ดูรายการ Service IN ทั้งหมดของลูกค้า"""
+    """ดูรายการ Service IN ทั้งหมดของลูกค้า พร้อมรายละเอียด Service OUT ถ้ามี"""
     try:
         customer = store.get_customer_by_id(customer_id)
+
+        def _fmt_sout(booking):
+            sout = booking.service_out
+            if sout is None:
+                return None
+            psout = booking.payment_sout
+            return {
+                "sout_id":     sout.id,
+                "status":      sout.status.value,
+                "products":    [{"type": p.type.value, "price": p.price} for p in sout.product_list],
+                "penalties":   [{"amount": p.amount, "reason": p.reason, "type": p.type.value}
+                                for p in sout.penalty_list],
+                "total_price": sout.total_price,
+                "is_paid":     psout.is_paid if psout else False,
+            }
+
         return {
             "success": True,
+            "customer_name": customer.name,
+            "membership":    type(customer).__name__,
+            "cancel_quota":  f"ยกเลิกได้ก่อน {customer.get_cancellation_limit_hours()} ชม.",
             "reservations": [
                 {
                     "service_id":    svc.id,
@@ -590,13 +616,16 @@ def view_my_reservations(customer_id: str) -> dict:
                     "total_price":   svc.total_price,
                     "bookings": [
                         {
-                            "booking_id": b.id,
-                            "date":       str(b.day),
-                            "start":      str(b.start),
-                            "end":        str(b.end),
-                            "room_size":  b.room.size,
-                            "price":      b.price,
-                            "addons":     [{"type": a.type.name, "price": a.price} for a in b.addon_list],
+                            "booking_id":  b.id,
+                            "date":        str(b.day),
+                            "start":       str(b.start),
+                            "end":         str(b.end),
+                            "room_size":   b.room.size,
+                            "room_rate":   b.room.rate,
+                            "equipment":   [{"type": eq.type, "rate": eq.rate} for eq in b.eq_list],
+                            "addons":      [{"type": a.type.name, "price": a.price} for a in b.addon_list],
+                            "price":       b.price,
+                            "service_out": _fmt_sout(b),
                         }
                         for b in svc.booking_list
                     ],
@@ -647,7 +676,7 @@ def view_booking_detail(customer_id: str, service_id: str, booking_id: str) -> d
         booking  = service.search_booking(booking_id)
 
         booking_start = datetime.combine(booking.day, booking.start)
-        hours_until   = (booking_start - now()).total_seconds() / 3600
+        hours_until   = (booking_start - _mock_now()).total_seconds() / 3600
         cancel_limit  = customer.get_cancellation_limit_hours()
 
         return {
@@ -776,12 +805,37 @@ def view_my_coupons(customer_id: str) -> dict:
 def cancel_booking(customer_id: str, service_id: str, booking_id: str) -> dict:
     """
     ยกเลิกการจอง (เฉพาะ Service ที่ PAID แล้ว)
-    แนะนำดู view_booking_detail ก่อนตรวจสอบนโยบายคืนเงิน
+    - STANDARD : ยกเลิกได้ก่อน 24 ชม. → คืนเงินเต็ม
+    - PREMIUM  : ยกเลิกได้ก่อน 12 ชม. → คืนเงินเต็ม
+    - DIAMOND  : ยกเลิกได้ก่อน  6 ชม. → คืนเงินเต็ม
+    แนะนำดู view_booking_detail ก่อนตรวจสอบว่าเข้าเงื่อนไขหรือไม่
     """
     try:
-        cancel_time = now()
-        msg = store.cancel_booking(customer_id, service_id, booking_id, cancel_time, store.policy)
-        return {"success": True, "message": msg}
+        customer = store.get_customer_by_id(customer_id)
+        service  = customer.get_reserve(service_id)
+        booking  = service.search_booking(booking_id)
+
+        cancel_limit  = customer.get_cancellation_limit_hours()
+        booking_start = datetime.combine(booking.day, booking.start)
+        hours_until   = (booking_start - _mock_now()).total_seconds() / 3600
+
+        if hours_until < cancel_limit:
+            return {
+                "success": False,
+                "error":   f"ยกเลิกช้าเกินไป — {type(customer).__name__} ต้องยกเลิกก่อน {cancel_limit} ชม. "
+                           f"(เหลืออีก {hours_until:.1f} ชม.) — ไม่ได้รับเงินคืน",
+                "membership":          type(customer).__name__,
+                "cancel_limit_hours":  cancel_limit,
+                "hours_until_booking": round(hours_until, 1),
+            }
+
+        msg = store.cancel_booking(customer_id, service_id, booking_id, _mock_now(), store.policy)
+        return {
+            "success":     True,
+            "message":     msg,
+            "refund_note": "คืนเงินเต็มจำนวน",
+            "booking_id":  booking_id,
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
@@ -880,7 +934,7 @@ def inspect_before_checkout(
             "products_ordered": [
                 f"{p.type.value}: {p.price} THB" for p in service_out.product_list
             ],
-            "current_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+            "current_time": _mock_now().strftime("%Y-%m-%d %H:%M:%S"),
             "expected_end": str(booking.end),
             "next_step": "ถาม Staff ว่ามีความเสียหายไหม? ถ้ามี → report_damage, ถ้าไม่มี → checkout",
         }
@@ -973,7 +1027,7 @@ def checkout(
         reserve       = customer.get_reserve(service_id)
         booking       = reserve.search_booking(booking_id)
         service_out   = booking.service_out
-        actual_time   = now()
+        actual_time   = _mock_now()
         expected_time = datetime.combine(booking.day, booking.end)
         branch        = store.get_branch_by_id(booking.room.branch_id)
         report        = store.get_daily_report(booking.day, branch)
