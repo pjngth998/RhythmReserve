@@ -1,0 +1,62 @@
+@startuml CreatePenalty
+
+actor Staff
+participant "Staff" as Staff
+participant "RhythmReserve" as System
+participant "Policy" as Policy
+participant "Service_OUT" as ServiceOUT
+participant "Penalty" as Penalty
+participant "DailyReport" as DailyReport
+
+Staff -> System : checkout()
+System -> Staff : customer_check_out()
+
+Staff -> Policy : check_late_checkout()
+
+alt actual > expected + 15min 
+    Policy -> Penalty : 
+    Policy --> Staff : late_penalty
+    Staff -> ServiceOUT : add_penalty(late_penalty)
+else 
+    Policy --> Staff : None
+end
+
+== 2. Check Room Damage ==
+alt is_room_damaged == True and room_damage_cost > 0
+    Staff -> Policy : check_damage_penalty(booking_id, room_damage_cost, desc)
+    Policy -> Penalty : __init__(DAMAGE, cost, desc, booking_id)
+    Penalty --> Policy : room_penalty
+    Policy --> Staff : room_penalty
+    Staff -> ServiceOUT : add_penalty(room_penalty)
+    Staff -> Staff : booking.room.status = MAINTENANCE
+else ห้องปกติ
+    Staff -> Staff : booking.room.status = AVAILABLE
+end
+
+== 3. Check Equipment Damage ==
+loop for eq in booking.eq_list
+    alt eq.id in damaged_eq_ids
+        Staff -> Policy : check_damage_penalty(booking_id, eq.price, desc)
+        Policy -> Penalty : __init__(DAMAGE, eq.price, desc, booking_id)
+        Penalty --> Policy : eq_penalty
+        Policy --> Staff : eq_penalty
+        Staff -> ServiceOUT : add_penalty(eq_penalty)
+        Staff -> Staff : eq.status = MAINTENANCE
+    else อุปกรณ์ปกติ
+        Staff -> Staff : eq.status = AVAILABLE
+    end
+end
+
+== 4. Apply Penalties to Report ==
+loop for pen in service_out.penalty_list
+    alt pen.status == PENDING
+        Staff -> Penalty : change_penalty_status(APPLIED)
+        Staff -> DailyReport : add_penalty(pen)
+    end
+end
+
+Staff -> DailyReport : add_booking_record(booking)
+Staff --> System : PaymentServiceOut
+System --> Staff : PaymentServiceOut (ยอดคำนวณแล้ว)
+
+@enduml

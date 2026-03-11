@@ -24,7 +24,6 @@ class EquipmentType(Enum):
     MICROPHONE = "MC"
     BASS = "BS"
     KEYBOARD = "KB"
-
 class RoomEquipmentStatus(Enum):
     AVAILABLE = "Available"
     PENDING = "Pending"
@@ -96,13 +95,11 @@ class TXNType(Enum):
     REFUND = "REFUND"
     PENALTY = "PENALTY"
 
-
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
 
 SLOT_STEP = timedelta(minutes=30)
 BUFFER = timedelta(minutes=15)
-
 
 # ===========================================================================
 # User
@@ -271,7 +268,7 @@ class Diamond(Customer):
     def get_tier_discount(self) -> float:          return 0.05
     def get_points_per_hr(self) -> int:            return 8
 
-    # ===========================================================================
+# ===========================================================================
 # Penalty
 # ===========================================================================
 class Penalty:
@@ -1882,14 +1879,14 @@ class RhythmReserve():
 
 
     
-    def search_custoemr(self,customer_id):
+    def search_customer(self,customer_id):
         for customer in self.__customer_list:
             if customer.id == customer_id:
                 return customer
         return None
 
     def cancel_booking(self,customer_id,servicein_id,booking_id):
-        customer = self.search_custoemr(customer_id)
+        customer = self.search_customer(customer_id)
         service_in = customer.search_reserve(servicein_id)
         
 
