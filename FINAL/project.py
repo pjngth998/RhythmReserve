@@ -820,6 +820,9 @@ def buy_snacks_drinks(
 ) -> dict:
     """
     สั่งเครื่องดื่ม / ขนมระหว่างใช้งานห้อง
+    ⚠️ ก่อนเรียก tool นี้ต้องเรียก tool_search("buy snacks drinks") ก่อนเสมอ
+       เพื่อโหลด parameter ที่ถูกต้อง
+    สั่งเครื่องดื่ม / ขนมระหว่างใช้งานห้อง
     product_type: WATER / COFFEE / COKE / CHOCOPIE / LAY / TARO
     """
     try:
@@ -860,32 +863,90 @@ def inspect_before_checkout(
     - ถ้ามี    → เรียก report_damage ก่อน แล้วค่อย checkout
     """
     try:
-        customer    = store.get_customer_by_id(customer_id)
-        reserve     = customer.get_reserve(service_id)
-        booking     = reserve.search_booking(booking_id)
+        customer = store.get_customer_by_id(customer_id)
+        if not customer:
+            return {"success": False, "error": f"ไม่พบลูกค้า customer_id={customer_id}"}
+
+        reserve = customer.get_reserve(service_id)
+        if not reserve:
+            return {"success": False, "error": f"ไม่พบ service service_id={service_id}"}
+
+        booking = reserve.search_booking(booking_id)
+        if not booking:
+            return {"success": False, "error": f"ไม่พบการจอง booking_id={booking_id}"}
+
         service_out = booking.service_out
+        if not service_out:
+            return {"success": False, "error": f"ยังไม่มี service_out สำหรับ booking_id={booking_id} (ลูกค้ายังไม่ได้ check-in)"}
 
         return {
             "success":    True,
             "booking_id": booking_id,
             "room": {
-                "room_id":   booking.room.id,
-                "room_size": booking.room.size,
-                "room_rate": booking.room.rate,
+                "room_id":   str(booking.room.id),       # ✅ str() ป้องกัน object leak
+                "room_size": str(booking.room.size),
+                "room_rate": float(booking.room.rate),
             },
             "equipment": [
-                {"eq_id": eq.id, "type": eq.type, "price": eq.price}
+                {
+                    "eq_id": str(eq.id),
+                    "type":  str(eq.type),               # ✅ eq.type คืน .value อยู่แล้ว แต่ str() ซ้ำไว้ปลอดภัย
+                    "price": float(eq.price),
+                }
                 for eq in booking.eq_list
             ],
             "products_ordered": [
-                f"{p.type.value}: {p.price} THB" for p in service_out.product_list
+                f"{p.type.value}: {p.price} THB"
+                for p in service_out.product_list
             ],
             "current_time": now().strftime("%Y-%m-%d %H:%M:%S"),
             "expected_end": str(booking.end),
             "next_step": "ถาม Staff ว่ามีความเสียหายไหม? ถ้ามี → report_damage, ถ้าไม่มี → checkout",
         }
+
+    except RecursionError:
+        return {"success": False, "error": "เกิด circular reference ใน object กรุณาตรวจสอบ model"}
+    except AttributeError as e:
+        return {"success": False, "error": f"เข้าถึง attribute ไม่ได้: {e}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
+# @mcp.tool()
+# def inspect_before_checkout(
+#     customer_id: str, service_id: str, booking_id: str,
+# ) -> dict:
+#     """
+#     Staff ตรวจสอบความเสียหายก่อน checkout
+#     ⚠️ ต้องเรียก tool นี้ก่อนเสมอ แล้วถามว่ามีความเสียหายไหม
+#     - ถ้าไม่มี → เรียก checkout โดยตรง
+#     - ถ้ามี    → เรียก report_damage ก่อน แล้วค่อย checkout
+#     """
+#     try:
+#         customer    = store.get_customer_by_id(customer_id)
+#         reserve     = customer.get_reserve(service_id)
+#         booking     = reserve.search_booking(booking_id)
+#         service_out = booking.service_out
+# 
+#         return {
+#             "success":    True,
+#             "booking_id": booking_id,
+#             "room": {
+#                 "room_id":   booking.room.id,
+#                 "room_size": booking.room.size,
+#                 "room_rate": booking.room.rate,
+#             },
+#             "equipment": [
+#                 {"eq_id": eq.id, "type": eq.type, "price": eq.price}
+#                 for eq in booking.eq_list
+#             ],
+#             "products_ordered": [
+#                 f"{p.type.value}: {p.price} THB" for p in service_out.product_list
+#             ],
+#             "current_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+#             "expected_end": str(booking.end),
+#             "next_step": "ถาม Staff ว่ามีความเสียหายไหม? ถ้ามี → report_damage, ถ้าไม่มี → checkout",
+#         }
+#     except Exception as e:
+#         return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -978,23 +1039,19 @@ def checkout(
         branch        = store.get_branch_by_id(booking.room.branch_id)
         report        = store.get_daily_report(booking.day, branch)
 
-        # เช็ค late checkout
         late_pen = store.policy.check_late_checkout(
             actual_time, expected_time, booking.id, booking.room.rate)
         if late_pen:
             service_out.add_penalty(late_pen)
 
-        # คำนวณยอดรวม (products + damage penalties + late penalty)
         payment_sout = PaymentServiceOut(service_out, channel)
         payment_sout.calculate_total()
 
-        # penalty → APPLIED + บันทึก report
         for pen in service_out.penalty_list:
             if pen.status == PenaltyStatus.PENDING:
                 pen.change_penalty_status(PenaltyStatus.APPLIED)
                 report.add_penalty(pen)
 
-        # อัปเดต room/eq status
         booking.room.update_timeslot_status(
             booking.day, booking.start, booking.end, RoomEquipmentStatus.AVAILABLE)
         for eq in booking.eq_list:
@@ -1011,19 +1068,29 @@ def checkout(
         customer.add_points(booking.duration)
         reserve.set_status(ServiceStatus.PAID)
 
+        # ✅ ดึงค่าออกมาเป็น primitive ทั้งหมดก่อน return
+        products   = [f"{p.type.value}: {p.price} THB" for p in service_out.product_list]
+        penalties  = [{"amount": f"{p.amount} THB", "reason": str(p.reason)} for p in service_out.penalty_list]
+        total      = float(payment_sout.total_price)
+        pts_earned = int(booking.duration) * int(customer.get_points_per_hr())
+
         return {
             "success": True,
             "message": "ชำระเงินสำเร็จ ขอบคุณที่ใช้บริการ!",
             "summary": {
-                "products":      [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
-                "penalties":     [{"amount": f"{p.amount} THB", "reason": p.reason} for p in service_out.penalty_list],
-                "total_price":   payment_sout.total_price,
-                "points_earned": booking.duration * customer.get_points_per_hr(),
+                "products":      products,
+                "penalties":     penalties,
+                "total_price":   total,
+                "points_earned": pts_earned,
             }
         }
+
+    except RecursionError:
+        return {"success": False, "error": "เกิด circular reference ใน object กรุณาตรวจสอบ model"}
+    except AttributeError as e:
+        return {"success": False, "error": f"เข้าถึง attribute ไม่ได้: {e}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # 8. POINTS & REWARDS

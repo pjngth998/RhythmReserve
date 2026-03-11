@@ -543,10 +543,15 @@ class Booking():
         return self.__price
 
     def booking_cancel(self):
-        set_room_success =  self.__room.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
+        set_room_success = self.__room.update_timeslot_status(
+            self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE
+        )
 
+        set_eq_success = True  # ✅ default เป็น True ก่อน (กรณีไม่มี equipment)
         for eq in self.__eq_list:
-            set_eq_success =  eq.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
+            set_eq_success = eq.update_timeslot_status(
+                self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE
+            )
 
         if set_room_success and set_eq_success:
             return True
