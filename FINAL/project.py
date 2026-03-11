@@ -1,6 +1,9 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+
 from datetime import datetime, time
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
@@ -103,6 +106,8 @@ def register_account(
     - PREMIUM  : ฿599 | ส่วนลด 3% | 5 pts/hr | ยกเลิกก่อน 12 ชม.
     - DIAMOND  : ฿999 | ส่วนลด 5% | 8 pts/hr | ยกเลิกก่อน 6 ชม.
     birthday: YYYY-MM-DD
+
+    ⚠️ ถ้า membership ไม่ใช่ STANDARD ต้องเรียก select_register_payment ก่อนเสมอ
     """
     try:
         mu = membership.upper()
@@ -113,15 +118,69 @@ def register_account(
                                          "pts_per_hr": e.points_per_hr} for e in Membership}}
         mem_enum = mem_map[mu]
         bday     = datetime.strptime(birthday, "%Y-%m-%d").date()
-        channel  = mock_channel if mem_enum != Membership.STANDARD else None
+
+        if mem_enum == Membership.STANDARD:
+            customer = store.customer_register_request(name, username, password, email, phone, bday, mem_enum, None)
+            return {
+                "success": True,
+                "message": f"สมัครสมาชิกสำเร็จ! ยินดีต้อนรับ {name}",
+                "customer_id": customer.id,
+                "membership":  mu,
+                "registration_fee_paid": 0,
+                "benefits": {"discount": "0%", "points_per_hr": 3},
+            }
+
+        # PREMIUM / DIAMOND → ต้องจ่ายก่อน
+        return {
+            "success":       True,
+            "require_payment": True,
+            "message":       f"membership {mu} มีค่าสมัคร ฿{mem_enum.price} กรุณาเลือกวิธีชำระเงิน",
+            "registration_fee": mem_enum.price,
+            "payment_options": [
+                {"method": "credit", "label": "บัตรเครดิต"},
+                {"method": "qr",     "label": "QR Code"},
+            ],
+            "next_step": "ถามผู้ใช้ว่าเลือกวิธีไหน แล้วเรียก pay_and_confirm_register พร้อมข้อมูลเดิมทั้งหมด"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def pay_and_confirm_register(
+    name: str, username: str, password: str,
+    email: str, phone: str, birthday: str,
+    membership: str,
+    payment_method: str,
+) -> dict:
+    """
+    ชำระค่าสมัคร PREMIUM/DIAMOND และสร้างบัญชี
+    payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
+    """
+    try:
+        mu       = membership.upper()
+        mem_map  = {e.name: e for e in Membership}
+        mem_enum = mem_map[mu]
+        bday     = datetime.strptime(birthday, "%Y-%m-%d").date()
+
+        if payment_method == "credit":
+            channel = CreditCard()
+        elif payment_method == "qr":
+            channel = QrScan()
+        else:
+            return {"success": False, "error": "payment_method ต้องเป็น 'credit' หรือ 'qr'"}
+
         customer = store.customer_register_request(name, username, password, email, phone, bday, mem_enum, channel)
         return {
-            "success": True,
-            "message": f"สมัครสมาชิกสำเร็จ! ยินดีต้อนรับ {name}",
-            "customer_id": customer.id,
-            "membership":  mu,
+            "success":               True,
+            "message":               f"สมัครสมาชิกสำเร็จ! ยินดีต้อนรับ {name}",
+            "customer_id":           customer.id,
+            "membership":            mu,
             "registration_fee_paid": mem_enum.price,
-            "benefits": {"discount": f"{mem_enum.discount*100:.0f}%", "points_per_hr": mem_enum.points_per_hr},
+            "benefits": {
+                "discount":      f"{mem_enum.discount*100:.0f}%",
+                "points_per_hr": mem_enum.points_per_hr,
+            },
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -337,6 +396,10 @@ def create_reservation(
                             เช่น "ELECTRICGUITAR:2,DRUM:1"
     - addons              : บริการเสริม คั่นด้วย comma
                             เช่น "RECORDING,LIVESTREAM"
+    สร้างการจองห้อง (Service IN)
+    ⚠️ หลังสร้างสำเร็จ ต้องถามผู้ใช้ก่อนเสมอว่า "ต้องการเพิ่ม Booking อีกไหม?"
+    - ถ้าใช่ → เรียก add_booking_to_reservation
+    - ถ้าไม่ → เรียก select_payment_method แล้วค่อย pay_reservation
     """
     try:
         ru = room_size.upper()
@@ -559,34 +622,54 @@ def view_cancellation_policy(customer_id: str) -> dict:
 
 
 @mcp.tool()
-def pay_reservation(customer_id: str, service_id: str, 
-                    payment_method: str = "none",  # ← default เป็น none
+def select_payment_method(customer_id: str, service_id: str) -> dict:
+    """
+    ดูยอดรวมและเลือกวิธีชำระเงิน — ต้องเรียก tool นี้ก่อนเสมอ แล้วถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหน
+    จากนั้นค่อยเรียก pay_reservation พร้อม payment_method ที่ผู้ใช้เลือก
+    """
+    try:
+        customer   = store.get_customer_by_id(customer_id)
+        service_in = customer.get_reserve(service_id)
+        total      = service_in.calculate_total()
+        return {
+            "success":          True,
+            "service_id":       service_id,
+            "total_price":      total,
+            "payment_options":  [
+                {"method": "credit", "label": "บัตรเครดิต"},
+                {"method": "qr",     "label": "QR Code"},
+            ],
+            "next_step": "ถามผู้ใช้ว่าเลือกวิธีไหน แล้วเรียก pay_reservation พร้อม payment_method"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def pay_reservation(customer_id: str, service_id: str,
+                    payment_method: str,
                     coupon_id: str = "") -> list:
-    """ชำระเงินยืนยันการจอง
-    IMPORTANT: ถ้า payment_method = 'none' ให้ถามผู้ใช้ก่อนเสมอว่าต้องการชำระด้วยวิธีไหน
+    """
+    ชำระเงินยืนยันการจอง — ต้องเรียก select_payment_method ก่อนเสมอ
     payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
     """
     try:
-        if payment_method == "none":
-            return ["กรุณาเลือกวิธีชำระเงิน: 'credit' = บัตรเครดิต หรือ 'qr' = QR Code"]
-        
-        coupon     = coupon_id.strip() or None
-        customer   = store.get_customer_by_id(customer_id)
-        service_in = customer.get_reserve(service_id)
+        coupon = coupon_id.strip() or None
 
         if payment_method == "qr":
-            channel = QrScan()
-            total   = service_in.calculate_total()
-            qr_b64  = channel.get_qr_base64(total, service_id)
-            service = store.pay_service_in(customer_id, service_id, channel, coupon)
-            return [
-                f"ชำระเงินสำเร็จ! Service: {service.id} Status: {service.status.value}",
-                Image(data=qr_b64, media_type="image/png")
-            ]
-        else:
+            channel    = QrScan()
+            customer   = store.get_customer_by_id(customer_id)
+            service_in = customer.get_reserve(service_id)
+            total      = service_in.calculate_total()
+            qr_b64     = channel.get_qr_base64(total, service_id)
+            service    = store.pay_service_in(customer_id, service_id, channel, coupon)
+            return [f"ชำระเงินสำเร็จ! Service: {service.id} Status: {service.status.value}"]
+        elif payment_method == "credit":
             channel = CreditCard()
             service = store.pay_service_in(customer_id, service_id, channel, coupon)
             return [f"ชำระเงินสำเร็จ! Service: {service.id} Status: {service.status.value}"]
+        else:
+            return [f"payment_method ไม่ถูกต้อง ต้องเป็น 'credit' หรือ 'qr' เท่านั้น"]
 
     except Exception as e:
         return [f"Error: {str(e)}"]
@@ -694,24 +777,59 @@ def checkout(
     damaged_equipment_ids: str = "",
 ) -> dict:
     """
-    เช็คเอาท์ — ตรวจ Late Checkout / Damage และคำนวณยอดทั้งหมด
-    damaged_equipment_ids: equipment_id คั่นด้วย comma
+    เช็คเอาท์ — คำนวณยอดทั้งหมด (สินค้า + penalty)
+    ⚠️ หลังได้ยอดแล้ว ต้องถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหน แล้วค่อยเรียก confirm_checkout
     """
     try:
         damaged_ids = [x.strip() for x in damaged_equipment_ids.split(",") if x.strip()]
         result = store.pay_service_out(customer_id, service_id, booking_id, mock_channel,
                                        is_room_damaged, room_damage_cost, damaged_ids)
-        return {"success": True, "message": "คำนวณยอดสำเร็จ กรุณายืนยันการชำระเงิน",
-                **result, "next_step": "เรียก confirm_checkout เพื่อปิด session"}
+        return {
+            "success": True,
+            "message": "คำนวณยอดสำเร็จ",
+            **result,
+            "payment_options": [
+                {"method": "credit", "label": "บัตรเครดิต"},
+                {"method": "qr",     "label": "QR Code"},
+            ],
+            "next_step": "ถามผู้ใช้ว่าเลือกวิธีไหน แล้วเรียก confirm_checkout พร้อม payment_method"
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
-def confirm_checkout(customer_id: str, service_id: str, booking_id: str) -> dict:
-    """ยืนยันการชำระเงิน Service OUT และปิด session (รับ points + อัปเดต report)"""
+def confirm_checkout(
+    customer_id: str, service_id: str, booking_id: str,
+    payment_method: str,
+) -> dict:
+    """
+    ยืนยันชำระเงิน Service OUT และปิด session (รับ points + อัปเดต report)
+    payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
+    """
     try:
-        result = store.confirm_pay_service_out(customer_id, service_id, booking_id)
+        if payment_method == "credit":
+            channel = CreditCard()
+        elif payment_method == "qr":
+            channel = QrScan()
+        else:
+            return {"success": False, "error": "payment_method ต้องเป็น 'credit' หรือ 'qr'"}
+
+        # อัปเดต channel ใน payment_sout ก่อน confirm
+        customer    = store.get_customer_by_id(customer_id)
+        reserve     = customer.get_reserve(service_id)
+        booking     = reserve.search_booking(booking_id)
+        payment_sout = booking.payment_sout
+        payment_sout._PaymentServiceOut__channel = channel
+
+        branch  = store.get_branch_by_id(booking.room.branch_id)
+        staff   = Staff("system", "system", "System", branch)
+        report  = store.get_daily_report(booking.day, branch)
+        result  = staff.confirm_checkout(payment_sout, report)
+
+        customer.add_points(booking.duration)
+        reserve.set_status(ServiceStatus.PAID)
+
         return {"success": True, "message": "ชำระเงินสำเร็จ ขอบคุณที่ใช้บริการ!", "receipt": result}
     except Exception as e:
         return {"success": False, "error": str(e)}

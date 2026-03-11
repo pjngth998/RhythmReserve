@@ -648,6 +648,12 @@ class ServiceIN:
     def set_payment(self, payment):
         self.__payment = payment
 
+    def get_booking(self, booking_id: str) -> Booking:
+        for booking in self.__booking_list:
+            if booking.id == booking_id:
+                return booking
+        raise Exception(f"Booking {booking_id} not found")
+
     @property
     def payment(self):
         return self.__payment
@@ -1395,7 +1401,15 @@ class TransactionRecord:
         return (f"<TXN {self.__txn_id} | {self.__txn_type} | "
                 f"{self.__amount:.2f} THB | {self.__channel_type}{ref} | {self.__timestamp.strftime('%Y-%m-%d %H:%M:%S')}>")
 
-    
+    def to_format(self):
+        return {
+            "txn_id":       self.__txn_id,
+            "txn_type":     self.__txn_type.value,
+            "amount":       self.__amount,
+            "channel_type": self.__channel_type,
+            "ref_txn_id":   self.__ref_txn_id,
+            "timestamp":    self.__timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
 # ===========================================================================
 # PAYMENT SERVICEIN
@@ -1769,10 +1783,14 @@ class RhythmReserve():
         if now.date() != booking.day:
             raise Exception("Not the booking date")
         
-        check_in_time = (datetime.combine(booking.day, booking.start) - timedelta(minutes=10)).time()
-
-        if now.time() < check_in_time:
+        check_in_open = datetime.combine(booking.day, booking.start) - timedelta(minutes=10)
+        check_in_close = datetime.combine(booking.day, booking.end)
+        
+        if now < check_in_open:
             raise Exception("Too early to check in, please wait until 10 minutes before booking time")
+        
+        if now >= check_in_close:
+            raise Exception("Check-in time has passed, booking has ended")
         
         booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.OCCUPIED)
         for eq in booking.eq_list:
