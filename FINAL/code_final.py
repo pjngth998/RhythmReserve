@@ -2268,6 +2268,8 @@ class RhythmReserve():
             self.policy, booking, report, channel,
             is_room_damaged, room_damage_cost, damaged_eq_ids
         )
+
+
         booking.set_payment_sout(payment_sout)
         return {
             "sout_id": service_out.id,
@@ -2282,16 +2284,16 @@ class RhythmReserve():
         booking = reserve.get_booking(booking_id)
 
         branch = self.get_branch_by_id(booking.room.branch_id)
-        staff = Staff(branch)
-        report = self.get_daily_report(branch.id, booking.day)
-
+        report = self.get_daily_report(booking.day, branch)
         payment_sout = booking.payment_sout
-        result = staff.confirm_checkout(payment_sout, report)
+
+        success = payment_sout.process_payment()
+        if success:
+            report.add_revenue(payment_sout.total_price)
 
         customer.add_points(booking.duration)
         reserve.set_status(ServiceStatus.PAID)
-        return result
-
+        return payment_sout.to_format()
 
     def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
         customer = self.get_customer_by_id(customer_id)
