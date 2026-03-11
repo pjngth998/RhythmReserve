@@ -12,8 +12,7 @@ import io
 _time_offset = timedelta(0)
 
 def now() -> datetime:
-    return now() + _time_offset
-
+    return datetime.now() + _time_offset
 #ENUM CLASS
 class RoomType(Enum):
     SMALL = "S"
@@ -1782,18 +1781,18 @@ class RhythmReserve():
         reserve = customer.get_reserve(reserve_id)
         booking = reserve.get_booking(booking_id)
         
-        now = now()
+        current_time = now()
         
-        if now.date() != booking.day:
+        if current_time.date() != booking.day:
             raise Exception("Not the booking date")
         
         check_in_open = datetime.combine(booking.day, booking.start) - timedelta(minutes=10)
         check_in_close = datetime.combine(booking.day, booking.end)
         
-        if now < check_in_open:
+        if current_time < check_in_open:
             raise Exception("Too early to check in, please wait until 10 minutes before booking time")
         
-        if now >= check_in_close:
+        if current_time < check_in_open:
             raise Exception("Check-in time has passed, booking has ended")
         
         booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.OCCUPIED)
