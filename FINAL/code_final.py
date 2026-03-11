@@ -413,6 +413,11 @@ class Booking():
         self.__service_out : ServiceOUT = None
         self.__payment_sout = None
 
+
+    @property
+    def timeslot(self):
+        return self.__timeslot
+
     @property
     def id(self):
         return self.__id
@@ -609,31 +614,39 @@ class ServiceIN:
         return True
 
 
-    def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
-        total_price      = self.calculate_total()
-        tier_discount    = customer.get_tier_discount()
-        discounted_price = self.apply_tier_discount(total_price, tier_discount)
+#     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
+#         total_price      = self.calculate_total()
+#         tier_discount    = customer.get_tier_discount()
+#         discounted_price = self.apply_tier_discount(total_price, tier_discount)
+# 
+#         final_price = discounted_price
+#         if coupon_id:
+#             coupon = customer.get_coupon(coupon_id)
+#             if coupon is None:
+#                 raise ValueError("Coupon Invalid or Expired")
+#             self.__final_price = self.apply_coupon_discount(discounted_price, coupon.get_discount())
+#             customer.remove_coupon(coupon_id)
+# 
+#         self.__final_price = final_price
+#         payment_success  = self.__payment.process_payment(final_price)
+# 
+#         if payment_success:
+#             self.change_status(ServiceStatus.PAID)
+#             for booking in self.__booking_list:
+#                 booking.confirm()
+#         else:
+#             self.change_status(ServiceStatus.PENDING)
+# 
+#         return payment_success
 
-        final_price = discounted_price
-        if coupon_id:
-            coupon = customer.get_coupon(coupon_id)
-            if coupon is None:
-                raise ValueError("Coupon Invalid or Expired")
-            final_price = self.apply_coupon_discount(discounted_price, coupon.get_discount())
-            customer.remove_coupon(coupon_id)
-
-        self.final_price = final_price
-        payment_success  = self.payment.process_payment(final_price)
-
+    def checkout(self):
+        payment_success = self.__payment.process_payment()
         if payment_success:
             self.change_status(ServiceStatus.PAID)
-            for booking in self.__booking_list:
-                booking.confirm()
         else:
             self.change_status(ServiceStatus.PENDING)
-
         return payment_success
-    
+        
     def _calculate_refund(self,booking : Booking):
         propotion = booking.price/self.__total_price
         refund_amount = self.__final_price * propotion
@@ -647,8 +660,8 @@ class ServiceIN:
 
                 if refund_success:
                     set_status= booking.booking_cancel()
-                    self.remove_booking(booking_id)
                     if set_status :
+                        self.remove_booking(booking_id)
                         return True
         return False
     
@@ -753,17 +766,12 @@ class Staff:
         if damaged_eq_ids is None:
             damaged_eq_ids = []
 
-        # 1. late checkout
         late_pen = policy.check_late_checkout(
             actual_time, expected_time, booking.id, booking.room.rate)
         if late_pen:
             service_out.add_penalty(late_pen)
 
-        # บรรทัด 749-769 ใน customer_check_out แก้เป็น:
-
-        # 2. room damage
         if is_room_damaged and room_damage_cost > 0:
-            # ✅ เปลี่ยน timeslot ของ booking นี้เป็น MAINTENANCE แทนการ set .status
             booking.room.update_timeslot_status(
                 booking.day, booking.start, booking.end,
                 RoomEquipmentStatus.MAINTENANCE
@@ -773,16 +781,12 @@ class Staff:
             if r_pen:
                 service_out.add_penalty(r_pen)
         else:
-            # ✅ คืน timeslot กลับเป็น AVAILABLE หลัง checkout
             booking.room.update_timeslot_status(
                 booking.day, booking.start, booking.end,
                 RoomEquipmentStatus.AVAILABLE
             )
-
-        # 3. equipment damage
         for eq in booking.eq_list:
             if eq.id in damaged_eq_ids:
-                # ✅ เปลี่ยน timeslot ของ eq นี้เป็น MAINTENANCE
                 eq.update_timeslot_status(
                     booking.day, booking.start, booking.end,
                     RoomEquipmentStatus.MAINTENANCE
@@ -966,6 +970,10 @@ class Room():
     @property
     def sizeII(self):
         return self.__size
+
+    @property
+    def branch_id(self):
+        return self.__branch_id
     
     @property
     def timeslot(self):
@@ -1303,7 +1311,7 @@ class PaymentServiceIn:
 
     def __apply_discount(self, total_price: float, coupon: Coupon = None) -> float:
         membership_discount = total_price * self.__customer.membership.discount
-        final = total_price - membership_discount
+        final_price = total_price - membership_discount
         print(f"[Payment] Membership discount: {membership_discount:.2f} THB ({self.__customer.membership.value})")
 
         if coupon:
@@ -1313,12 +1321,12 @@ class PaymentServiceIn:
                 print(f"[Payment] Coupon {coupon.id} has already been used")
             else:
                 coupon_discount = coupon.get_discount() * total_price
-                final -= coupon_discount
+                final_price -= coupon_discount
                 coupon.mark_used()
                 print(f"[Payment] Coupon discount: {coupon.get_discount()*100:.0f}% → {coupon_discount:.2f} THB")
 
-        print(f"[Payment] Final price after discount: {final:.2f} THB")
-        return final
+        print(f"[Payment] Final price after discount: {final_price:.2f} THB")
+        return final_price
 
     def process_payment(self) -> bool:
         self.__transaction_id = f"TXN-{uuid.uuid4().hex[:8].upper()}"
@@ -1336,8 +1344,13 @@ class PaymentServiceIn:
             self.__transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
 
-        noti = Notification(self.__customer.username)
-        noti.noti_send("Payment Successful!")
+            noti = Notification(self.__customer.username)
+            noti.noti_send("Payment Successful!")
+
+        else :
+            noti = Notification(self.__customer.username)
+            noti.noti_send("Payment Failed!")
+
         return self.__is_success
 
     def lookup_charge_transaction(self, txn_id: Optional[str] = None) -> Optional[TransactionRecord]:
@@ -1532,12 +1545,13 @@ class RhythmReserve():
     def policy(self):
         return self.__policy
 
-    def get_daily_report(self, day) -> DailyReport:
+    def get_daily_report(self, branch_id,day) -> DailyReport:
         key = day.isoformat()
         if key not in self.__daily_reports:
-            branch = 
-            self.__daily_reports[key] = DailyReport(key, branch)
-        return self.__daily_reports[key]
+            for branch in self.__branch_list:
+                if branch.id == branch_id:
+                    self.__daily_reports[key] = DailyReport(key, branch)
+                    return self.__daily_reports[key]
 
     def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
@@ -1983,16 +1997,12 @@ class RhythmReserve():
         total = service_in.calculate_total()
         payment = PaymentServiceIn(reserve_id, customer, total, channel, coupon)
         
-        if payment.process_payment():
-            service_in.set_status(ServiceStatus.PAID)
-            service_in.set_payment(payment)
+        if service_in.checkout():
             for booking in service_in.booking_list:
                 booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
                 for eq in booking.eq_list:
                     eq.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
-            
             self._auto_redeem_coupon(customer)
-            
             return service_in
         
         raise Exception("Payment failed")
@@ -2099,7 +2109,7 @@ class RhythmReserve():
 
         branch = self.get_branch_by_id(booking.room.branch_id)
         staff = Staff(branch)
-        report = self.get_daily_report(booking.day)
+        report = self.get_daily_report(branch.id, booking.day)
 
         payment_sout = staff.customer_check_out(
             service_out, actual_time, expected_time,
@@ -2121,7 +2131,7 @@ class RhythmReserve():
 
         branch = self.get_branch_by_id(booking.room.branch_id)
         staff = Staff(branch)
-        report = self.get_daily_report(booking.day)
+        report = self.get_daily_report(branch.id, booking.day)
 
         payment_sout = booking.payment_sout
         result = staff.confirm_checkout(payment_sout, report)
@@ -2132,7 +2142,7 @@ class RhythmReserve():
 
 
     def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
-        customer = self.search_custoemr(customer_id)
+        customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
@@ -2142,14 +2152,13 @@ class RhythmReserve():
         booking  = service_in.search_booking(booking_id)
 
         booking_start = datetime.combine(booking.day, booking.timeslot.start)
-        total_price = service_in.total_price
         
-        check_cancel = policy.check_cancel_refund(customer : Customer,cancel_time,booking_start)
+        check_cancel = policy.check_cancel_refund(customer,cancel_time,booking_start)
         if not check_cancel:
             raise Exception("Cancel too late: Don't have REFUND")
 
         cancel = service_in.cancel_b(booking_id)
         if cancel:
             return "Cancel Booking Successfully"
-        raise Exception("Can't Cancle This Booking")
+        raise Exception("Can't Cancel This Booking")
         
