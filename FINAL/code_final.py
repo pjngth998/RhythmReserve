@@ -2141,12 +2141,12 @@ class RhythmReserve():
         
         booking  = service_in.search_booking(booking_id)
 
-        booking_start = booking.timeslot.start
+        booking_start = datetime.combine(booking.day, booking.timeslot.start)
         total_price = service_in.total_price
         
-        check_cancel = policy.check_cancel_refund(cancel_time,booking_start,customer : Customer)
+        check_cancel = policy.check_cancel_refund(customer : Customer,cancel_time,booking_start)
         if not check_cancel:
-            raise Exception("Cancel too late: ไม่ได้รับเงินคืน")
+            raise Exception("Cancel too late: Don't have REFUND")
 
         cancel = service_in.cancel_b(booking_id)
         if cancel:
