@@ -24,7 +24,6 @@ class EquipmentType(Enum):
     MICROPHONE = "MC"
     BASS = "BS"
     KEYBOARD = "KB"
-
 class RoomEquipmentStatus(Enum):
     AVAILABLE = "Available"
     PENDING = "Pending"
@@ -64,6 +63,16 @@ class Membership(str, Enum):
         obj.discount      = discount
         obj.points_per_hr = points_per_hr
         return obj
+    
+class AddonType(Enum):
+    RECORDING   = ("REC",  500)   
+    LIVESTREAM  = ("LIVE", 800)   
+
+    def __new__(cls, code, price_per_session):
+        obj = object.__new__(cls)
+        obj._value_ = code
+        obj.price_per_session = price_per_session
+        return obj
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -98,7 +107,6 @@ class TXNType(Enum):
     CHARGE = "CHARGE"
     REFUND = "REFUND"
     PENALTY = "PENALTY"
-
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -213,6 +221,10 @@ class Customer(User) :
     def points(self):
         return self.__points
     
+    @property
+    def membership(self):
+        return self.__membership
+    
     @points.setter
     def points(self, value):
         self.__points = value
@@ -225,7 +237,7 @@ class Customer(User) :
     
     def get_customer_info(self, customer_id):
         if self.__id == customer_id:
-            return self.__name, self.__id, self.__reserve_list
+            return self.username, self.__id, self.__reserve_list
         
     @reserve_list.setter
     def add_reserve_list(self, reserve):
@@ -395,8 +407,28 @@ class Penalty:
             "status":     self.__status.value,
             "booking_id": self.__booking_id,
         }
+    
+# ===========================================================================
+# Addon
+# ===========================================================================
+class Addon:
+    def __init__(self, addon_type: AddonType):
+        self.__type  = addon_type
+        self.__id    = f"ADD-{addon_type.value}-{str(uuid.uuid4())[:8]}"
+        self.__price = addon_type.price_per_session
 
-   
+    @property
+    def id(self):    
+        return self.__id
+    @property
+    def type(self):  
+        return self.__type
+    @property
+    def price(self): 
+        return self.__price
+
+
+
 # ===========================================================================
 # Booking
 # ===========================================================================
@@ -412,7 +444,18 @@ class Booking():
         self.__duration = timeslot.duration
         self.__service_out : ServiceOUT = None
         self.__payment_sout = None
+        self.__addon_list = []   
 
+    @property
+    def addon_list(self):
+        return self.__addon_list
+
+    def add_addon(self, addon: Addon):
+        self.__addon_list.append(addon)
+
+    @property
+    def timeslot(self):
+        return self.__timeslot
 
     @property
     def timeslot(self):
@@ -462,11 +505,10 @@ class Booking():
         return self.__payment_sout
     
     def calculate_price(self):
-        room_price = self.__room.rate * self.__duration
-        eq_price = 0
-        for eq in self.__eq_list:
-            eq_price += eq.rate
-        self.__price = room_price + eq_price
+        room_price  = self.__room.rate * self.__duration
+        eq_price    = sum(eq.rate for eq in self.__eq_list)
+        addon_price = sum(a.price for a in self.__addon_list)
+        self.__price = room_price + eq_price + addon_price
         return self.__price
 
     def booking_cancel(self):
@@ -741,7 +783,7 @@ class Policy:
     #     #               f"Late cancellation (limit {limit} hrs)", booking_id)
     #     return 0.0, None
 
-    def check_cancel_refund(self,customer: Customer,cancel_time: datetime, booking_start:datetime,total_price):
+    def check_cancel_refund(self,customer: Customer,cancel_time: datetime, booking_start:datetime):
         limit = customer.get_cancellation_limit_hours()
         
         diff  = booking_start - cancel_time
@@ -753,9 +795,19 @@ class Policy:
 # ===========================================================================
 # Staff
 # ===========================================================================
-class Staff:
-    def __init__(self, branch):
+class Staff(User):
+    def __init__(self, username, password, name, branch):
+        super().__init__(username, password, name, email=None, phone=None, birthday=None, status=UserStatus.LOGIN)
         self.__branch = branch
+        self.__id = f"S-{branch.name}-{str(uuid.uuid4())[:8]}"
+
+    @property
+    def id(self):
+        return self.__id
+
+    @property
+    def branch(self):
+        return self.__branch
 
     def customer_check_out(self, service_out: ServiceOUT, actual_time: datetime,
                             expected_time: datetime, policy: Policy, booking: Booking,
@@ -1544,14 +1596,24 @@ class RhythmReserve():
     @property
     def policy(self):
         return self.__policy
+    
+    @property
+    def staff(self):
+        return self.__staff_list
 
-    def get_daily_report(self, branch_id,day) -> DailyReport:
+    def get_daily_report(self, day , branch) -> DailyReport:
         key = day.isoformat()
         if key not in self.__daily_reports:
-            for branch in self.__branch_list:
-                if branch.id == branch_id:
-                    self.__daily_reports[key] = DailyReport(key, branch)
-                    return self.__daily_reports[key]
+            self.__daily_reports[key] = DailyReport(key, branch)
+        return self.__daily_reports[key]
+    
+    def staff_register(self, username: str, password: str, name: str, branch_id: str) :
+        if self.search_user(username):
+            raise Exception("Username already taken")
+        branch = self.get_branch_by_id(branch_id)
+        staff  = Staff(username, password, name, branch)
+        self.add_staff_ls(staff)
+        return staff
 
     def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
@@ -1824,6 +1886,13 @@ class RhythmReserve():
                 return customer
         raise Exception("customer not found")
     
+    def get_staff_by_id(self, username):
+        for staff in self.__staff_list:
+            if staff.username == username:
+                return staff
+        return None
+
+    
     def get_branch_by_id(self, branch_id):
         for branch in self.__branch_list:
             if branch.id == branch_id:
@@ -1934,9 +2003,9 @@ class RhythmReserve():
                 return rm
         raise Exception("Don't have available room in that time")
     
-    def create_service_in(self, customer_id, branch_id, room_size, day, start, end, eq_list):
+    def create_service_in(self, customer_id, branch_id, room_size, day, start, end, eq_list, addon_types: list[str] = None):
         customer = self.get_customer_by_id(customer_id)
-        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
+        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list, addon_types=addon_types)
         if isinstance(booking, str):
             return booking
 
@@ -1946,7 +2015,7 @@ class RhythmReserve():
         return service
 
     
-    def create_booking(self, customer_id, branch_id, room_size, day, start, end, eq_list):
+    def create_booking(self, customer_id, branch_id, room_size, day, start, end, eq_list, addon_types: list[str] = None):
         customer = self.get_customer_by_id(customer_id)
 
         branch = self.get_branch_by_id(branch_id)
@@ -1971,13 +2040,19 @@ class RhythmReserve():
             selected_eqs.append(eq)
 
         booking = Booking(branch.name, room, selected_eqs, customer, room_slot)
+        if addon_types:
+            name_map = {a.name: a for a in AddonType}
+            for t in addon_types:
+                if t.upper() in name_map:
+                    booking.add_addon(Addon(name_map[t.upper()]))
         return booking
+
     
-    def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
+    def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list, addon_types=None):
         customer = self.get_customer_by_id(customer_id)
         service = customer.get_reserve(service_id)
 
-        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
+        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list, addon_types=addon_types)
         if isinstance(booking, str):
             return booking
 
@@ -2108,8 +2183,8 @@ class RhythmReserve():
         expected_time = datetime.combine(booking.day, booking.end)
 
         branch = self.get_branch_by_id(booking.room.branch_id)
-        staff = Staff(branch)
-        report = self.get_daily_report(branch.id, booking.day)
+        staff = Staff("system", "system", "System", branch)
+        report = self.get_daily_report(booking.day,branch)
 
         payment_sout = staff.customer_check_out(
             service_out, actual_time, expected_time,
@@ -2143,6 +2218,7 @@ class RhythmReserve():
 
     def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
         customer = self.get_customer_by_id(customer_id)
+        customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
@@ -2151,9 +2227,10 @@ class RhythmReserve():
         
         booking  = service_in.search_booking(booking_id)
 
-        booking_start = datetime.combine(booking.day, booking.timeslot.start)
+        booking_start = datetime.combine(booking.day, booking.start)
+        total_price = service_in.total_price
         
-        check_cancel = policy.check_cancel_refund(customer,cancel_time,booking_start)
+        check_cancel = policy.check_cancel_refund(customer, cancel_time, booking_start)
         if not check_cancel:
             raise Exception("Cancel too late: Don't have REFUND")
 
