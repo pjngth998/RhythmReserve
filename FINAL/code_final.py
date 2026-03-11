@@ -2032,11 +2032,11 @@ class RhythmReserve():
         return booking
 
     
-    def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
+    def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list, addon_types=None):
         customer = self.get_customer_by_id(customer_id)
         service = customer.get_reserve(service_id)
 
-        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list)
+        booking = self.create_booking(customer_id, branch_id, room_size, day, start, end, eq_list, addon_types=addon_types)
         if isinstance(booking, str):
             return booking
 
@@ -2171,7 +2171,7 @@ class RhythmReserve():
         expected_time = datetime.combine(booking.day, booking.end)
 
         branch = self.get_branch_by_id(booking.room.branch_id)
-        staff = Staff(branch)
+        staff = Staff("system", "system", "System", branch)
         report = self.get_daily_report(booking.day,branch)
 
         payment_sout = staff.customer_check_out(
@@ -2194,7 +2194,7 @@ class RhythmReserve():
 
         branch = self.get_branch_by_id(booking.room.branch_id)
         staff = Staff(branch)
-        report = self.get_daily_report(booking.day)
+        report = self.get_daily_report(booking.day, branch)
 
         payment_sout = booking.payment_sout
         result = staff.confirm_checkout(payment_sout, report)
@@ -2205,7 +2205,7 @@ class RhythmReserve():
 
 
     def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
-        customer = self.search_custoemr(customer_id)
+        customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
@@ -2214,7 +2214,7 @@ class RhythmReserve():
         
         booking  = service_in.search_booking(booking_id)
 
-        booking_start = datetime.combine(booking.day, booking.timeslot.start)
+        booking_start = datetime.combine(booking.day, booking.start)
         total_price = service_in.total_price
         
         check_cancel = policy.check_cancel_refund(customer, cancel_time, booking_start)
