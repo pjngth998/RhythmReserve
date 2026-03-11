@@ -125,6 +125,47 @@ mcp = FastMCP("RhythmReserve")
 # 1. ACCOUNT MANAGEMENT — Customer
 # ────────────────────────────────────────────────────────────────────────────
 
+# ── Mock Time ───────────────────────────────────────────────────────────────
+from datetime import datetime, timedelta
+
+_time_offset = timedelta(0)
+
+def now() -> datetime:
+    return now() + _time_offset
+
+
+@mcp.tool()
+def advance_time(hours: int = 0, minutes: int = 0) -> dict:
+    """เลื่อนเวลา mock ไปข้างหน้า เพื่อทดสอบ check-in / check-out / penalty"""
+    global _time_offset
+    _time_offset += timedelta(hours=hours, minutes=minutes)
+    return {
+        "success":      True,
+        "advanced_by":  f"{hours}h {minutes}m",
+        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+@mcp.tool()
+def reset_time() -> dict:
+    """รีเซ็ต mock time กลับเป็นเวลาจริง"""
+    global _time_offset
+    _time_offset = timedelta(0)
+    return {
+        "success":           True,
+        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+@mcp.tool()
+def get_current_time() -> dict:
+    """ดูเวลา mock ปัจจุบัน"""
+    return {
+        "success":           True,
+        "current_mock_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+        "offset":            str(_time_offset),
+    }
+
 @mcp.tool()
 def register_account(
     name: str, username: str, password: str,
@@ -425,11 +466,9 @@ def create_reservation(
     - room_size           : SMALL / MEDIUM / LARGE / EXTRALARGE
     - start_hour          : ชั่วโมงเริ่มต้น (9-22)
     - duration_hours      : จำนวนชั่วโมง (1-14)
-    - equipment_selections: ชนิด:จำนวน คั่นด้วย comma
-                            เช่น "ELECTRICGUITAR:2,DRUM:1"
-    - addons              : บริการเสริม คั่นด้วย comma
-                            เช่น "RECORDING,LIVESTREAM"
-    สร้างการจองห้อง (Service IN)
+    - equipment_selections: ชนิด:จำนวน คั่นด้วย comma เช่น "ELECTRICGUITAR:2,DRUM:1"
+    - addons              : บริการเสริม คั่นด้วย comma เช่น "RECORDING,LIVESTREAM"
+
     ⚠️ หลังสร้างสำเร็จ ต้องถามผู้ใช้ก่อนเสมอว่า "ต้องการเพิ่ม Booking อีกไหม?"
     - ถ้าใช่ → เรียก add_booking_to_reservation
     - ถ้าไม่ → เรียก select_payment_method แล้วค่อย pay_reservation
@@ -450,7 +489,6 @@ def create_reservation(
         start_t = time(start_hour, 0)
         end_t   = time(end_hour, 0)
 
-        # validate + แปลง addons → list[str]
         addon_types: list[str] = []
         if addons.strip():
             for a in addons.split(","):
@@ -469,6 +507,11 @@ def create_reservation(
             eq_ids, addon_types if addon_types else None
         )
 
+        customer        = store.get_customer_by_id(customer_id)
+        discount_rate   = customer.membership.discount
+        discount_amount = round(service.total_price * discount_rate, 2)
+        final_price     = round(service.total_price - discount_amount, 2)
+
         return {
             "success":    True,
             "message":    "สร้างการจองสำเร็จ! กรุณาชำระเงินเพื่อยืนยัน",
@@ -480,19 +523,22 @@ def create_reservation(
                     "start_time": f"{start_hour:02d}:00",
                     "end_time":   f"{end_hour:02d}:00",
                     "room_size":  ru,
-                    "room_rate":  b.room.rate,                      # จาก Room.rate
+                    "room_rate":  b.room.rate,
                     "equipment":  eq_detail,
                     "addons":     [{"type": a.type.name, "price": a.price} for a in b.addon_list],
-                    "price":      b.price,                          # จาก Booking.price
+                    "price":      b.price,
                 }
                 for b in service.booking_list
             ],
-            "total_price": service.total_price,
-            "next_step":   "เรียก pay_reservation เพื่อยืนยันการจอง",
+            "subtotal":        service.total_price,
+            "membership":      type(customer).__name__,
+            "discount_rate":   f"{discount_rate*100:.0f}%",
+            "discount_amount": discount_amount,
+            "final_price":     final_price,
+            "next_step":       "ถามผู้ใช้ว่าต้องการเพิ่ม Booking อีกไหม? ถ้าไม่ → เรียก select_payment_method",
         }
     except (ValueError, Exception) as e:
         return {"success": False, "error": str(e)}
-
 
 @mcp.tool()
 def add_booking_to_reservation(
@@ -601,7 +647,7 @@ def view_booking_detail(customer_id: str, service_id: str, booking_id: str) -> d
         booking  = service.search_booking(booking_id)
 
         booking_start = datetime.combine(booking.day, booking.start)
-        hours_until   = (booking_start - datetime.now()).total_seconds() / 3600
+        hours_until   = (booking_start - now()).total_seconds() / 3600
         cancel_limit  = customer.get_cancellation_limit_hours()
 
         return {
@@ -733,7 +779,7 @@ def cancel_booking(customer_id: str, service_id: str, booking_id: str) -> dict:
     แนะนำดู view_booking_detail ก่อนตรวจสอบนโยบายคืนเงิน
     """
     try:
-        cancel_time = datetime.now()
+        cancel_time = now()
         msg = store.cancel_booking(customer_id, service_id, booking_id, cancel_time, store.policy)
         return {"success": True, "message": msg}
     except Exception as e:

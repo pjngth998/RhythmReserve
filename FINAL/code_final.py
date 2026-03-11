@@ -9,6 +9,10 @@ from enum import Enum
 import qrcode
 import io
 
+_time_offset = timedelta(0)
+
+def now() -> datetime:
+    return now() + _time_offset
 
 #ENUM CLASS
 class RoomType(Enum):
@@ -129,7 +133,7 @@ class Coupon:
 
     @classmethod
     def create_coupon(cls, discount: float) -> "Coupon":
-        expired_date = datetime.now() + relativedelta(months=cls.EXPIRE_MONTHS)
+        expired_date = now() + relativedelta(months=cls.EXPIRE_MONTHS)
         date_part = expired_date.strftime("%y%m%d")
         coupon_id    = f"CP-{date_part}-{(str(uuid.uuid4()))[:8]}"
         print(f"[Coupon] create → id={coupon_id}, discount={discount*100:.0f}%, expires={expired_date.date()}")
@@ -146,7 +150,7 @@ class Coupon:
         return self.__expired_date
 
     def is_expired(self) -> bool:
-        return datetime.now() > self.__expired_date
+        return now() > self.__expired_date
     
     def mark_used(self):
         self.__used = True
@@ -1252,7 +1256,7 @@ class Notification:
     def noti_id(self):
         return self.__noti_id
     def format_message(self, message: str) -> str:
-        message = (f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}] \n"
+        message = (f"[{now().strftime('%Y-%m-%d %H:%M')}] \n"
                         f"Dear {self.__username}: {message}")
         return message
     
@@ -1324,7 +1328,7 @@ class CreditCard(PaymentChannel):
         try:
             month, year = expiry.split("/")
             exp = datetime(2000 + int(year), int(month), 1)
-            return exp >= datetime.now().replace(day=1)
+            return exp >= now().replace(day=1)
         except Exception:
             return False
 
@@ -1378,7 +1382,7 @@ class TransactionRecord:
         self.__amount        = amount
         self.__channel_type  = channel_type
         self.__ref_txn_id    = ref_txn_id
-        self.__timestamp     = datetime.now()
+        self.__timestamp     = now()
 
     @property
     def amount(self):
@@ -1778,7 +1782,7 @@ class RhythmReserve():
         reserve = customer.get_reserve(reserve_id)
         booking = reserve.get_booking(booking_id)
         
-        now = datetime.now()
+        now = now()
         
         if now.date() != booking.day:
             raise Exception("Not the booking date")
@@ -1813,7 +1817,7 @@ class RhythmReserve():
 
         
 
-        created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
+        created_at = now().strftime("%Y-%m-%d %H:%M") 
         status = "PENDING"
         price = room.rate
 
@@ -2252,7 +2256,7 @@ class RhythmReserve():
         booking = reserve.get_booking(booking_id)
         service_out = booking.service_out
 
-        actual_time = datetime.now()
+        actual_time = now()
         expected_time = datetime.combine(booking.day, booking.end)
 
         branch = self.get_branch_by_id(booking.room.branch_id)
