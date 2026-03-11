@@ -24,7 +24,6 @@ class EquipmentType(Enum):
     MICROPHONE = "MC"
     BASS = "BS"
     KEYBOARD = "KB"
-
 class RoomEquipmentStatus(Enum):
     AVAILABLE = "Available"
     PENDING = "Pending"
@@ -64,6 +63,16 @@ class Membership(str, Enum):
         obj.discount      = discount
         obj.points_per_hr = points_per_hr
         return obj
+    
+class AddonType(Enum):
+    RECORDING   = ("REC",  500)   
+    LIVESTREAM  = ("LIVE", 800)   
+
+    def __new__(cls, code, price_per_session):
+        obj = object.__new__(cls)
+        obj._value_ = code
+        obj.price_per_session = price_per_session
+        return obj
 
 class UserStatus(Enum):
     LOGIN = "LOGIN"
@@ -98,7 +107,6 @@ class TXNType(Enum):
     CHARGE = "CHARGE"
     REFUND = "REFUND"
     PENALTY = "PENALTY"
-
 
 OPEN_TIME = time(9, 0)
 CLOSE_TIME = time(23, 0)
@@ -213,11 +221,15 @@ class Customer(User) :
     def points(self):
         return self.__points
     
+    @points.setter
+    def points(self, value):
+        self.__points = value
+    
     def get_coupon_list(self) -> list:
         return self.__coupon_list
     
     def add_points(self, duration_hrs: int):
-        self.points += self.get_points_per_hr() * duration_hrs
+        self.__points += self.get_points_per_hr() * duration_hrs
     
     def get_customer_info(self, customer_id):
         if self.__id == customer_id:
@@ -226,12 +238,6 @@ class Customer(User) :
     @reserve_list.setter
     def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
-    
-    def get_reserve_detail(self, reserve_id):
-        for reserve in self.__reserve_list :
-            if reserve.reserve_id == reserve_id:
-                return reserve
-        return None
     
     def get_reserve(self, reserve_id):
         for reserve in self.__reserve_list:
@@ -242,7 +248,7 @@ class Customer(User) :
     
     def get_booking(self, booking_id):
         for reserve in self.__reserve_list:
-            for booking in reserve:
+            for booking in reserve.booking_list:
                 if booking.id == booking_id:
                     return booking
         raise Exception("booking not found")
@@ -270,7 +276,7 @@ class Customer(User) :
         pass
 
     @abstractmethod
-    def redeem_point(self):
+    def redeem_coupon(self):
         pass
 
     @abstractmethod
@@ -313,7 +319,7 @@ class PendingCustomer():
 # ===========================================================================
 class Standard(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.STANDARD, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.STANDARD)
 
     def get_cancellation_limit_hours(self) -> int: return 24
     def get_tier_discount(self) -> float:          return 0.0
@@ -327,7 +333,7 @@ class Standard(Customer):
 
 class Premium(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.PREMIUM, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.PREMIUM)
 
     def get_cancellation_limit_hours(self) -> int: return 12
     def get_tier_discount(self) -> float:          return 0.03
@@ -344,7 +350,7 @@ class Premium(Customer):
 
 class Diamond(Customer):
     def __init__(self, username, password, name, email, phone, birthday, status):
-        super().__init__(Membership.DIAMOND, username, password, name, email, phone, birthday, status)
+        super().__init__(username, password, name, email, phone, birthday, status, Membership.DIAMOND)
 
     def get_cancellation_limit_hours(self) -> int: return 6
     def get_tier_discount(self) -> float:          return 0.05
@@ -397,8 +403,28 @@ class Penalty:
             "status":     self.__status.value,
             "booking_id": self.__booking_id,
         }
+    
+# ===========================================================================
+# Addon
+# ===========================================================================
+class Addon:
+    def __init__(self, addon_type: AddonType):
+        self.__type  = addon_type
+        self.__id    = f"ADD-{addon_type.value}-{str(uuid.uuid4())[:8]}"
+        self.__price = addon_type.price_per_session
 
-   
+    @property
+    def id(self):    
+        return self.__id
+    @property
+    def type(self):  
+        return self.__type
+    @property
+    def price(self): 
+        return self.__price
+
+
+
 # ===========================================================================
 # Booking
 # ===========================================================================
@@ -413,6 +439,15 @@ class Booking():
         self.__price = 0.0
         self.__duration = timeslot.duration
         self.__service_out : ServiceOUT = None
+        self.__payment_sout = None
+        self.__addon_list = []   
+
+    @property
+    def addon_list(self):
+        return self.__addon_list
+
+    def add_addon(self, addon: Addon):
+        self.__addon_list.append(addon)
 
     @property
     def id(self):
@@ -446,19 +481,29 @@ class Booking():
     def service_out(self):
         return self.__service_out
     
+    @property
+    def duration(self):
+        return self.__duration 
+
+    def set_payment_sout(self, payment_sout):
+        self.__payment_sout = payment_sout
+
+    @property
+    def payment_sout(self):
+        return self.__payment_sout
+    
     def calculate_price(self):
-        room_price = self.__room.rate * self.__duration
-        eq_price = 0
-        for eq in self.__eq_list:
-            eq_price += eq.rate
-        self.__price = room_price + eq_price
+        room_price  = self.__room.rate * self.__duration
+        eq_price    = sum(eq.rate for eq in self.__eq_list)
+        addon_price = sum(a.price for a in self.__addon_list)
+        self.__price = room_price + eq_price + addon_price
         return self.__price
 
     def booking_cancel(self):
-        set_room_success =  self.__room.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+        set_room_success =  self.__room.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
 
         for eq in self.__eq_list:
-            set_eq_success =  eq.timeslot.set_status(TimeSlotStatus.AVAILABLE)
+            set_eq_success =  eq.update_timeslot_status(self.__timeslot.date, self.__timeslot.start, self.__timeslot.end, TimeSlotStatus.AVAILABLE)
 
         if set_room_success and set_eq_success:
             return True
@@ -528,7 +573,7 @@ class Products():
     
     @property
     def type(self):
-        return self.__price
+        return self.__type
     
 
 # ===========================================================================
@@ -556,6 +601,17 @@ class ServiceIN:
     def status(self):
         return self.__status
     
+    @property
+    def booking_list(self):
+        return self.__booking_list
+    
+    def set_payment(self, payment):
+        self.__payment = payment
+
+    @property
+    def payment(self):
+        return self.__payment
+        
     def set_status(self, status:ServiceStatus):
         self.__status = status
         return True
@@ -564,29 +620,29 @@ class ServiceIN:
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 return booking
-        return booking
+        raise Exception("Booking not found")
     
     def add_booking(self, booking: Booking):
         self.__booking_list.append(booking)
 
     def remove_booking(self, booking_id: str) -> bool:
-        print(f"\n[Service_IN] remove_booking({booking_id})")
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 self.__booking_list.remove(booking)
+        print(f"\n[Service_IN] remove_booking({booking_id})")
 
     def calculate_total(self):
+        self.__total_price = 0.0
         for booking in self.__booking_list:
-            self.__total_p += booking.calculate_price()
+            self.__total_price += booking.calculate_price()
         return self.__total_price
 
 
     def change_status(self, status: ServiceStatus):
-        status = self.set_status(status)
-        if status:
-            print(f"[Service_IN] {self.__servicein_id} status → {status.value}")
-            return True
-        raise Exception("Can't Change Status")
+        self.set_status(status)
+        print(f"[Service_IN] {self.__servicein_id} status → {status.value}")
+        return True
+
 
     def checkout(self, customer: "Customer", coupon_id: Optional[str] = None) -> bool:
         total_price      = self.calculate_total()
@@ -626,6 +682,7 @@ class ServiceIN:
 
                 if refund_success:
                     set_status= booking.booking_cancel()
+                    self.remove_booking(booking_id)
                     if set_status :
                         return True
         return False
@@ -635,7 +692,7 @@ class ServiceIN:
 # ServiceOUT
 # ===========================================================================
 class ServiceOUT:
-    def __init__(self, booking:Booking):
+    def __init__(self, booking: Booking):
         self.__sout_id = f"SOUT-{str(uuid.uuid4())[:8]}"
         self.__booking = booking
         self.__product_list = []
@@ -646,13 +703,22 @@ class ServiceOUT:
     @property
     def id(self):
         return self.__sout_id
-    
+
     @property
     def status(self):
         return self.__status
-    
+
     @property
-    def penalty_list(self): return self.__penalty_list
+    def product_list(self):
+        return self.__product_list
+
+    @property
+    def penalty_list(self):
+        return self.__penalty_list
+
+    @property
+    def total_price(self):
+        return self.__total_price
 
     def add_product(self, product: Products):
         self.__product_list.append(product)
@@ -662,16 +728,9 @@ class ServiceOUT:
 
     def calculate_total_price(self):
         product_sum = sum(p.price for p in self.__product_list)
-        penalty_sum = sum(p.amount for p in self.__penalty_list if p.status == PenaltyStatus.PENDING)
+        penalty_sum = sum(p.amount for p in self.__penalty_list)
         self.__total_price = product_sum + penalty_sum
         return self.__total_price
-    
-    def to_dict(self):
-        return {
-            "products":    [p.to_dict() for p in self.__product_list],
-            "penalties":   [p.to_dict() for p in self.__penalty_list],
-            "total_price": round(self.__total_price, 2),
-        }
     
 # ===========================================================================
 # POLICY
@@ -695,24 +754,40 @@ class Policy:
             return None
         return Penalty(PenaltyType.DAMAGE, cost, desc, booking_id)
 
-    def check_cancellation(self, cancel_time: datetime, booking_start: datetime,
-                            customer: Customer, total_price: float,
-                            booking_id: str) -> Tuple[float, Optional[Penalty]]:
+    # def check_cancellation(self, cancel_time: datetime, booking_start: datetime,customer: Customer,total_price) -> Tuple[float, Optional[Penalty]]:
+    #     limit = customer.get_cancellation_limit_hours()
+    #     diff  = booking_start - cancel_time
+    #     if diff >= timedelta(hours=limit):
+    #         return total_price, None
+    #     # pen = Penalty(PenaltyType.CANCEL_LATE, total_price,
+    #     #               f"Late cancellation (limit {limit} hrs)", booking_id)
+    #     return 0.0, None
+
+    def check_cancel_refund(self,customer: Customer,cancel_time: datetime, booking_start:datetime):
         limit = customer.get_cancellation_limit_hours()
+        
         diff  = booking_start - cancel_time
         if diff >= timedelta(hours=limit):
-            return total_price, None
-        pen = Penalty(PenaltyType.CANCEL_LATE, total_price,
-                      f"Late cancellation (limit {limit} hrs)", booking_id)
-        return 0.0, pen
+            return True
+        return None
 
 
 # ===========================================================================
 # Staff
 # ===========================================================================
-class Staff:
-    def __init__(self, branch):
+class Staff(User):
+    def __init__(self, username, password, name, branch):
+        super().__init__(username, password, name, email=None, phone=None, birthday=None, status=UserStatus.LOGIN)
         self.__branch = branch
+        self.__id = f"S-{branch.name}-{str(uuid.uuid4())[:8]}"
+
+    @property
+    def id(self):
+        return self.__id
+
+    @property
+    def branch(self):
+        return self.__branch
 
     def customer_check_out(self, service_out: ServiceOUT, actual_time: datetime,
                             expected_time: datetime, policy: Policy, booking: Booking,
@@ -725,31 +800,49 @@ class Staff:
 
         # 1. late checkout
         late_pen = policy.check_late_checkout(
-            actual_time, expected_time, booking.id, booking.room_rate)
+            actual_time, expected_time, booking.id, booking.room.rate)
         if late_pen:
             service_out.add_penalty(late_pen)
 
+        # บรรทัด 749-769 ใน customer_check_out แก้เป็น:
+
         # 2. room damage
         if is_room_damaged and room_damage_cost > 0:
-            booking.room.status = RoomEquipmentStatus.MAINTENANCE
+            # ✅ เปลี่ยน timeslot ของ booking นี้เป็น MAINTENANCE แทนการ set .status
+            booking.room.update_timeslot_status(
+                booking.day, booking.start, booking.end,
+                RoomEquipmentStatus.MAINTENANCE
+            )
             r_pen = policy.check_damage_penalty(
                 booking.id, room_damage_cost, f"Room damage {room_damage_cost}")
             if r_pen:
                 service_out.add_penalty(r_pen)
         else:
-            booking.room.status = RoomEquipmentStatus.AVAILABLE
+            # ✅ คืน timeslot กลับเป็น AVAILABLE หลัง checkout
+            booking.room.update_timeslot_status(
+                booking.day, booking.start, booking.end,
+                RoomEquipmentStatus.AVAILABLE
+            )
 
         # 3. equipment damage
         for eq in booking.eq_list:
             if eq.id in damaged_eq_ids:
-                eq.status = RoomEquipmentStatus.MAINTENANCE
+                # ✅ เปลี่ยน timeslot ของ eq นี้เป็น MAINTENANCE
+                eq.update_timeslot_status(
+                    booking.day, booking.start, booking.end,
+                    RoomEquipmentStatus.MAINTENANCE
+                )
                 e_pen = policy.check_damage_penalty(
                     booking.id, eq.price,
-                    f"Equipment damage: {eq.type_} ({eq.id}) {eq.price}")
+                    f"Equipment damage: {eq.type} ({eq.id}) {eq.price}")  # แก้ eq.type_ → eq.type ด้วย
                 if e_pen:
                     service_out.add_penalty(e_pen)
             else:
-                eq.status = RoomEquipmentStatus.AVAILABLE
+                # ✅ คืน timeslot กลับเป็น AVAILABLE
+                eq.update_timeslot_status(
+                    booking.day, booking.start, booking.end,
+                    RoomEquipmentStatus.AVAILABLE
+                )
 
         # 4. สร้าง PaymentServiceOut คำนวณยอดให้ลูกค้าดูก่อน
         payment_sout = PaymentServiceOut(service_out, channel)
@@ -979,7 +1072,6 @@ class Equipment():
     def timeslot(self):
         return self.__timeslot
     
-    @timeslot.setter
     def add_timeslot(self, new_timeslot):
         self.__timeslot.append(new_timeslot)
 
@@ -1142,34 +1234,15 @@ class PaymentChannel(ABC):
         pass
 
 
-class QrScan(PaymentChannel):
-    def __init__(self):
-        self.qr_image: Optional[str] = None
-
-    def generate_qr(self, amount: float, ref: str) -> str:
-        payload = f"Payment completed | REF:{ref} | AMT:{amount:.2f} THB"
-        
-        qr = qrcode.make(payload)
-        qr.save("qr_output.png")
-        print(f"[QrScan] QR saved → qr_output.png")
-
-        buffer = io.BytesIO()
-        qr.save(buffer, format="PNG")
-        self.__qr_image = base64.b64encode(buffer.getvalue()).decode()
-        return f"data:image/png;base64,{self.__qr_image}"
-
-    def process(self, amount: float, ref: str = "TXN") -> bool:
-        self.generate_qr(amount, ref)
-        print(f"[QrScan] Waiting for scan... Payment {amount:.2f} THB confirmed!")
-        return True
-
-    def refund(self, amount: float, original_ref: str, refund_ref: str) -> bool:
-        print(f"[QrScan] Refund {amount:.2f} THB → PromptPay (original TXN: {original_ref}, refund ID: {refund_ref})")
-        return True
-
-
 class CreditCard(PaymentChannel):
-    def __init__(self, card_number: str, cvv: str, expiry: str):
+    MOCK_CARD   = "4111111111111111"
+    MOCK_CVV    = "123"
+    MOCK_EXPIRY = "12/30"
+
+    def __init__(self, 
+                 card_number: str = MOCK_CARD, 
+                 cvv: str = MOCK_CVV, 
+                 expiry: str = MOCK_EXPIRY):
         self.__card_number = card_number
         self.__cvv         = cvv
         self.__expiry      = expiry
@@ -1240,6 +1313,18 @@ class TransactionRecord:
     @property
     def amount(self):
         return self.__amount
+    
+    @property
+    def txn_id(self): 
+        return self.__txn_id
+
+    @property
+    def txn_type(self): 
+        return self.__txn_type
+
+    @property
+    def ref_txn_id(self): 
+        return self.__ref_txn_id
 
     def __repr__(self):
         ref = f" ref={self.__ref_txn_id}" if self.__ref_txn_id else ""
@@ -1288,14 +1373,13 @@ class PaymentServiceIn:
         if self.__is_success:
             record = TransactionRecord(
                 txn_id        = self.__transaction_id,
-                service_in_id = self.__servicein_id,
+                servicein_id = self.__servicein_id,
                 txn_type      = TXNType.CHARGE,
                 amount        = self.__final_price,
                 channel_type  = type(self.__channel).__name__,
             )
             self.__transaction_history.append(record)
             print(f"[Payment] Recorded: {record}")
-            self._send_confirm(self.__customer.username)
 
         noti = Notification(self.__customer.username)
         noti.noti_send("Payment Successful!")
@@ -1341,7 +1425,7 @@ class PaymentServiceIn:
         if success:
             refund_record = TransactionRecord(
                 txn_id        = refund_txn_id,
-                service_in_id = self.__servicein_id,
+                servicein_id = self.__servicein_id,
                 txn_type      = TXNType.REFUND,
                 amount        = refund_amount,
                 channel_type  = type(self.__channel).__name__,
@@ -1382,7 +1466,7 @@ class PaymentServiceOut:
         self.__total_price    = self.__service_out.calculate_total_price()
         self.__is_calculated  = True
         print(f"[PaymentServiceOut] ยอดที่ต้องชำระ: {self.__total_price:.2f} THB")
-        print(f"[PaymentServiceOut]   - {self.__service_out. to_format()}")
+        print(f"[PaymentServiceOut]   - sout_id: {self.__service_out.id}, total: {self.__total_price}")
         return self.__total_price
 
     def process_payment(self) -> bool:
@@ -1396,7 +1480,7 @@ class PaymentServiceOut:
         if success:
             record = TransactionRecord(
                 txn_id       = txn_id,
-                sout_id      = self.__service_out.id,
+                servicein_id  = self.__service_out.id, 
                 txn_type     = TXNType.CHARGE,
                 amount       = self.__total_price,
                 channel_type = type(self.__channel).__name__,
@@ -1415,7 +1499,11 @@ class PaymentServiceOut:
             "sout_id":      self.__service_out.id,
             "total_price":   self.__total_price,
             "is_paid":       self.__is_paid,
-            "service_out":   self.__service_out. to_format(),
+            "service_out": {
+                "id": self.__service_out.id,
+                "products": [f"{p.type.value}: {p.price}" for p in self.__service_out.product_list],
+                "penalties": [f"{p.amount}" for p in self.__service_out.penalty_list],
+                    },
             "transactions":  [t. to_format() for t in self.__transaction_history],
         }
     
@@ -1440,7 +1528,7 @@ class PaymentRegister():
         if self.__is_success:
             record = TransactionRecord(
                 txn_id        = self.__transaction_id,
-                service_in_id = self.__servicein_id,
+                servicein_id  = self.__username,
                 txn_type      = TXNType.REGISTER,
                 amount        = self.__cost,
                 channel_type  = type(self.__channel).__name__,
@@ -1482,13 +1570,33 @@ class RhythmReserve():
         self.__customer_list = []
         self.__staff_list = []
         self.__pending_register = []
+        self.__policy = Policy()
+        self.__daily_reports = {}
+
+    @property
+    def policy(self):
+        return self.__policy
+
+    def get_daily_report(self, day , branch) -> DailyReport:
+        key = day.isoformat()
+        if key not in self.__daily_reports:
+            self.__daily_reports[key] = DailyReport(key, branch)
+        return self.__daily_reports[key]
+    
+    def staff_register(self, username: str, password: str, name: str, branch_id: str) :
+        if self.search_user(username):
+            raise Exception("Username already taken")
+        branch = self.get_branch_by_id(branch_id)
+        staff  = Staff(username, password, name, branch)
+        self.add_staff_ls(staff)
+        return staff
 
     def customer_register_request(self, name, username, password, email, phone, birthday, membership: Membership, channel=None):
         if self.search_user(username):
             raise Exception("Have Account Already")
         
         if membership == Membership.STANDARD:
-            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+            customer = Standard(username, password, name, email, phone, birthday, UserStatus.LOGIN)
             self.add_customer_ls(customer)
             return customer
     
@@ -1518,9 +1626,9 @@ class RhythmReserve():
         
         match pending.membership:
             case Membership.PREMIUM:
-                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+                customer = Premium(username, password, name, email, phone, birthday, UserStatus.LOGIN)
             case Membership.DIAMOND:
-                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN, membership)
+                customer = Diamond(username, password, name, email, phone, birthday, UserStatus.LOGIN)
 
         self.__pending_register.remove(pending)
         self.add_customer_ls(customer)
@@ -1559,7 +1667,7 @@ class RhythmReserve():
 
         protected_fields = ["password", "username", "customer_id", "staff_id"]
         if user and hasattr(user,data.value):
-            if data != protected_fields:
+            if data.value not in protected_fields:
                 setattr(user,data.value,new_info)
                 return f"Edit {data.value} Success"
             raise Exception(f"{data.value} can't edit")
@@ -1608,15 +1716,11 @@ class RhythmReserve():
         customer_info = customer.get_customer_info(customer_id)
         
         branch = self.get_branch_by_id(branch_id)
-        if not branch:
-            return "Branch Not Found"
 
         room = self.get_room_by_id(room_id)
         max_quota = room.quota
 
-        if not room: 
-            return "Room Not Found"
-        # max_quota = room.get_eq_quota(room_id)
+        
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M") 
         status = "PENDING"
@@ -1637,7 +1741,7 @@ class RhythmReserve():
         if total_requested_size <= max_quota:
             for eq_id in eq_list:
                 eq = branch.get_eq_by_id(eq_id)
-                eq.add_timeslot = TimeSlot(day, s_time, e_time, TimeSlotStatus.PENDING)
+                eq.add_timeslot(TimeSlot(day, s_time, e_time, TimeSlotStatus.PENDING))
             return True
         else:
             raise Exception("Exceed Room Quota Limit")
@@ -1797,6 +1901,8 @@ class RhythmReserve():
             for eq in stock.equipment:
                 conflict = False
                 for slot in eq.timeslot:
+                    if slot.status == TimeSlotStatus.AVAILABLE:
+                        continue
                     if slot.date == day:
                         if start < slot.end and end > slot.start:
                             conflict = True
@@ -1852,8 +1958,8 @@ class RhythmReserve():
             if slot.status == TimeSlotStatus.AVAILABLE:
                 continue
 
-            slot_start = datetime.combine(date.today(), slot.start)
-            slot_end = datetime.combine(date.today(), slot.end) + BUFFER
+            slot_start = datetime.combine(slot.date, slot.start)
+            slot_end   = datetime.combine(slot.date, slot.end) + BUFFER
 
             if start < slot_end and slot_start < end:
                 return True
@@ -1874,11 +1980,11 @@ class RhythmReserve():
 
         service = ServiceIN(booking)
         customer.add_reserve_list = service
-        service.total_price += booking.total_price
+        service.calculate_total()
         return service
 
     
-    def create_booking(self, customer_id, branch_id, room_size, day, start, end, eq_list):
+    def create_booking(self, customer_id, branch_id, room_size, day, start, end, eq_list, addon_types: list[str] = None):
         customer = self.get_customer_by_id(customer_id)
 
         branch = self.get_branch_by_id(branch_id)
@@ -1903,7 +2009,13 @@ class RhythmReserve():
             selected_eqs.append(eq)
 
         booking = Booking(branch.name, room, selected_eqs, customer, room_slot)
+        if addon_types:
+            name_map = {a.name: a for a in AddonType}
+            for t in addon_types:
+                if t.upper() in name_map:
+                    booking.add_addon(Addon(name_map[t.upper()]))
         return booking
+
     
     def add_booking_to_service(self, service_id, customer_id, branch_id, room_size, day, start, end, eq_list):
         customer = self.get_customer_by_id(customer_id)
@@ -1914,9 +2026,10 @@ class RhythmReserve():
             return booking
 
         service.add_booking(booking)
-        service.total_price = booking.price
+        service.calculate_total()
         return service
     
+
     def pay_service_in(self, customer_id, reserve_id, channel, coupon_id=None):
         customer = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(reserve_id)
@@ -1929,9 +2042,13 @@ class RhythmReserve():
         payment = PaymentServiceIn(reserve_id, customer, total, channel, coupon)
         
         if payment.process_payment():
-            service_in.status = ServiceStatus.PAID
+            service_in.set_status(ServiceStatus.PAID)
+            service_in.set_payment(payment)
+            for booking in service_in.booking_list:
+                booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
+                for eq in booking.eq_list:
+                    eq.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
             
-            # แลก coupon อัตโนมัติถ้าคะแนนถึง
             self._auto_redeem_coupon(customer)
             
             return service_in
@@ -1972,24 +2089,124 @@ class RhythmReserve():
     def get_my_coupons(self, customer_id):
         customer = self.get_customer_by_id(customer_id)
         return customer.get_coupon_list()
-
     
-    def search_custoemr(self,customer_id):
-        for customer in self.__customer_list:
-            if customer.id == customer_id:
-                return customer
-        return None
+    def get_available_products(self, branch_id):
+        branch = self.get_branch_by_id(branch_id)
+        summary = []
+        for stock in branch.product:
+            count = len(stock.get_stock)
+            if count > 0:
+                line = f"{stock.type.value}: {count}"
+                summary.append(line)
+        return summary
+    
+    def add_product_to_service_out(self, branch_id, customer_id, reserve_id, booking_id, product_type: ProductType, amount: int):
+        branch = self.get_branch_by_id(branch_id)
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
 
-    def cancel_booking(self,customer_id,servicein_id,booking_id):
+        stock = None
+        for s in branch.product:
+            if s.type == product_type:
+                stock = s
+                break
+
+        if stock is None:
+            raise Exception(f"Product type {product_type.value} not found")
+
+        if len(stock.get_stock) < amount:
+            raise Exception(f"Not enough stock: only {len(stock.get_stock)} {product_type.value} left")
+
+        for i in range(amount):
+            product = stock.get_stock[0]
+            service_out.add_product(product)
+            stock.del_stock(product.id)
+
+        return {
+            "sout_id": service_out.id,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "total_price": service_out.calculate_total_price()
+        }
+
+    def get_service_out_summary(self, customer_id, reserve_id, booking_id):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
+
+        return {
+            "sout_id": service_out.id,
+            "status": service_out.status.value,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "penalties": [f"{p.amount} THB" for p in service_out.penalty_list],
+            "total_price": service_out.total_price
+        }
+    
+    def pay_service_out(self, customer_id, reserve_id, booking_id, channel,
+                    is_room_damaged: bool = False, room_damage_cost: float = 0.0,
+                    damaged_eq_ids: list = []):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+        service_out = booking.service_out
+
+        actual_time = datetime.now()
+        expected_time = datetime.combine(booking.day, booking.end)
+
+        branch = self.get_branch_by_id(booking.room.branch_id)
+        staff = Staff(branch)
+        report = self.get_daily_report(booking.day,branch)
+
+        payment_sout = staff.customer_check_out(
+            service_out, actual_time, expected_time,
+            self.policy, booking, report, channel,
+            is_room_damaged, room_damage_cost, damaged_eq_ids
+        )
+        booking.set_payment_sout(payment_sout)
+        return {
+            "sout_id": service_out.id,
+            "products": [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+            "penalties": [f"{p.amount} THB" for p in service_out.penalty_list],
+            "total_price": payment_sout.total_price
+        }
+    
+    def confirm_pay_service_out(self, customer_id, reserve_id, booking_id):
+        customer = self.get_customer_by_id(customer_id)
+        reserve = customer.get_reserve(reserve_id)
+        booking = reserve.get_booking(booking_id)
+
+        branch = self.get_branch_by_id(booking.room.branch_id)
+        staff = Staff(branch)
+        report = self.get_daily_report(booking.day)
+
+        payment_sout = booking.payment_sout
+        result = staff.confirm_checkout(payment_sout, report)
+
+        customer.add_points(booking.duration)
+        reserve.set_status(ServiceStatus.PAID)
+        return result
+
+
+    def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
         customer = self.search_custoemr(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
-        if service_in != ServiceStatus.PENDING:
+        if service_in.status != ServiceStatus.PAID:
             raise Exception("Cannot refund: Service not paid yet")
-            
-        cancel = service_in.cancel_b(booking_id)
+        
+        booking  = service_in.search_booking(booking_id)
 
+        booking_start = datetime.combine(booking.day, booking.timeslot.start)
+        total_price = service_in.total_price
+        
+        check_cancel = policy.check_cancel_refund(customer, cancel_time, booking_start)
+        if not check_cancel:
+            raise Exception("Cancel too late: Don't have REFUND")
+
+        cancel = service_in.cancel_b(booking_id)
         if cancel:
             return "Cancel Booking Successfully"
         raise Exception("Can't Cancle This Booking")
