@@ -850,16 +850,116 @@ def view_service_out_summary(customer_id: str, service_id: str, booking_id: str)
 # ────────────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
-def checkout(
+def inspect_before_checkout(
     customer_id: str, service_id: str, booking_id: str,
-    payment_method: str,
-    is_room_damaged: bool = False, room_damage_cost: float = 0.0,
+) -> dict:
+    """
+    Staff ตรวจสอบความเสียหายก่อน checkout
+    ⚠️ ต้องเรียก tool นี้ก่อนเสมอ แล้วถามว่ามีความเสียหายไหม
+    - ถ้าไม่มี → เรียก checkout โดยตรง
+    - ถ้ามี    → เรียก report_damage ก่อน แล้วค่อย checkout
+    """
+    try:
+        customer    = store.get_customer_by_id(customer_id)
+        reserve     = customer.get_reserve(service_id)
+        booking     = reserve.search_booking(booking_id)
+        service_out = booking.service_out
+
+        return {
+            "success":    True,
+            "booking_id": booking_id,
+            "room": {
+                "room_id":   booking.room.id,
+                "room_size": booking.room.size,
+                "room_rate": booking.room.rate,
+            },
+            "equipment": [
+                {"eq_id": eq.id, "type": eq.type, "price": eq.price}
+                for eq in booking.eq_list
+            ],
+            "products_ordered": [
+                f"{p.type.value}: {p.price} THB" for p in service_out.product_list
+            ],
+            "current_time": now().strftime("%Y-%m-%d %H:%M:%S"),
+            "expected_end": str(booking.end),
+            "next_step": "ถาม Staff ว่ามีความเสียหายไหม? ถ้ามี → report_damage, ถ้าไม่มี → checkout",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def report_damage(
+    customer_id: str, service_id: str, booking_id: str,
+    is_room_damaged: bool = False,
+    room_damage_cost: float = 0.0,
     damaged_equipment_ids: str = "",
 ) -> dict:
     """
-    เช็คเอาท์ — คำนวณยอดและชำระเงิน Service OUT ในขั้นตอนเดียว
+    Staff รายงานความเสียหาย — เรียกหลัง inspect_before_checkout ถ้ามีของเสียหาย
+    - is_room_damaged      : ห้องเสียหายไหม
+    - room_damage_cost     : ค่าเสียหายห้อง (THB)
+    - damaged_equipment_ids: equipment_id คั่นด้วย comma เช่น "EQ-Silom-DM-xxxx,EQ-Silom-MC-xxxx"
+    ⚠️ หลังรายงานแล้ว ต้องถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหน แล้วค่อยเรียก checkout
+    """
+    try:
+        customer    = store.get_customer_by_id(customer_id)
+        reserve     = customer.get_reserve(service_id)
+        booking     = reserve.search_booking(booking_id)
+        service_out = booking.service_out
+        policy      = store.policy
+
+        damaged_ids = [x.strip() for x in damaged_equipment_ids.split(",") if x.strip()]
+
+        if is_room_damaged and room_damage_cost > 0:
+            pen = policy.check_damage_penalty(
+                booking_id, room_damage_cost, f"Room damage {room_damage_cost} THB")
+            if pen:
+                service_out.add_penalty(pen)
+
+        for eq in booking.eq_list:
+            if eq.id in damaged_ids:
+                pen = policy.check_damage_penalty(
+                    booking_id, eq.price, f"Equipment damage: {eq.type} ({eq.id})")
+                if pen:
+                    service_out.add_penalty(pen)
+
+        service_out.calculate_total_price()
+
+        return {
+            "success":    True,
+            "message":    "บันทึกความเสียหายสำเร็จ",
+            "booking_id": booking_id,
+            "damages": {
+                "room_damaged":   is_room_damaged,
+                "room_cost":      room_damage_cost,
+                "damaged_eq_ids": damaged_ids,
+            },
+            "penalties": [
+                {"amount": f"{p.amount} THB", "reason": p.reason}
+                for p in service_out.penalty_list
+            ],
+            "total_penalty": sum(p.amount for p in service_out.penalty_list),
+            "payment_options": [
+                {"method": "credit", "label": "บัตรเครดิต"},
+                {"method": "qr",     "label": "QR Code"},
+            ],
+            "next_step": "ถามผู้ใช้ว่าเลือกวิธีชำระเงินไหน แล้วเรียก checkout",
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@mcp.tool()
+def checkout(
+    customer_id: str, service_id: str, booking_id: str,
+    payment_method: str,
+) -> dict:
+    """
+    ชำระเงิน Service OUT และปิด session
+    ⚠️ ต้องเรียก inspect_before_checkout ก่อนเสมอ
+       ถ้ามีความเสียหาย ต้องเรียก report_damage ก่อนด้วย
     payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
-    ⚠️ ต้องถามผู้ใช้ว่าจะจ่ายด้วยวิธีไหนก่อนเรียก tool นี้เสมอ
     """
     try:
         if payment_method == "credit":
@@ -869,39 +969,58 @@ def checkout(
         else:
             return {"success": False, "error": "payment_method ต้องเป็น 'credit' หรือ 'qr'"}
 
-        damaged_ids = [x.strip() for x in damaged_equipment_ids.split(",") if x.strip()]
-        result = store.pay_service_out(customer_id, service_id, booking_id, channel,
-                                       is_room_damaged, room_damage_cost, damaged_ids)
-        return {
-            "success": True,
-            "message": "คำนวณยอดสำเร็จ กรุณายืนยันการชำระเงิน",
-            **result,
-            "next_step": "เรียก confirm_checkout เพื่อปิด session"
-        }
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+        customer      = store.get_customer_by_id(customer_id)
+        reserve       = customer.get_reserve(service_id)
+        booking       = reserve.search_booking(booking_id)
+        service_out   = booking.service_out
+        actual_time   = now()
+        expected_time = datetime.combine(booking.day, booking.end)
+        branch        = store.get_branch_by_id(booking.room.branch_id)
+        report        = store.get_daily_report(booking.day, branch)
 
+        # เช็ค late checkout
+        late_pen = store.policy.check_late_checkout(
+            actual_time, expected_time, booking.id, booking.room.rate)
+        if late_pen:
+            service_out.add_penalty(late_pen)
 
-@mcp.tool()
-def confirm_checkout(
-    customer_id: str, service_id: str, booking_id: str,
-) -> dict:
-    """ยืนยันปิด session — รับ points + อัปเดต report"""
-    try:
-        customer     = store.get_customer_by_id(customer_id)
-        reserve      = customer.get_reserve(service_id)
-        booking      = reserve.search_booking(booking_id)
-        payment_sout = booking.payment_sout
+        # คำนวณยอดรวม (products + damage penalties + late penalty)
+        payment_sout = PaymentServiceOut(service_out, channel)
+        payment_sout.calculate_total()
 
-        branch  = store.get_branch_by_id(booking.room.branch_id)
-        staff   = Staff("system", "system", "System", branch)
-        report  = store.get_daily_report(booking.day, branch)
-        result  = staff.confirm_checkout(payment_sout, report)
+        # penalty → APPLIED + บันทึก report
+        for pen in service_out.penalty_list:
+            if pen.status == PenaltyStatus.PENDING:
+                pen.change_penalty_status(PenaltyStatus.APPLIED)
+                report.add_penalty(pen)
 
+        # อัปเดต room/eq status
+        booking.room.update_timeslot_status(
+            booking.day, booking.start, booking.end, RoomEquipmentStatus.AVAILABLE)
+        for eq in booking.eq_list:
+            eq.update_timeslot_status(
+                booking.day, booking.start, booking.end, RoomEquipmentStatus.AVAILABLE)
+
+        report.add_booking_record(booking)
+        booking.set_payment_sout(payment_sout)
+
+        if not payment_sout.process_payment():
+            return {"success": False, "error": "Payment failed"}
+
+        report.add_revenue(payment_sout.total_price)
         customer.add_points(booking.duration)
         reserve.set_status(ServiceStatus.PAID)
 
-        return {"success": True, "message": "ชำระเงินสำเร็จ ขอบคุณที่ใช้บริการ!", "receipt": result}
+        return {
+            "success": True,
+            "message": "ชำระเงินสำเร็จ ขอบคุณที่ใช้บริการ!",
+            "summary": {
+                "products":      [f"{p.type.value}: {p.price} THB" for p in service_out.product_list],
+                "penalties":     [{"amount": f"{p.amount} THB", "reason": p.reason} for p in service_out.penalty_list],
+                "total_price":   payment_sout.total_price,
+                "points_earned": booking.duration * customer.get_points_per_hr(),
+            }
+        }
     except Exception as e:
         return {"success": False, "error": str(e)}
 
