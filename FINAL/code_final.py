@@ -178,6 +178,34 @@ class User():
     def status(self):
         return self.__status
     
+    @property
+    def name(self):
+        return self.__name
+    @name.setter
+    def name(self,value):
+        self.__name = value
+
+    @property
+    def email(self):
+        return self.__email
+    @email.setter
+    def email(self,value):
+        self.__email = value
+    
+    @property
+    def phone(self):
+        return self.__phone
+    @phone.setter
+    def phone(self,value):
+        self.__phone = value
+    
+    @property
+    def birthday(self):
+        return self.__birthday
+    @birthday.setter
+    def birthday(self,value):
+        self.__birthday = value
+
     def set_status_user(self,n_status):
         if isinstance(n_status,UserStatus):
             self.__status = n_status
@@ -1308,6 +1336,27 @@ class CreditCard(PaymentChannel):
         print(f"[CreditCard] Refund {amount:.2f} THB → *{self.__card_number[-4:]} "
               f"(original TXN: {original_ref}, refund ID: {refund_ref})")
         return True
+    
+
+class QrScan(PaymentChannel):
+    def process(self, amount: float, ref: str = "TXN") -> bool:
+        qr_data = f"RhythmReserve|{ref}|{amount:.2f}THB"
+        img = qrcode.make(qr_data)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        b64 = base64.b64encode(buffer.getvalue()).decode()
+        print(f"QR_CODE_BASE64:{b64}") 
+        return True
+
+    def refund(self, amount, original_ref, refund_ref) -> bool:
+        return True
+
+    def get_qr_base64(self, amount: float, ref: str) -> str:
+        qr_data = f"RhythmReserve|{ref}|{amount:.2f}THB"
+        img = qrcode.make(qr_data)
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        return base64.b64encode(buffer.getvalue()).decode()
 
 
 # ===========================================================================
@@ -2062,24 +2111,30 @@ class RhythmReserve():
     
 
     def pay_service_in(self, customer_id, reserve_id, channel, coupon_id=None):
-        customer = self.get_customer_by_id(customer_id)
+        customer   = self.get_customer_by_id(customer_id)
         service_in = customer.get_reserve(reserve_id)
-        
+
         coupon = None
         if coupon_id:
             coupon = customer.get_coupon(coupon_id)
-        
-        total = service_in.calculate_total()
+
+        total   = service_in.calculate_total()
         payment = PaymentServiceIn(reserve_id, customer, total, channel, coupon)
+        
+        service_in.set_payment(payment)
         
         if service_in.checkout():
             for booking in service_in.booking_list:
-                booking.room.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
+                booking.room.update_timeslot_status(
+                    booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED  # ✅ ใส่ครบ
+                )
                 for eq in booking.eq_list:
-                    eq.update_timeslot_status(booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
+                    eq.update_timeslot_status(
+                        booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED  # ✅ ใส่ครบ
+                    )
             self._auto_redeem_coupon(customer)
             return service_in
-        
+
         raise Exception("Payment failed")
 
 

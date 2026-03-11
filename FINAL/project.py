@@ -3,6 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from datetime import datetime, time
 from fastmcp import FastMCP
+from fastmcp.utilities.types import Image
 
 from code_final import *
 
@@ -556,16 +557,39 @@ def view_cancellation_policy(customer_id: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+
 @mcp.tool()
-def pay_reservation(customer_id: str, service_id: str, coupon_id: str = "") -> dict:
-    """ชำระเงินยืนยันการจอง (Service IN) — ส่วนลด Membership คิดอัตโนมัติ"""
+def pay_reservation(customer_id: str, service_id: str, 
+                    payment_method: str = "none",  # ← default เป็น none
+                    coupon_id: str = "") -> list:
+    """ชำระเงินยืนยันการจอง
+    IMPORTANT: ถ้า payment_method = 'none' ให้ถามผู้ใช้ก่อนเสมอว่าต้องการชำระด้วยวิธีไหน
+    payment_method: 'credit' = บัตรเครดิต, 'qr' = QR Code
+    """
     try:
-        coupon  = coupon_id.strip() or None
-        service = store.pay_service_in(customer_id, service_id, mock_channel, coupon)
-        return {"success": True, "message": "ชำระเงินสำเร็จ! การจองได้รับการยืนยันแล้ว",
-                "service_id": service.id, "status": service.status.value}
+        if payment_method == "none":
+            return ["กรุณาเลือกวิธีชำระเงิน: 'credit' = บัตรเครดิต หรือ 'qr' = QR Code"]
+        
+        coupon     = coupon_id.strip() or None
+        customer   = store.get_customer_by_id(customer_id)
+        service_in = customer.get_reserve(service_id)
+
+        if payment_method == "qr":
+            channel = QrScan()
+            total   = service_in.calculate_total()
+            qr_b64  = channel.get_qr_base64(total, service_id)
+            service = store.pay_service_in(customer_id, service_id, channel, coupon)
+            return [
+                f"ชำระเงินสำเร็จ! Service: {service.id} Status: {service.status.value}",
+                Image(data=qr_b64, media_type="image/png")
+            ]
+        else:
+            channel = CreditCard()
+            service = store.pay_service_in(customer_id, service_id, channel, coupon)
+            return [f"ชำระเงินสำเร็จ! Service: {service.id} Status: {service.status.value}"]
+
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        return [f"Error: {str(e)}"]
 
 
 @mcp.tool()
