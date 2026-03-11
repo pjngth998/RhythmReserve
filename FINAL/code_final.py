@@ -173,12 +173,6 @@ class Customer(User) :
     def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
     
-    def get_reserve_detail(self, reserve_id):
-        for reserve in self.__reserve_list :
-            if reserve.reserve_id == reserve_id:
-                return reserve
-        return None
-    
     def get_reserve(self, reserve_id):
         for reserve in self.__reserve_list:
             if reserve.id == reserve_id:
@@ -353,6 +347,10 @@ class Booking():
     def service_out(self):
         return self.__service_out
     
+    @property
+    def timeslot(self):
+        return self.__timeslot
+    
     def calculate_price(self):
         room_price = self.__room.rate * self.__duration
         eq_price = 0
@@ -471,7 +469,7 @@ class ServiceIN:
         for booking in self.__booking_list:
             if booking.id == booking_id:
                 return booking
-        return booking
+        return None
     
     def cal_total_price(self, add_price):
         self.__total_price += add_price
@@ -536,6 +534,7 @@ class ServiceIN:
 
                 if refund_success:
                     set_status= booking.booking_cancel()
+                    self.remove_booking(booking_id)
                     if set_status :
                         return True
         return False
@@ -605,16 +604,22 @@ class Policy:
             return None
         return Penalty(PenaltyType.DAMAGE, cost, desc, booking_id)
 
-    def check_cancellation(self, cancel_time: datetime, booking_start: datetime,
-                            customer: Customer, total_price: float,
-                            booking_id: str) -> Tuple[float, Optional[Penalty]]:
+    # def check_cancellation(self, cancel_time: datetime, booking_start: datetime,customer: Customer,total_price) -> Tuple[float, Optional[Penalty]]:
+    #     limit = customer.get_cancellation_limit_hours()
+    #     diff  = booking_start - cancel_time
+    #     if diff >= timedelta(hours=limit):
+    #         return total_price, None
+    #     # pen = Penalty(PenaltyType.CANCEL_LATE, total_price,
+    #     #               f"Late cancellation (limit {limit} hrs)", booking_id)
+    #     return 0.0, None
+
+    def check_cancel_refund(self,customer: Customer,cancel_time: datetime, booking_start:datetime,total_price):
         limit = customer.get_cancellation_limit_hours()
+        
         diff  = booking_start - cancel_time
         if diff >= timedelta(hours=limit):
-            return total_price, None
-        pen = Penalty(PenaltyType.CANCEL_LATE, total_price,
-                      f"Late cancellation (limit {limit} hrs)", booking_id)
-        return 0.0, pen
+            return True
+        return None
 
 
 # ===========================================================================
@@ -1868,16 +1873,24 @@ class RhythmReserve():
                 return customer
         return None
 
-    def cancel_booking(self,customer_id,servicein_id,booking_id):
+    def cancel_booking(self,customer_id,servicein_id,booking_id,cancel_time : datetime, policy: Policy):
         customer = self.search_custoemr(customer_id)
         service_in = customer.get_reserve(servicein_id)
         
 
-        if service_in != ServiceStatus.PENDING:
+        if service_in.status != ServiceStatus.PAID:
             raise Exception("Cannot refund: Service not paid yet")
-            
-        cancel = service_in.cancel_b(booking_id)
+        
+        booking  = service_in.search_booking(booking_id)
 
+        booking_start = booking.timeslot.start
+        total_price = service_in.total_price
+        
+        check_cancel = policy.check_cancel_refund(cancel_time,booking_start,customer : Customer)
+        if not check_cancel:
+            raise Exception("Cancel too late: ไม่ได้รับเงินคืน")
+
+        cancel = service_in.cancel_b(booking_id)
         if cancel:
             return "Cancel Booking Successfully"
         raise Exception("Can't Cancle This Booking")
