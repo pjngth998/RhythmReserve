@@ -4,66 +4,72 @@ title SD-06: add_product_to_service_out
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
-participant "Branch" as BR
 participant "Booking" as BK
+participant "Branch" as BR
 participant "StockProduct" as STCK
 participant "ServiceOUT" as SOUT
-participant "Products" as PROD
 
 C -> RR : add_product_to_service_out(branch_id, customer_id,\nreserve_id, booking_id, product_type, amount)
-
+activate RR
 RR -> RR : get_branch_by_id(branch_id)
 RR -> RR : get_customer_by_id(customer_id)
 
 RR -> CUS : get_reserve(reserve_id)
-' activate CUS
+activate CUS
 CUS -->> RR : reserve
 ' deactivate CUS
 
-RR -> CUS : get_booking(booking_id)
+RR -> CUS : find_booking(booking_id)
 ' activate CUS
 CUS -->> RR : booking
-' deactivate CUS
+deactivate CUS
 
 RR -> BK : service_out
-' activate BK
+activate BK
 BK -->> RR : service_out
-' deactivate BK
+deactivate BK
 
 ' --- ค้นหา Stock ---
 RR -> BR : branch.product (get list)
+activate BR
 BR -->> RR : stock_list
+deactivate BR
 
 
-loop ทุก stock ใน branch.product
-    RR -> BR : branch.product
-    BR --> RR : stock_list
+loop for stock in stock list
     alt stock.type == product_type
-        RR --> RR : stock (found)
+        RR -> RR : stock (found)
     end
 end
 
 alt stock is None
-    RR --> C : Exception("Product type not found")
-else alt len(stock.get_stock) < amount
-    RR --> C : Exception("Not enough stock")
+    RR --> C : raise Exception("Product type not found")
+else len(stock.get_stock) < amount
+    RR --> C : raise Exception("Not enough stock")
 else
     loop i in range(amount)
         RR -> STCK : get_stock[0]
+        activate STCK
         STCK --> RR : product
 
         RR -> SOUT : add_product(product)
+        activate SOUT
         SOUT -> SOUT : __product_list.append(product)
 
         RR -> STCK : del_stock(product.id)
         STCK -> STCK : __product_list.pop(index)
+        STCK --> RR : True
+        deactivate STCK
     end
 
     RR -> SOUT : calculate_total_price()
     SOUT -> SOUT : sum(product.price) + sum(penalty.amount)
     SOUT --> RR : total_price
+    deactivate SOUT
 
     RR --> C : { sout_id, products, total_price }
+deactivate RR
 end
+
 
 @enduml

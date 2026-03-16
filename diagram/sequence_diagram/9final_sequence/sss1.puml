@@ -1,6 +1,7 @@
 @startuml
-title SD-06: add_product_to_service_out (Object Navigation Version)
+title SD-06: add_product_to_service_out (CUS Method Focus)
 
+' --- การตั้งค่าเพื่อความสวยงามและพอดีขอบ ---
 skinparam Style strictuml
 skinparam MaxMessageSize 200
 skinparam sequence {
@@ -11,37 +12,41 @@ skinparam sequence {
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
-participant "Reserve" as RSV
 participant "Booking" as BK
 participant "Branch" as BR
 participant "StockProduct" as STCK
 participant "ServiceOUT" as SOUT
 
-C -> RR : add_product_to_service_out(..., product_type, amount)
+C -> RR : add_product_to_service_out(...)
 activate RR
 
-' --- จุดที่แก้: การเข้าถึง Object ตามลำดับชั้น ---
+' --- 1. เตรียมข้อมูล Object จาก Customer ---
 RR -> RR : get_branch_by_id(branch_id)
 RR -> RR : get_customer_by_id(customer_id)
 
+' เรียกหา Reserve จาก Customer
 RR -> CUS : get_reserve(reserve_id)
 activate CUS
 CUS -->> RR : reserve
 deactivate CUS
 
-RR -> RSV : get_booking(booking_id)
-activate RSV
-RSV -->> RR : booking
-deactivate RSV
+' เรียกหา Booking จาก Customer (อยู่คลาสเดียวกัน)
+RR -> CUS : find_booking(booking_id)
+activate CUS
+CUS -->> RR : booking
+deactivate CUS
 
-RR -> BK : service_out
+' ดึงถังเก็บค่าบริการจาก Booking
+RR -> BK : get_service_out()
 activate BK
 BK -->> RR : service_out
 deactivate BK
 
-' --- ค้นหา Stock ---
-RR -> BR : branch.product (get list)
+' --- 2. ค้นหา Stock (ดึงรายการมาครั้งเดียวตามโค้ด) ---
+RR -> BR : branch.product
+activate BR
 BR -->> RR : stock_list
+deactivate BR
 
 loop for each s in stock_list
     alt s.type == product_type
@@ -49,17 +54,18 @@ loop for each s in stock_list
     end
 end
 
-' --- ตรวจสอบ Exception (ยุบรวมให้พอดีขอบ) ---
+' --- 3. ตรวจสอบเงื่อนไขและจัดการสินค้า ---
 alt stock is None
-    RR --[#red]> C : raise Exception("Product type not found")
+    RR --[#red]> C : Exception("Product type not found")
 else len(stock.get_stock) < amount
-    RR --[#red]> C : raise Exception("Not enough stock")
+    RR --[#red]> C : Exception("Not enough stock")
 else [Available]
     
-    ' --- วนลูปจัดการสินค้าตามโค้ด ---
     loop i in range(amount)
         RR -> STCK : get_stock[0]
+        activate STCK
         STCK -->> RR : product
+        deactivate STCK
 
         RR -> SOUT : add_product(product)
         activate SOUT
@@ -72,7 +78,6 @@ else [Available]
         deactivate STCK
     end
 
-    ' สรุปผลตอนท้าย
     RR -> SOUT : calculate_total_price()
     activate SOUT
     SOUT -->> RR : total_price

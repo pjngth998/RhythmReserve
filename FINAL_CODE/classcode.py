@@ -283,7 +283,7 @@ class Customer(User):
                 return reserve
         raise Exception("service not found")
 
-    def get_booking(self, booking_id):
+    def find_booking(self, booking_id):
         for reserve in self.__reserve_list:
             for booking in reserve.booking_list:
                 if booking.id == booking_id:
@@ -1732,7 +1732,7 @@ class RhythmReserve():
     def check_in(self, customer_id, reserve_id, booking_id):
         customer = self.get_customer_by_id(customer_id)
         reserve  = customer.get_reserve(reserve_id)
-        booking  = reserve.get_booking(booking_id)
+        booking  = reserve.find_booking(booking_id)
 
         current_time = now()
 
@@ -2150,7 +2150,7 @@ class RhythmReserve():
         branch      = self.get_branch_by_id(branch_id)
         customer    = self.get_customer_by_id(customer_id)
         reserve     = customer.get_reserve(reserve_id)
-        booking     = reserve.get_booking(booking_id)
+        booking     = reserve.find_booking(booking_id)
         service_out = booking.service_out
 
         stock = None
@@ -2179,7 +2179,7 @@ class RhythmReserve():
     def get_service_out_summary(self, customer_id, reserve_id, booking_id):
         customer    = self.get_customer_by_id(customer_id)
         reserve     = customer.get_reserve(reserve_id)
-        booking     = reserve.get_booking(booking_id)
+        booking     = reserve.find_booking(booking_id)
         service_out = booking.service_out
 
         return {
@@ -2195,7 +2195,7 @@ class RhythmReserve():
                         damaged_eq_ids: list = []):
         customer    = self.get_customer_by_id(customer_id)
         reserve     = customer.get_reserve(reserve_id)
-        booking     = reserve.get_booking(booking_id)
+        booking     = reserve.find_booking(booking_id)
         service_out = booking.service_out
 
         actual_time   = now()
@@ -2222,7 +2222,7 @@ class RhythmReserve():
     def confirm_pay_service_out(self, customer_id, reserve_id, booking_id):
         customer    = self.get_customer_by_id(customer_id)
         reserve     = customer.get_reserve(reserve_id)
-        booking     = reserve.get_booking(booking_id)
+        booking     = reserve.find_booking(booking_id)
 
         branch       = self.get_branch_by_id(booking.room.branch_id)
         report       = self.get_daily_report(booking.day, branch)
