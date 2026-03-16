@@ -1,83 +1,72 @@
 @startuml
-title SD-03: pay_service_in (Final Refined)
+title SD-04: cancel_booking (Refined Logic)
 
 skinparam Style strictuml
 skinparam sequence {
     MessageAlignment center
-    ActivationBackgroundColor #E1F5FE
 }
 
 actor Customer as C
 participant "RhythmReserve" as RR
-participant "CustomerInstance" as CI
-participant "Membership" as MEM
+participant "Customer" as CUS
 participant "ServiceIN" as SIN
+participant "Policy" as POL
 participant "PaymentServiceIn" as PSIN
-participant "Coupon" as CPN
-participant "Room/Equipment" as RE
+participant "Booking" as BK
+participant "Room/Eq" as RE
 
-C -> RR : pay_service_in(...)
+C -> RR : cancel_booking(customer_id, servicein_id, booking_id, cancel_time, policy)
 activate RR
 
     RR -> RR : get_customer_by_id(customer_id)
-    RR -> CI : get_reserve(reserve_id)
-    CI -->> RR : service_in
+    RR -> CUS : get_reserve(servicein_id)
+    CUS -->> RR : service_in
 
-    opt coupon_id is not None
-        RR -> CI : get_coupon(coupon_id)
-        CI -->> RR : coupon
-    end
+    ' เช็คสถานะการจ่ายเงิน
+    alt [service_in.status != PAID]
+        RR --[#red]> C : raise Exception("Cannot refund...")
+    else [status == PAID]
+        RR -> SIN : search_booking(booking_id)
+        SIN -->> RR : booking
 
-    RR -> SIN : calculate_total()
-    SIN -->> RR : total_price
+        ' การเช็ค Policy (ยุบให้คลีนเหมือนคูปอง)
+        RR -> POL : check_cancel_refund(customer, cancel_time, booking_start)
+        activate POL
+            POL -> CUS : get_cancellation_limit_hours()
+            CUS -->> POL : limit_hours
+            POL -->> RR : boolean (check_cancel)
+        deactivate POL
 
-    '--- จังหวะสร้าง Payment และการดึง Membership ---
-    create PSIN
-    RR -> PSIN : <<create>> PaymentServiceIn(..., customer, ...)
-    activate PSIN
-        PSIN -> PSIN : __apply_discount(total, coupon)
-        activate PSIN #LightBlue
+        alt [not check_cancel]
+            RR --[#red]> C : raise Exception("Cancel too late...")
+        else [check_cancel is True]
             
-            '--- ขั้นตอนการไปเอา Membership ตามที่คุณแนะนำ ---
-            PSIN -> CI : get_membership()
-            activate CI
-            CI -->> PSIN : membership_instance
-            deactivate CI
-            
-            PSIN -> MEM : get_discount()
-            activate MEM
-            MEM -->> PSIN : discount_rate
-            deactivate MEM
-            
-            opt coupon is not None
-                PSIN -> CPN : validate & get_discount()
-                CPN -->> PSIN : coupon_discount
-            end
-        deactivate PSIN
-    PSIN -->> RR : payment instance
-    deactivate PSIN
+            ' เริ่มกระบวนการ cancel_b ภายใน ServiceIN
+            RR -> SIN : cancel_b(booking_id)
+            activate SIN
+                SIN -> SIN : _calculate_refund(booking)
+                
+                SIN -> PSIN : payment_refund(refund_amount)
+                activate PSIN
+                    note over PSIN : Lookup txn & Process Refund
+                    PSIN -->> SIN : True
+                deactivate PSIN
 
-    RR -> SIN : set_payment(payment)
-    RR -> SIN : set_final_price(payment.final_price)
+                SIN -> BK : booking_cancel()
+                activate BK
+                    BK -> RE : room.update_timeslot_status(..., AVAILABLE)
+                    loop for each eq in eq_list
+                        BK -> RE : eq.update_timeslot_status(..., AVAILABLE)
+                    end
+                    BK -->> SIN : True
+                deactivate BK
 
-    '--- ส่วน Checkout และการ Update Status ---
-    RR -> SIN : checkout()
-    activate SIN
-        SIN -> PSIN : process_payment()
-        SIN -->> RR : True (Success)
-    deactivate SIN
+                SIN -> SIN : remove_booking(booking_id)
+                SIN -->> RR : True
+            deactivate SIN
 
-    alt if checkout is True
-        loop for each booking in service_in
-            RR -> RE : room.update_timeslot_status(..., RESERVED)
-            loop for each eq in booking.eq_list
-                RR -> RE : eq.update_timeslot_status(..., RESERVED)
-            end
+            RR -->> C : "Cancel Booking Successfully"
         end
-        RR -> RR : _auto_redeem_coupon(customer)
     end
-
-RR -->> C : service_in object
 deactivate RR
-
 @enduml
