@@ -579,28 +579,18 @@ def create_reservation(
         final_price     = round(service.total_price - discount_amount, 2)
 
         return {
-            "success":    True,
-            "message":    "สร้างการจองสำเร็จ! กรุณาชำระเงินเพื่อยืนยัน",
-            "service_id": service.id,
+            "success":    True, "message":    "สร้างการจองสำเร็จ! กรุณาชำระเงินเพื่อยืนยัน", "service_id": service.id,
             "bookings": [
                 {
-                    "booking_id": b.id,
-                    "date":       date_str,
-                    "start_time": f"{start_hour:02d}:00",
-                    "end_time":   f"{end_hour:02d}:00",
-                    "room_size":  ru,
-                    "room_rate":  b.room.rate,
-                    "equipment":  eq_detail,
+                    "booking_id": b.id, "date":       date_str, "start_time": f"{start_hour:02d}:00", "end_time":   f"{end_hour:02d}:00",
+                    "room_size":  ru, "room_rate":  b.room.rate, "equipment":  eq_detail,
                     "addons":     [{"type": a.type.name, "price": a.price} for a in b.addon_list],
                     "price":      b.price,
                 }
                 for b in service.booking_list
             ],
-            "subtotal":        service.total_price,
-            "membership":      type(customer).__name__,
-            "discount_rate":   f"{discount_rate*100:.0f}%",
-            "discount_amount": discount_amount,
-            "final_price":     final_price,
+            "subtotal":        service.total_price, "membership":      type(customer).__name__, "discount_rate":   f"{discount_rate*100:.0f}%",
+            "discount_amount": discount_amount, "final_price":     final_price,
             "next_step":       "ถามผู้ใช้ว่าต้องการเพิ่ม Booking อีกไหม? ถ้าไม่ -> เรียก select_payment_method",
         }
     except (ValueError, Exception) as e:
@@ -796,12 +786,7 @@ def view_cancellation_policy(customer_id: str) -> dict:
 
 
 @mcp.tool()
-def pay_reservation(
-    customer_id: str,
-    service_id: str,
-    payment_method: str = "none",
-    coupon_id: str = "",
-) -> list:
+def pay_reservation(customer_id: str, service_id: str, payment_method: str = "none", coupon_id: str = "",) -> list:
     """
     ชำระเงินยืนยันการจอง
     payment_method: 'credit' = บัตรเครดิต | 'qr' = QR Code
@@ -1279,10 +1264,7 @@ def report_damage(
 #
 
 @mcp.tool()
-def checkout(
-    customer_id: str, service_id: str, booking_id: str,
-    payment_method: str,
-) -> dict:
+def checkout(customer_id: str, service_id: str, booking_id: str,payment_method: str,) -> dict:
     """
     ชำระเงิน Service OUT และปิด session
 
@@ -1374,9 +1356,7 @@ def checkout(
                     {"amount": f"{p.amount} THB", "reason": p.reason, "type": p.type.value}
                     for p in service_out.penalty_list
                 ],
-                "total_price":   payment_sout.total_price,
-                "points_earned": points_earned,
-                "total_points":  customer.points,
+                "total_price":   payment_sout.total_price, "points_earned": points_earned, "total_points":  customer.points,
             },
         }
     except Exception as e:

@@ -274,6 +274,7 @@ class Customer(User):
         if self.__id == customer_id:
             return self.username, self.__id, self.__reserve_list
 
+    @reserve_list.setter
     def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
 
@@ -1845,12 +1846,18 @@ class RhythmReserve():
         product_list = []
         for i in range(amount):
             match type_:
-                case ProductType.WATER:    product = Products(branch.name, type_, 10)
-                case ProductType.COFFEE:   product = Products(branch.name, type_, 30)
-                case ProductType.COKE:     product = Products(branch.name, type_, 15)
-                case ProductType.CHOCOPIE: product = Products(branch.name, type_, 10)
-                case ProductType.LAY:      product = Products(branch.name, type_, 20)
-                case ProductType.TARO:     product = Products(branch.name, type_, 15)
+                case ProductType.WATER:    
+                    product = Products(branch.name, type_, 10)
+                case ProductType.COFFEE:   
+                    product = Products(branch.name, type_, 30)
+                case ProductType.COKE:     
+                    product = Products(branch.name, type_, 15)
+                case ProductType.CHOCOPIE: 
+                    product = Products(branch.name, type_, 10)
+                case ProductType.LAY:      
+                    product = Products(branch.name, type_, 20)
+                case ProductType.TARO:     
+                    product = Products(branch.name, type_, 15)
             product_list.append(product)
             stock.add_stock(product)
         return product_list
@@ -1961,17 +1968,12 @@ class RhythmReserve():
         return available_slots
 
     def _has_conflict(self, room, start, end):
-        """
-        ตรวจสอบว่า room มี timeslot ที่ชนกับ start-end หรือไม่
-        รองรับทั้ง datetime และ time objects โดย normalize เป็น datetime เสมอ
-        """
         for slot in room.timeslot:
             if slot.status == TimeSlotStatus.AVAILABLE:
                 continue
             slot_start = datetime.combine(slot.date, slot.start)
             slot_end   = datetime.combine(slot.date, slot.end) + BUFFER
 
-            # ✅ FIX: normalize start/end → datetime ป้องกัน time vs datetime comparison
             if isinstance(start, time):
                 start_dt = datetime.combine(slot.date, start)
             else:
@@ -2002,17 +2004,13 @@ class RhythmReserve():
             return booking
 
         service = ServiceIN(booking)
-        customer.add_reserve_list(service)
+        customer.add_reserve_list = service
         service.calculate_total()
         return service
 
     def create_booking(self, customer_id, branch_id, room_size, day, start, end,
                        eq_list, addon_types: list[str] = None):
-        """
-        ✅ FIX: normalize start/end จาก time → datetime ก่อนส่งต่อ
-        เพื่อป้องกัน TypeError: '<' not supported between 'datetime.time' and 'datetime.datetime'
-        """
-        # normalize time → datetime
+       
         if isinstance(start, time):
             start = datetime.combine(day, start)
         if isinstance(end, time):
@@ -2022,7 +2020,6 @@ class RhythmReserve():
         branch   = self.get_branch_by_id(branch_id)
         room     = self.get_available_room(branch, room_size, start, end)
 
-        # ดึง time กลับมาสำหรับ TimeSlot (ซึ่งต้องการ time object)
         start_t = start.time() if isinstance(start, datetime) else start
         end_t   = end.time()   if isinstance(end,   datetime) else end
 
@@ -2117,12 +2114,6 @@ class RhythmReserve():
             print(f"[Coupon] Auto redeem failed: {e}")
 
     def manual_redeem_coupon(self, customer_id: str, points: int) -> "Coupon":
-        """
-        แลกคูปองด้วยตนเอง
-        Standard : points ต้องเป็น 20
-        Premium  : 20 หรือ 30
-        Diamond  : 20, 30 หรือ 40
-        """
         customer = self.get_customer_by_id(customer_id)
 
         if isinstance(customer, Standard):
