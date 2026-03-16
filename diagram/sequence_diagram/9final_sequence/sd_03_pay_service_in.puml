@@ -75,7 +75,13 @@ alt success
     SIN --> RR : True
     loop all booking in serviceIN
         RR -> R : update_timeslot_status(..., RESERVED)
+        activate R
+        R --> RR : True
+        deactivate R
         RR -> Eq : update_timeslot_status(..., RESERVED)
+        activate Eq
+        Eq --> RR : True
+        deactivate Eq
     end
 
     RR -> RR : _auto_redeem_coupon(customer)

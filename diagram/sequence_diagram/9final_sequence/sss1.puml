@@ -1,72 +1,85 @@
 @startuml
-title SD-04: cancel_booking (Refined Logic)
+title SD-06: add_product_to_service_out (Object Navigation Version)
 
 skinparam Style strictuml
+skinparam MaxMessageSize 200
 skinparam sequence {
     MessageAlignment center
+    ParticipantPadding 20
 }
 
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
-participant "ServiceIN" as SIN
-participant "Policy" as POL
-participant "PaymentServiceIn" as PSIN
+participant "Reserve" as RSV
 participant "Booking" as BK
-participant "Room/Eq" as RE
+participant "Branch" as BR
+participant "StockProduct" as STCK
+participant "ServiceOUT" as SOUT
 
-C -> RR : cancel_booking(customer_id, servicein_id, booking_id, cancel_time, policy)
+C -> RR : add_product_to_service_out(..., product_type, amount)
 activate RR
 
-    RR -> RR : get_customer_by_id(customer_id)
-    RR -> CUS : get_reserve(servicein_id)
-    CUS -->> RR : service_in
+' --- จุดที่แก้: การเข้าถึง Object ตามลำดับชั้น ---
+RR -> RR : get_branch_by_id(branch_id)
+RR -> RR : get_customer_by_id(customer_id)
 
-    ' เช็คสถานะการจ่ายเงิน
-    alt [service_in.status != PAID]
-        RR --[#red]> C : raise Exception("Cannot refund...")
-    else [status == PAID]
-        RR -> SIN : search_booking(booking_id)
-        SIN -->> RR : booking
+RR -> CUS : get_reserve(reserve_id)
+activate CUS
+CUS -->> RR : reserve
+deactivate CUS
 
-        ' การเช็ค Policy (ยุบให้คลีนเหมือนคูปอง)
-        RR -> POL : check_cancel_refund(customer, cancel_time, booking_start)
-        activate POL
-            POL -> CUS : get_cancellation_limit_hours()
-            CUS -->> POL : limit_hours
-            POL -->> RR : boolean (check_cancel)
-        deactivate POL
+RR -> RSV : get_booking(booking_id)
+activate RSV
+RSV -->> RR : booking
+deactivate RSV
 
-        alt [not check_cancel]
-            RR --[#red]> C : raise Exception("Cancel too late...")
-        else [check_cancel is True]
-            
-            ' เริ่มกระบวนการ cancel_b ภายใน ServiceIN
-            RR -> SIN : cancel_b(booking_id)
-            activate SIN
-                SIN -> SIN : _calculate_refund(booking)
-                
-                SIN -> PSIN : payment_refund(refund_amount)
-                activate PSIN
-                    note over PSIN : Lookup txn & Process Refund
-                    PSIN -->> SIN : True
-                deactivate PSIN
+RR -> BK : service_out
+activate BK
+BK -->> RR : service_out
+deactivate BK
 
-                SIN -> BK : booking_cancel()
-                activate BK
-                    BK -> RE : room.update_timeslot_status(..., AVAILABLE)
-                    loop for each eq in eq_list
-                        BK -> RE : eq.update_timeslot_status(..., AVAILABLE)
-                    end
-                    BK -->> SIN : True
-                deactivate BK
+' --- ค้นหา Stock ---
+RR -> BR : branch.product (get list)
+BR -->> RR : stock_list
 
-                SIN -> SIN : remove_booking(booking_id)
-                SIN -->> RR : True
-            deactivate SIN
-
-            RR -->> C : "Cancel Booking Successfully"
-        end
+loop for each s in stock_list
+    alt s.type == product_type
+        RR -> RR : stock = s (found)
     end
+end
+
+' --- ตรวจสอบ Exception (ยุบรวมให้พอดีขอบ) ---
+alt stock is None
+    RR --[#red]> C : raise Exception("Product type not found")
+else len(stock.get_stock) < amount
+    RR --[#red]> C : raise Exception("Not enough stock")
+else [Available]
+    
+    ' --- วนลูปจัดการสินค้าตามโค้ด ---
+    loop i in range(amount)
+        RR -> STCK : get_stock[0]
+        STCK -->> RR : product
+
+        RR -> SOUT : add_product(product)
+        activate SOUT
+        SOUT -->> RR : void
+        deactivate SOUT
+
+        RR -> STCK : del_stock(product.id)
+        activate STCK
+        STCK -->> RR : void
+        deactivate STCK
+    end
+
+    ' สรุปผลตอนท้าย
+    RR -> SOUT : calculate_total_price()
+    activate SOUT
+    SOUT -->> RR : total_price
+    deactivate SOUT
+
+    RR -->> C : { sout_id, products, total_price }
+end
+
 deactivate RR
 @enduml
