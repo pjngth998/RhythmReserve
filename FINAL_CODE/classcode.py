@@ -1501,13 +1501,17 @@ class PaymentServiceOut:
         self.__transaction_history: List[TransactionRecord] = []
 
     @property
-    def id(self):          return self.__service_out.id
+    def id(self):          
+        return self.__service_out.id
     @property
-    def is_paid(self):     return self.__is_paid
+    def is_paid(self):     
+        return self.__is_paid
     @property
-    def total_price(self): return self.__total_price
+    def total_price(self): 
+        return self.__total_price
     @property
-    def transaction_history(self): return self.__transaction_history
+    def transaction_history(self): 
+        return self.__transaction_history
 
     def calculate_total(self) -> float:
         self.__total_price   = self.__service_out.calculate_total_price()
