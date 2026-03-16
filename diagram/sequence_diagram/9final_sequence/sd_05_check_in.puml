@@ -1,0 +1,48 @@
+@startuml
+title SD-05: check_in
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Customer" as CUS
+participant "ServiceIN" as SIN
+participant "Booking" as BK
+participant "Room" as RM
+participant "Equipment" as EQ
+participant "ServiceOUT" as SOUT
+
+C -> RR : check_in(customer_id, reserve_id, booking_id)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR -> CUS : get_reserve(reserve_id)
+CUS --> RR : serviceIN
+
+RR -> SIN : get_booking(booking_id)
+SIN --> RR : booking
+
+RR -> RR : now()
+
+alt current_time.date() != booking.day
+    RR --> C : Exception("Not the booking date")
+else
+    alt current_time < check_in_open (booking.start - 10 min)
+        RR --> C : Exception("Too early to check in")
+    else alt current_time > check_in_close (booking.end)
+        RR --> C : Exception("Check-in time has passed")
+    else
+        RR -> RM : update_timeslot_status(day, start, end, OCCUPIED)
+        RM --> RR : True
+
+        loop ทุก eq ใน booking.eq_list
+            RR -> EQ : update_timeslot_status(day, start, end, OCCUPIED)
+            EQ --> RR : True
+        end
+
+        RR -> SOUT ** : ServiceOUT(booking)
+        RR -> BK : set_service_out(serviceOUT)
+        BK --> RR : void
+
+        RR --> C : serviceOUT object
+    end
+end
+
+@enduml

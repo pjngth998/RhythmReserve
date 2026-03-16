@@ -1,0 +1,76 @@
+@startuml
+title SD-09: manual_redeem_coupon
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Customer" as CUS
+participant "Standard" as STD
+participant "Premium" as PRM
+participant "Diamond" as DMN
+participant "Coupon" as CPN
+
+C -> RR : manual_redeem_coupon(customer_id, points)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR --> RR : customer
+
+alt customer is Standard
+    alt points != 20
+        RR --> C : Exception("Standard รองรับเฉพาะ 20 แต้ม")
+    else
+        RR -> STD : redeem_coupon()
+        STD -> STD : check points >= 20
+        alt points >= 20
+            STD -> STD : self.points -= 20
+            STD -> CPN : Coupon.create_coupon(0.05)
+            CPN -> CPN : coupon_id = "CP-{date}-{uuid}"
+            CPN --> STD : coupon
+            STD --> RR : coupon
+        else
+            STD --> RR : Exception("แต้มไม่พอ")
+        end
+    end
+
+else alt customer is Premium
+    RR -> PRM : redeem_coupon(points)
+    alt points == 20 and self.points >= 20
+        PRM -> PRM : self.points -= 20
+        PRM -> CPN : Coupon.create_coupon(0.10)
+        CPN --> PRM : coupon
+        PRM --> RR : coupon
+    else alt points == 30 and self.points >= 30
+        PRM -> PRM : self.points -= 30
+        PRM -> CPN : Coupon.create_coupon(0.15)
+        CPN --> PRM : coupon
+        PRM --> RR : coupon
+    else
+        PRM --> RR : Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
+    end
+
+else alt customer is Diamond
+    RR -> DMN : redeem_coupon(points)
+    alt points == 20 and self.points >= 20
+        DMN -> DMN : self.points -= 20
+        DMN -> CPN : Coupon.create_coupon(0.10)
+        CPN --> DMN : coupon
+        DMN --> RR : coupon
+    else alt points == 30 and self.points >= 30
+        DMN -> DMN : self.points -= 30
+        DMN -> CPN : Coupon.create_coupon(0.15)
+        CPN --> DMN : coupon
+        DMN --> RR : coupon
+    else alt points == 40 and self.points >= 40
+        DMN -> DMN : self.points -= 40
+        DMN -> CPN : Coupon.create_coupon(0.20)
+        CPN --> DMN : coupon
+        DMN --> RR : coupon
+    else
+        DMN --> RR : Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
+    end
+end
+
+RR -> CUS : add_coupon(coupon)
+CUS -> CUS : __coupon_list.append(coupon)
+RR --> C : coupon object
+
+@enduml

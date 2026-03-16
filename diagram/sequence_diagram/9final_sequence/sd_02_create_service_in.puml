@@ -1,0 +1,59 @@
+@startuml
+title SD-02: create_service_in
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Branch" as BR
+participant "Room" as RM
+participant "Equipment" as EQ
+participant "Booking" as BK
+participant "ServiceIN" as SIN
+
+C -> RR : create_service_in(customer_id, branch_id, room_size,\nday, start, end, eq_list, addon_types)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR -> RR : create_booking(customer_id, branch_id, room_size,\nday, start, end, eq_list, addon_types)
+
+    RR -> RR : get_branch_by_id(branch_id)
+    RR -> BR : get_available_room(branch, size, start, end)
+
+    loop ทุก room ใน branch
+        BR -> RM : _has_conflict(room, start, end)
+        RM --> BR : False
+    end
+    BR --> RR : room
+
+    RR -> RR : get_available_equipment(branch_id, day, start, end)
+    RR --> RR : available_eq_list
+
+    RR -> RR : check_selected_eq(customer_id, branch_id, room_id,\nday, start, end, eq_list)
+
+    loop ทุก eq_id ใน eq_list
+        RR -> BR : check_can_reserve(eq_id, day, s_time, e_time)
+        BR --> RR : True
+    end
+
+    loop ทุก eq_id ที่ผ่าน quota check
+        RR -> EQ : add_timeslot(TimeSlot(day, start, end, PENDING))
+    end
+
+    RR -> RM : add_timeslot(TimeSlot(day, start, end, PENDING))
+
+    RR -> BK ** : Booking(branch_name, room, eq_list, customer, timeslot)
+    BK -> BK : calculate_price()
+    BK --> RR : booking
+
+    opt addon_types not empty
+        RR -> BK : add_addon(Addon(addon_type))
+    end
+
+RR -> SIN ** : ServiceIN(first_booking)
+RR -> SIN : calculate_total()
+SIN -> BK : calculate_price()
+BK --> SIN : price
+SIN --> RR : total_price
+
+RR -> RR : customer.add_reserve_list = service
+RR --> C : serviceIN object
+
+@enduml

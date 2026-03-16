@@ -1,0 +1,50 @@
+@startuml
+title SD-06: add_product_to_service_out
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Branch" as BR
+participant "StockProduct" as STCK
+participant "ServiceOUT" as SOUT
+participant "Products" as PROD
+
+C -> RR : add_product_to_service_out(branch_id, customer_id,\nreserve_id, booking_id, product_type, amount)
+
+RR -> RR : get_branch_by_id(branch_id)
+RR -> RR : get_customer_by_id(customer_id)
+RR -> RR : customer.get_reserve(reserve_id)
+RR -> RR : reserve.get_booking(booking_id)
+RR -> RR : booking.service_out
+
+loop ทุก stock ใน branch.product
+    RR -> BR : branch.product
+    BR --> RR : stock_list
+    alt stock.type == product_type
+        RR --> RR : stock (found)
+    end
+end
+
+alt stock is None
+    RR --> C : Exception("Product type not found")
+else alt len(stock.get_stock) < amount
+    RR --> C : Exception("Not enough stock")
+else
+    loop i in range(amount)
+        RR -> STCK : get_stock[0]
+        STCK --> RR : product
+
+        RR -> SOUT : add_product(product)
+        SOUT -> SOUT : __product_list.append(product)
+
+        RR -> STCK : del_stock(product.id)
+        STCK -> STCK : __product_list.pop(index)
+    end
+
+    RR -> SOUT : calculate_total_price()
+    SOUT -> SOUT : sum(product.price) + sum(penalty.amount)
+    SOUT --> RR : total_price
+
+    RR --> C : { sout_id, products, total_price }
+end
+
+@enduml

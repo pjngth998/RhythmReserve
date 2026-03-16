@@ -1,0 +1,65 @@
+@startuml
+title SD-03: pay_service_in
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Customer" as CUS
+participant "ServiceIN" as SIN
+participant "PaymentServiceIn" as PSIN
+participant "PaymentChannel" as CHAN
+participant "Coupon" as CPN
+
+C -> RR : pay_service_in(customer_id, reserve_id, channel, coupon_id)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR -> CUS : get_reserve(reserve_id)
+CUS --> RR : serviceIN
+
+opt coupon_id not None
+    RR -> CUS : get_coupon(coupon_id)
+    CUS --> RR : coupon
+end
+
+RR -> SIN : calculate_total()
+SIN --> RR : total_price
+
+RR -> PSIN ** : PaymentServiceIn(reserve_id, customer, total_price, channel, coupon)
+
+PSIN -> PSIN : __apply_discount(total_price, coupon)
+PSIN -> CUS : membership.discount
+CUS --> PSIN : discount_rate
+
+opt coupon not None
+    PSIN -> CPN : is_expired()
+    CPN --> PSIN : False
+    PSIN -> CPN : used
+    CPN --> PSIN : False
+    PSIN -> CPN : get_discount()
+    CPN --> PSIN : discount_rate
+    PSIN -> CPN : mark_used()
+end
+
+PSIN --> RR : paymentServiceIn (final_price set)
+
+RR -> SIN : set_payment(payment)
+RR -> SIN : set_final_price(payment.final_price)
+
+RR -> SIN : checkout()
+SIN -> PSIN : process_payment()
+PSIN -> CHAN : process(final_price, ref=txn_id)
+CHAN --> PSIN : True
+PSIN -> PSIN : TransactionRecord(txn_id, CHARGE, amount)
+PSIN --> SIN : True
+
+SIN -> SIN : change_status(PAID)
+SIN --> RR : True
+
+loop ทุก booking ใน serviceIN
+    RR -> RR : booking.room.update_timeslot_status(..., RESERVED)
+    RR -> RR : eq.update_timeslot_status(..., RESERVED)
+end
+
+RR -> RR : _auto_redeem_coupon(customer)
+RR --> C : serviceIN object
+
+@enduml

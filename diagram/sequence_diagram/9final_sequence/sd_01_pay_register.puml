@@ -1,0 +1,47 @@
+@startuml
+title SD-01: pay_register (Premium / Diamond)
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "PendingCustomer" as PC
+participant "PaymentRegister" as PREG
+participant "PaymentChannel" as CHAN
+
+C -> RR : customer_register_request(name, username, password,\nemail, phone, birthday, membership)
+
+alt membership == STANDARD
+    RR -> RR : Standard(username, ...)
+    RR --> C : customer object
+else membership == PREMIUM or DIAMOND
+    RR -> PC ** : PendingCustomer(name, username, ..., membership)
+    RR -> RR : __pending_register.append(pending)
+
+    RR -> RR : pay_register(username, membership, channel)
+    RR -> PC : get_pending_register(username)
+    PC --> RR : pending
+
+    RR -> PREG ** : PaymentRegister(username, membership, channel)
+    RR -> PREG : process_payment()
+    PREG -> CHAN : process(cost, ref=txn_id)
+    CHAN --> PREG : True
+
+    PREG -> PREG : TransactionRecord(txn_id, REGISTER, amount)
+    PREG --> RR : True
+
+    RR -> PC : pending.is_paid = True
+
+    RR -> RR : confirm_register(name, username, ..., membership)
+    RR -> PC : get_pending_register(username)
+    PC --> RR : pending
+
+    alt membership == PREMIUM
+        RR -> RR : Premium(username, ...)
+    else membership == DIAMOND
+        RR -> RR : Diamond(username, ...)
+    end
+
+    RR -> RR : add_customer_ls(customer)
+    RR --> C : customer object
+end
+
+@enduml

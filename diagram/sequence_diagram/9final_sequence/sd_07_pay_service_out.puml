@@ -1,0 +1,67 @@
+@startuml
+title SD-07: pay_service_out
+
+actor Customer as C
+participant "RhythmReserve" as RR
+participant "Customer" as CUS
+participant "Booking" as BK
+participant "ServiceOUT" as SOUT
+participant "Policy" as POL
+participant "PaymentServiceOut" as PSOUT
+participant "PaymentChannel" as CHAN
+
+C -> RR : pay_service_out(customer_id, reserve_id,\nbooking_id, channel, is_room_damaged,\nroom_damage_cost, damaged_eq_ids)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR -> CUS : get_reserve(reserve_id)
+CUS --> RR : reserve
+RR -> RR : reserve.get_booking(booking_id)
+RR -> BK : booking.service_out
+BK --> RR : serviceOUT
+
+RR -> RR : now() → actual_time
+RR -> RR : datetime.combine(booking.day, booking.end) → expected_time
+
+RR -> POL : check_late_checkout(actual_time, expected_time,\nbooking_id, room.rate)
+alt actual_time > expected_time + 15min grace
+    POL -> POL : Penalty(LATE, rounded_hrs × rate, reason)
+    POL --> RR : late_penalty
+    RR -> SOUT : add_penalty(late_penalty)
+else
+    POL --> RR : None
+end
+
+opt is_room_damaged
+    RR -> POL : check_damage_penalty(booking_id, room_damage_cost, desc)
+    POL --> RR : damage_penalty
+    RR -> SOUT : add_penalty(damage_penalty)
+    RR -> BK : room.update_timeslot_status(..., MAINTENANCE)
+end
+
+loop ทุก eq ใน booking.eq_list
+    alt eq.id in damaged_eq_ids
+        RR -> POL : check_damage_penalty(booking_id, eq.price, desc)
+        POL --> RR : eq_penalty
+        RR -> SOUT : add_penalty(eq_penalty)
+        RR -> BK : eq.update_timeslot_status(..., MAINTENANCE)
+    else
+        RR -> BK : eq.update_timeslot_status(..., AVAILABLE)
+    end
+end
+
+RR -> PSOUT ** : PaymentServiceOut(serviceOUT, channel)
+RR -> PSOUT : calculate_total()
+PSOUT -> SOUT : calculate_total_price()
+SOUT -> SOUT : sum(products) + sum(penalties)
+SOUT --> PSOUT : total_price
+PSOUT --> RR : total_price
+
+loop ทุก penalty ที่ status == PENDING
+    RR -> RR : penalty.change_penalty_status(APPLIED)
+    RR -> RR : report.add_penalty(penalty)
+end
+
+RR -> BK : set_payment_sout(payment_sout)
+RR --> C : { sout_id, products, penalties, total_price }
+
+@enduml

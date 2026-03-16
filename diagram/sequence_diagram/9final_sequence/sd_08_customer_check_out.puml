@@ -1,0 +1,83 @@
+@startuml
+title SD-08: customer_check_out (Staff)
+
+actor Staff as S
+participant "RhythmReserve" as RR
+participant "Staff" as ST
+participant "Booking" as BK
+participant "ServiceOUT" as SOUT
+participant "Policy" as POL
+participant "PaymentServiceOut" as PSOUT
+participant "PaymentChannel" as CHAN
+participant "DailyReport" as RPT
+participant "Customer" as CUS
+
+S -> RR : pay_service_out(customer_id, reserve_id,\nbooking_id, channel, ...)
+
+RR -> RR : get_customer_by_id(customer_id)
+RR -> RR : customer.get_reserve(reserve_id)
+RR -> RR : reserve.get_booking(booking_id)
+RR -> BK : booking.service_out
+BK --> RR : serviceOUT
+
+RR -> RR : get_branch_by_id(booking.room.branch_id)
+RR -> RR : get_daily_report(booking.day, branch) → report
+
+RR -> ST ** : Staff("system", "system", "System", branch)
+RR -> ST : customer_check_out(serviceOUT, actual_time, expected_time,\npolicy, booking, report, channel, ...)
+
+    ST -> POL : check_late_checkout(actual, expected, booking_id, room_rate)
+    POL --> ST : late_penalty (or None)
+    opt late_penalty
+        ST -> SOUT : add_penalty(late_penalty)
+    end
+
+    opt is_room_damaged
+        ST -> BK : room.update_timeslot_status(..., MAINTENANCE)
+        ST -> POL : check_damage_penalty(booking_id, room_damage_cost, desc)
+        POL --> ST : room_penalty
+        ST -> SOUT : add_penalty(room_penalty)
+    else
+        ST -> BK : room.update_timeslot_status(..., AVAILABLE)
+    end
+
+    loop ทุก eq ใน booking.eq_list
+        alt eq.id in damaged_eq_ids
+            ST -> BK : eq.update_timeslot_status(..., MAINTENANCE)
+            ST -> POL : check_damage_penalty(booking_id, eq.price, desc)
+            POL --> ST : eq_penalty
+            ST -> SOUT : add_penalty(eq_penalty)
+        else
+            ST -> BK : eq.update_timeslot_status(..., AVAILABLE)
+        end
+    end
+
+    ST -> PSOUT ** : PaymentServiceOut(serviceOUT, channel)
+    ST -> PSOUT : calculate_total()
+    PSOUT -> SOUT : calculate_total_price()
+    SOUT --> PSOUT : total_price
+    PSOUT --> ST : total_price
+
+    loop ทุก penalty ที่ status == PENDING
+        ST -> ST : penalty.change_penalty_status(APPLIED)
+        ST -> RPT : add_penalty(penalty)
+    end
+
+    ST -> RPT : add_booking_record(booking)
+    ST --> RR : paymentServiceOut
+
+RR -> BK : set_payment_sout(payment_sout)
+
+RR -> RR : confirm_pay_service_out(customer_id, reserve_id, booking_id)
+RR -> PSOUT : process_payment()
+PSOUT -> CHAN : process(total_price, ref=txn_id)
+CHAN --> PSOUT : True
+PSOUT -> PSOUT : TransactionRecord(txn_id, CHARGE, amount)
+PSOUT --> RR : True
+
+RR -> RPT : add_revenue(total_price)
+RR -> CUS : add_points(booking.duration)
+RR -> RR : reserve.set_status(PAID)
+RR --> S : payment_sout.to_format()
+
+@enduml
