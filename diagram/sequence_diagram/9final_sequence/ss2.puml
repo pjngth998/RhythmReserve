@@ -52,7 +52,7 @@ else membership == PREMIUM / DIAMOND
           deactivate PENDC
      else failed
           PAYC-->PAYR: False
-          desactivate PAYC
+          deactivate PAYC
           PAYR-->RR: Flase
           deactivate PAYR
           RR-->C: raise Exception("Payment Unsuccessfully")
@@ -64,7 +64,7 @@ else membership == PREMIUM / DIAMOND
      RR->PENDC: remove(pending)
      RR->RR: add_customer_ls(Premium/Diamond)
      RR-->C: return customer
+     deactivate RR
 end 
-deactivate RR
 
 @enduml
