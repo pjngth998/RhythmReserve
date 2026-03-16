@@ -6,60 +6,89 @@ participant "RhythmReserve" as RR
 participant "Customer" as CUS
 participant "ServiceIN" as SIN
 participant "PaymentServiceIn" as PSIN
+participant "Room" as R
+participant "Equipment" as Eq
+participant "Membership" as MB
 participant "PaymentChannel" as CHAN
 participant "Coupon" as CPN
 
 C -> RR : pay_service_in(customer_id, reserve_id, channel, coupon_id)
+activate RR
 
 RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(reserve_id)
+activate CUS
 CUS --> RR : serviceIN
 
 opt coupon_id not None
     RR -> CUS : get_coupon(coupon_id)
     CUS --> RR : coupon
+    deactivate CUS
 end
 
 RR -> SIN : calculate_total()
+activate SIN
 SIN --> RR : total_price
+deactivate SIN
 
-RR -> PSIN ** : PaymentServiceIn(reserve_id, customer, total_price, channel, coupon)
+RR -> PSIN : <<create>> PaymentServiceIn(reserve_id, customer, total_price, channel, coupon)
+activate PSIN
 
 PSIN -> PSIN : __apply_discount(total_price, coupon)
-PSIN -> CUS : membership.discount
-CUS --> PSIN : discount_rate
+PSIN -> CUS : get_membership()
+activate CUS
+CUS --> PSIN : membership
+deactivate CUS
+PSIN -> MB : get_tier_discount()
+activate MB
+MB --> PSIN : tier_discount
+deactivate MB
 
-opt coupon not None
-    PSIN -> CPN : is_expired()
-    CPN --> PSIN : False
-    PSIN -> CPN : used
-    CPN --> PSIN : False
-    PSIN -> CPN : get_discount()
-    CPN --> PSIN : discount_rate
-    PSIN -> CPN : mark_used()
+
+
+opt coupon is not None
+    alt !coupon.is_expired() && !coupon.used
+        PSIN -> CPN : get_discount()
+        activate CPN
+        CPN -->> PSIN : discount
+        PSIN -> CPN : mark_used()
+        deactivate CPN
 end
 
 PSIN --> RR : paymentServiceIn (final_price set)
+deactivate PSIN
 
 RR -> SIN : set_payment(payment)
+activate SIN
 RR -> SIN : set_final_price(payment.final_price)
 
 RR -> SIN : checkout()
 SIN -> PSIN : process_payment()
+activate PSIN
 PSIN -> CHAN : process(final_price, ref=txn_id)
-CHAN --> PSIN : True
-PSIN -> PSIN : TransactionRecord(txn_id, CHARGE, amount)
-PSIN --> SIN : True
+activate CHAN
+alt success
+    CHAN --> PSIN : True
+    PSIN -> PSIN : TransactionRecord(txn_id, CHARGE, amount)
+    PSIN --> SIN : True
+    SIN -> SIN : change_status(PAID)
+    SIN --> RR : True
+    loop all booking in serviceIN
+        RR -> R : update_timeslot_status(..., RESERVED)
+        RR -> Eq : update_timeslot_status(..., RESERVED)
+    end
 
-SIN -> SIN : change_status(PAID)
-SIN --> RR : True
-
-loop ทุก booking ใน serviceIN
-    RR -> RR : booking.room.update_timeslot_status(..., RESERVED)
-    RR -> RR : eq.update_timeslot_status(..., RESERVED)
+    RR -> RR : _auto_redeem_coupon(customer)
+    RR --> C : serviceIN object
+else not success
+    CHAN --> PSIN : False
+    deactivate CHAN
+    PSIN --> SIN : False
+    deactivate PSIN
+    SIN -> SIN : change_status(PENDING)
+    SIN --> RR : False
+    deactivate SIN
+    deactivate RR
 end
-
-RR -> RR : _auto_redeem_coupon(customer)
-RR --> C : serviceIN object
 
 @enduml

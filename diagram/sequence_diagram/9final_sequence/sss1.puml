@@ -1,92 +1,83 @@
 @startuml
-title SD-02: create_service_in (Standard & Equipment Logic)
+title SD-03: pay_service_in (Final Refined)
 
 skinparam Style strictuml
 skinparam sequence {
     MessageAlignment center
-    ActivationBackgroundColor #F1F8E9
+    ActivationBackgroundColor #E1F5FE
 }
 
 actor Customer as C
 participant "RhythmReserve" as RR
-participant "Branch" as BR
-participant "Room" as RM
-participant "Booking" as BK
-participant "ServiceIN" as SIN
 participant "CustomerInstance" as CI
+participant "Membership" as MEM
+participant "ServiceIN" as SIN
+participant "PaymentServiceIn" as PSIN
+participant "Coupon" as CPN
+participant "Room/Equipment" as RE
 
-C -> RR : create_service_in(...)
+C -> RR : pay_service_in(...)
 activate RR
 
-RR -> RR : get_customer_by_id(customer_id)
+    RR -> RR : get_customer_by_id(customer_id)
+    RR -> CI : get_reserve(reserve_id)
+    CI -->> RR : service_in
 
-'--- Internal Call: create_booking ---
-Note over RR: self.create_booking(...)
-RR -> RR : create_booking(...)
-activate RR #LightBlue
-
-    RR -> RR : get_branch_by_id(branch_id)
-    
-    '--- ส่วนการหาห้องว่างตามรูปภาพที่คุณส่งมา ---
-    RR -> BR : get_available_room(branch, room_size, start, end)
-    activate BR
-         loop for room in self.__room_list
-              BR -> RM : _has_conflict(start, end)
-              activate RM
-              RM -->> BR : True (Conflict) / False (No conflict)
-              deactivate RM
-              
-              alt No conflict
-                   note over BR : select this room
-              end
-         end
-         BR -->> RR : room instance
-    deactivate BR
-
-    RR -> RR : get_available_equipment(branch_id, day, start_t, end_t)
-    note over RR : available_ids = [eq.id for eq in available]
-
-    '--- การเช็คอุปกรณ์แบบรวบยอด (Validation) ---
-    alt all eq_id in eq_list are available
-        note over RR : proceed to next step
-    else some eq_id not in available_ids
-        RR --[#red]> C : raise Exception (Not available)
+    opt coupon_id is not None
+        RR -> CI : get_coupon(coupon_id)
+        CI -->> RR : coupon
     end
 
-    ' สร้าง TimeSlot และเพิ่มลงใน Room
-    RR -> RM : add_timeslot(TimeSlot_instance)
-
-    '--- สร้าง Booking Object ---
-    create BK
-    RR -> BK : <<create>> Booking(...)
-
-    opt if addon_types is not empty
-         loop every addon in list
-              RR -> BK : add_addon(Addon_instance)
-         end
-    end
-
-    RR -->> RR : booking instance
-deactivate RR
-'--- จบช่วง create_booking กลับมาที่ main logic ---
-
-create SIN
-RR -> SIN : <<create>> ServiceIN(booking)
-
-RR -> CI : set add_reserve_list = service
-
-RR -> SIN : calculate_total()
-activate SIN
-    loop for each booking in service
-        SIN -> BK : calculate_price()
-        activate BK
-        BK -->> SIN : price
-        deactivate BK
-    end
+    RR -> SIN : calculate_total()
     SIN -->> RR : total_price
-deactivate SIN
 
-RR -->> C : serviceIN object
+    '--- จังหวะสร้าง Payment และการดึง Membership ---
+    create PSIN
+    RR -> PSIN : <<create>> PaymentServiceIn(..., customer, ...)
+    activate PSIN
+        PSIN -> PSIN : __apply_discount(total, coupon)
+        activate PSIN #LightBlue
+            
+            '--- ขั้นตอนการไปเอา Membership ตามที่คุณแนะนำ ---
+            PSIN -> CI : get_membership()
+            activate CI
+            CI -->> PSIN : membership_instance
+            deactivate CI
+            
+            PSIN -> MEM : get_discount()
+            activate MEM
+            MEM -->> PSIN : discount_rate
+            deactivate MEM
+            
+            opt coupon is not None
+                PSIN -> CPN : validate & get_discount()
+                CPN -->> PSIN : coupon_discount
+            end
+        deactivate PSIN
+    PSIN -->> RR : payment instance
+    deactivate PSIN
+
+    RR -> SIN : set_payment(payment)
+    RR -> SIN : set_final_price(payment.final_price)
+
+    '--- ส่วน Checkout และการ Update Status ---
+    RR -> SIN : checkout()
+    activate SIN
+        SIN -> PSIN : process_payment()
+        SIN -->> RR : True (Success)
+    deactivate SIN
+
+    alt if checkout is True
+        loop for each booking in service_in
+            RR -> RE : room.update_timeslot_status(..., RESERVED)
+            loop for each eq in booking.eq_list
+                RR -> RE : eq.update_timeslot_status(..., RESERVED)
+            end
+        end
+        RR -> RR : _auto_redeem_coupon(customer)
+    end
+
+RR -->> C : service_in object
 deactivate RR
 
 @enduml
