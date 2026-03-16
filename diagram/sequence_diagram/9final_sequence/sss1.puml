@@ -1,92 +1,72 @@
 @startuml
-title SD-02: create_service_in (Standard & Equipment Logic)
+title SD-04: cancel_booking (Refined Logic)
 
 skinparam Style strictuml
 skinparam sequence {
     MessageAlignment center
-    ActivationBackgroundColor #F1F8E9
 }
 
 actor Customer as C
 participant "RhythmReserve" as RR
-participant "Branch" as BR
-participant "Room" as RM
-participant "Booking" as BK
+participant "Customer" as CUS
 participant "ServiceIN" as SIN
-participant "CustomerInstance" as CI
+participant "Policy" as POL
+participant "PaymentServiceIn" as PSIN
+participant "Booking" as BK
+participant "Room/Eq" as RE
 
-C -> RR : create_service_in(...)
+C -> RR : cancel_booking(customer_id, servicein_id, booking_id, cancel_time, policy)
 activate RR
 
-RR -> RR : get_customer_by_id(customer_id)
+    RR -> RR : get_customer_by_id(customer_id)
+    RR -> CUS : get_reserve(servicein_id)
+    CUS -->> RR : service_in
 
-'--- Internal Call: create_booking ---
-Note over RR: self.create_booking(...)
-RR -> RR : create_booking(...)
-activate RR #LightBlue
+    ' เช็คสถานะการจ่ายเงิน
+    alt [service_in.status != PAID]
+        RR --[#red]> C : raise Exception("Cannot refund...")
+    else [status == PAID]
+        RR -> SIN : search_booking(booking_id)
+        SIN -->> RR : booking
 
-    RR -> RR : get_branch_by_id(branch_id)
-    
-    '--- ส่วนการหาห้องว่างตามรูปภาพที่คุณส่งมา ---
-    RR -> BR : get_available_room(branch, room_size, start, end)
-    activate BR
-         loop for room in self.__room_list
-              BR -> RM : _has_conflict(start, end)
-              activate RM
-              RM -->> BR : True (Conflict) / False (No conflict)
-              deactivate RM
-              
-              alt No conflict
-                   note over BR : select this room
-              end
-         end
-         BR -->> RR : room instance
-    deactivate BR
+        ' การเช็ค Policy (ยุบให้คลีนเหมือนคูปอง)
+        RR -> POL : check_cancel_refund(customer, cancel_time, booking_start)
+        activate POL
+            POL -> CUS : get_cancellation_limit_hours()
+            CUS -->> POL : limit_hours
+            POL -->> RR : boolean (check_cancel)
+        deactivate POL
 
-    RR -> RR : get_available_equipment(branch_id, day, start_t, end_t)
-    note over RR : available_ids = [eq.id for eq in available]
+        alt [not check_cancel]
+            RR --[#red]> C : raise Exception("Cancel too late...")
+        else [check_cancel is True]
+            
+            ' เริ่มกระบวนการ cancel_b ภายใน ServiceIN
+            RR -> SIN : cancel_b(booking_id)
+            activate SIN
+                SIN -> SIN : _calculate_refund(booking)
+                
+                SIN -> PSIN : payment_refund(refund_amount)
+                activate PSIN
+                    note over PSIN : Lookup txn & Process Refund
+                    PSIN -->> SIN : True
+                deactivate PSIN
 
-    '--- การเช็คอุปกรณ์แบบรวบยอด (Validation) ---
-    alt all eq_id in eq_list are available
-        note over RR : proceed to next step
-    else some eq_id not in available_ids
-        RR --[#red]> C : raise Exception (Not available)
+                SIN -> BK : booking_cancel()
+                activate BK
+                    BK -> RE : room.update_timeslot_status(..., AVAILABLE)
+                    loop for each eq in eq_list
+                        BK -> RE : eq.update_timeslot_status(..., AVAILABLE)
+                    end
+                    BK -->> SIN : True
+                deactivate BK
+
+                SIN -> SIN : remove_booking(booking_id)
+                SIN -->> RR : True
+            deactivate SIN
+
+            RR -->> C : "Cancel Booking Successfully"
+        end
     end
-
-    ' สร้าง TimeSlot และเพิ่มลงใน Room
-    RR -> RM : add_timeslot(TimeSlot_instance)
-
-    '--- สร้าง Booking Object ---
-    create BK
-    RR -> BK : <<create>> Booking(...)
-
-    opt if addon_types is not empty
-         loop every addon in list
-              RR -> BK : add_addon(Addon_instance)
-         end
-    end
-
-    RR -->> RR : booking instance
 deactivate RR
-'--- จบช่วง create_booking กลับมาที่ main logic ---
-
-create SIN
-RR -> SIN : <<create>> ServiceIN(booking)
-
-RR -> CI : set add_reserve_list = service
-
-RR -> SIN : calculate_total()
-activate SIN
-    loop for each booking in service
-        SIN -> BK : calculate_price()
-        activate BK
-        BK -->> SIN : price
-        deactivate BK
-    end
-    SIN -->> RR : total_price
-deactivate SIN
-
-RR -->> C : serviceIN object
-deactivate RR
-
 @enduml

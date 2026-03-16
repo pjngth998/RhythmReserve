@@ -7,50 +7,71 @@ participant "Customer" as CUS
 participant "ServiceIN" as SIN
 participant "Policy" as POL
 participant "Booking" as BK
+participant "Room" as R
+participant "Equipment" as Eq
 participant "PaymentServiceIn" as PSIN
 
 C -> RR : cancel_booking(customer_id, servicein_id,\nbooking_id, cancel_time, policy)
+activate RR
 
 RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(servicein_id)
+activate CUS
 CUS --> RR : serviceIN
+deactivate CUS
 
 alt serviceIN.status != PAID
-    RR --> C : Exception("Cannot refund: Service not paid yet")
+    RR --> C : raise Exception("Cannot refund: Service not paid yet")
 else
     RR -> SIN : search_booking(booking_id)
+    activate SIN
     SIN --> RR : booking
+    deactivate SIN
 
     RR -> POL : check_cancel_refund(customer, cancel_time, booking_start)
+    activate POL
     POL -> CUS : get_cancellation_limit_hours()
+    activate CUS
     CUS --> POL : limit_hours
+    deactivate CUS
+end
 
-    alt (booking_start - cancel_time) >= limit_hours
-        POL --> RR : True
-    else
-        POL --> RR : None
-        RR --> C : Exception("Cancel too late: Don't have REFUND")
+alt (booking_start - cancel_time) < limit_hours
+    POL --> RR : None
+    RR --> C : raise Exception("Cancel too late: Don't have REFUND")
+else (booking_start - cancel_time) >= limit_hours
+    POL --> RR : True
+    deactivate POL
+end
+
+RR -> SIN : cancel_b(booking_id)
+activate SIN
+SIN -> SIN : _calculate_refund(booking)
+SIN -> PSIN : payment_refund(refund_amount)
+activate PSIN
+PSIN -> PSIN : lookup_charge_transaction()
+PSIN -> PSIN : channel.refund(amount, original_ref, refund_ref)
+PSIN -> PSIN : TransactionRecord(refund_txn_id, REFUND, amount)
+alt Refund Success
+    PSIN --> SIN : True
+    SIN -> BK : booking_cancel()
+    activate BK
+    BK -> R : update_timeslot_status(..., AVAILABLE)
+    loop for eq in eq_list
+        BK -> Eq : update_timeslot_status(..., AVAILABLE)
     end
-
-    RR -> SIN : cancel_b(booking_id)
-        SIN -> SIN : _calculate_refund(booking)
-        SIN -> PSIN : payment_refund(refund_amount)
-        PSIN -> PSIN : lookup_charge_transaction()
-        PSIN -> PSIN : channel.refund(amount, original_ref, refund_ref)
-        PSIN -> PSIN : TransactionRecord(refund_txn_id, REFUND, amount)
-        PSIN --> SIN : True
-
-        SIN -> BK : booking_cancel()
-        BK -> BK : room.update_timeslot_status(..., AVAILABLE)
-        loop ทุก eq ใน eq_list
-            BK -> BK : eq.update_timeslot_status(..., AVAILABLE)
-        end
-        BK --> SIN : True
-
-        SIN -> SIN : remove_booking(booking_id)
+    BK --> SIN : True
+    deactivate BK
+    SIN -> SIN : remove_booking(booking_id)
     SIN --> RR : True
-
     RR --> C : "Cancel Booking Successfully"
+else Refund Failed
+    PSIN --> SIN : False
+    deactivate PSIN
+    SIN --> RR : False
+    deactivate SIN
+    RR --> C : raise Exception("Can't Cancel This Booking")
+    deactivate RR
 end
 
 @enduml
