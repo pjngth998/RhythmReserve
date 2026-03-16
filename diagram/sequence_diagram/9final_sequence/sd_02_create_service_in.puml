@@ -1,59 +1,101 @@
 @startuml
-title SD-02: create_service_in
+title SD-02: create_service_in (Refined Logic)
+
+skinparam Style strictuml
+skinparam sequence {
+    MessageAlignment center
+}
 
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Branch" as BR
 participant "Room" as RM
-participant "Equipment" as EQ
 participant "Booking" as BK
+participant "TimeSlot" as TS
 participant "ServiceIN" as SIN
+participant "Customer" as CUS
 
-C -> RR : create_service_in(customer_id, branch_id, room_size,\nday, start, end, eq_list, addon_types)
-
+C -> RR : create_service_in(customer_id, branch_id,\n room_size, day, start, end, eq_list, addon_types)
+activate RR
+Note over RR: self.get_customer_by_id(...)
 RR -> RR : get_customer_by_id(customer_id)
-RR -> RR : create_booking(customer_id, branch_id, room_size,\nday, start, end, eq_list, addon_types)
+    '--- Internal Call: create_booking ---
+Note over RR: self.create_booking(...)
+RR -> RR : create_booking(customer_id, branch_id, ...)
+Note over RR: self.get_branch_by_id(...)
+RR -> RR : get_branch_by_id(branch_id)
 
-    RR -> RR : get_branch_by_id(branch_id)
-    RR -> BR : get_available_room(branch, size, start, end)
+' เรียกผ่าน branch object
+Note over RR: self.get_available_room(...)
+RR -> BR : get_available_room(branch, room_size, start, end)
+activate BR
+loop for room in branch.room
+     BR -> RM : _has_conflict(start, end)
+     activate RM
+     alt (No conflict) and (room.sizeII == size)
+          RM --> BR : False (No conflict)
+          BR --> RR : room instance
+     else Have conflict
+          RM --> BR : True (Have conflict)
+          deactivate RM
+          BR --> C : raise Exception("Don't have available room in that time")
+     end
+     deactivate BR
+end
 
-    loop ทุก room ใน branch
-        BR -> RM : _has_conflict(room, start, end)
-        RM --> BR : False
-    end
-    BR --> RR : room
+RR -> RR : get_available_equipment(branch_id, day, start_t, end_t)
 
-    RR -> RR : get_available_equipment(branch_id, day, start, end)
-    RR --> RR : available_eq_list
+note over RR : available_ids = [eq.id for eq in available]
 
-    RR -> RR : check_selected_eq(customer_id, branch_id, room_id,\nday, start, end, eq_list)
+alt all eq_id in eq_list are available
+    note over RR : proceed to next step
+else some eq_id not in available_ids
+    RR --> C : raise Exception (Not available)
+end
 
-    loop ทุก eq_id ใน eq_list
-        RR -> BR : check_can_reserve(eq_id, day, s_time, e_time)
-        BR --> RR : True
-    end
+RR -> RR : check_selected_eq(customer_id, branch_id,\nroom.id, day, start_t, end_t, eq_list)
 
-    loop ทุก eq_id ที่ผ่าน quota check
-        RR -> EQ : add_timeslot(TimeSlot(day, start, end, PENDING))
-    end
+RR -> TS : <<create>> TimeSlot(day, start_t, end_t, RoomEquipmentStatus.PENDING)
+activate TS
+TS --> RR : TimeSlot
+deactivate TS
+' สร้าง TimeSlot และเพิ่มลงใน Room
+RR -> RM : add_timeslot(TimeSlot)
+' RM -> RM : self.__timeslot.append(new_timeslot)
 
-    RR -> RM : add_timeslot(TimeSlot(day, start, end, PENDING))
+'--- สร้าง Booking Object ---
+RR -> BK : <<create>> Booking(branch.name, room, selected_eqs, customer, room_slot)
+activate BK
+BK --> RR : Booking
+deactivate BK
 
-    RR -> BK ** : Booking(branch_name, room, eq_list, customer, timeslot)
-    BK -> BK : calculate_price()
-    BK --> RR : booking
+opt if addon_types
+     loop all addon in list
+          RR -> BK : add_addon(Addon_instance)
+     end
+end
 
-    opt addon_types not empty
-        RR -> BK : add_addon(Addon(addon_type))
-    end
+' RR -->> RR : booking instance
+'     deactivate RR
 
-RR -> SIN ** : ServiceIN(first_booking)
-RR -> SIN : calculate_total()
-SIN -> BK : calculate_price()
-BK --> SIN : price
-SIN --> RR : total_price
+    '--- กลับมาที่ create_service_in ---
+    RR -> SIN : <<create>> ServiceIN(booking)
+    activate SIN
+    SIN --> RR : ServiceIN
+    deactivate SIN
+    
+    RR -> CUS : set add_reserve_list(service)
+    
+    RR -> SIN : calculate_total()
+    activate SIN
+        SIN -> BK : calculate_price()
+        activate BK
+        BK --> SIN : price
+        deactivate BK
+        SIN --> RR : total_price
+    deactivate SIN
 
-RR -> RR : customer.add_reserve_list = service
 RR --> C : serviceIN object
+deactivate RR
 
 @enduml
