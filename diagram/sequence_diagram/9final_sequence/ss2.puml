@@ -1,0 +1,70 @@
+@startuml
+title SD-01: pay_register (Premium / Diamond)
+
+actor "Customer" as C
+participant "RhythmReserve" as RR
+
+participant "PendingCustomer" as PENDC
+participant "PaymentRegister" as PAYR
+participant "PaymentChannel" as PAYC
+participant "Standard" as STD
+
+C->RR: customer_register_request(...)
+activate RR
+
+opt if search_user(username) is True
+     RR-->C: raise Exception("Have Account Already")
+end
+
+alt membership == STANDARD
+     RR -> STD : <<create>> Standard(...)
+     activate STD
+     STD --> RR :  Standard
+     deactivate STD
+     RR -> RR : add_customer_ls()
+     RR --> C : return customer
+else membership == PREMIUM / DIAMOND
+     RR -> PENDC : <<create>> PendingCustomer(...)
+     activate PENDC
+     PENDC --> RR : PendingCustomer
+     deactivate PENDC
+     
+     Note over RR: self.pay_register(...)
+     RR->RR: pay_register()
+     RR->PENDC: get_pending_register(username)
+     activate PENDC
+     alt found
+          PENDC --> RR : cus in self.__pending_register
+     else not found
+          PENDC --> C: raise Exception("Not found in pending list")
+     end
+
+     RR->PAYR: <<CREATE>> PaymentRegister(...)
+     activate PAYR
+     PAYR-->RR: PaymentRegister
+     RR->PAYR: process_payment()
+     PAYR->PAYC: process(cost)
+     activate PAYC
+     alt success
+          PAYC-->PAYR: True
+          PAYR-->RR: True
+          RR->PENDC: set is_paid = True
+          deactivate PENDC
+     else failed
+          PAYC-->PAYR: False
+          desactivate PAYC
+          PAYR-->RR: Flase
+          deactivate PAYR
+          RR-->C: raise Exception("Payment Unsuccessfully")
+     end
+     
+
+     Note over RR: self.confirm_register(...)
+     RR->RR: confirm_register()
+     RR->PENDC: remove(pending)
+     RR->RR: add_customer_ls(Premium/Diamond)
+     RR-->C: return customer
+end 
+deactivate RR
+
+@enduml

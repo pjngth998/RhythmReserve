@@ -964,43 +964,6 @@ def inspect_before_checkout(
         return {"success": False, "error": f"เข้าถึง attribute ไม่ได้: {e}"}
     except Exception as e:
         return {"success": False, "error": str(e)}
-# @mcp.tool()
-# def inspect_before_checkout(
-#     customer_id: str, service_id: str, booking_id: str,
-# ) -> dict:
-#     """
-#     Staff ตรวจสอบความเสียหายก่อน checkout
-#     ⚠️ ต้องเรียก tool นี้ก่อนเสมอ แล้วถามว่ามีความเสียหายไหม
-#     - ถ้าไม่มี → เรียก checkout โดยตรง
-#     - ถ้ามี    → เรียก report_damage ก่อน แล้วค่อย checkout
-#     """
-#     try:
-#         customer    = store.get_customer_by_id(customer_id)
-#         reserve     = customer.get_reserve(service_id)
-#         booking     = reserve.search_booking(booking_id)
-#         service_out = booking.service_out
-# 
-#         return {
-#             "success":    True,
-#             "booking_id": booking_id,
-#             "room": {
-#                 "room_id":   booking.room.id,
-#                 "room_size": booking.room.size,
-#                 "room_rate": booking.room.rate,
-#             },
-#             "equipment": [
-#                 {"eq_id": eq.id, "type": eq.type, "price": eq.price}
-#                 for eq in booking.eq_list
-#             ],
-#             "products_ordered": [
-#                 f"{p.type.value}: {p.price} THB" for p in service_out.product_list
-#             ],
-#             "current_time": now().strftime("%Y-%m-%d %H:%M:%S"),
-#             "expected_end": str(booking.end),
-#             "next_step": "ถาม Staff ว่ามีความเสียหายไหม? ถ้ามี → report_damage, ถ้าไม่มี → checkout",
-#         }
-#     except Exception as e:
-#         return {"success": False, "error": str(e)}
 
 
 @mcp.tool()
@@ -1120,6 +1083,7 @@ def checkout(
 
         report.add_revenue(payment_sout.total_price)
         customer.add_points(booking.duration)
+        store.auto_redeem_coupon(customer)
         reserve.set_status(ServiceStatus.PAID)
 
         # ✅ ดึงค่าออกมาเป็น primitive ทั้งหมดก่อน return

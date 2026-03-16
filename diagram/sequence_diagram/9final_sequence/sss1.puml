@@ -1,0 +1,73 @@
+@startuml
+title SD-01: Registration with 4 Participating Classes
+
+skinparam Style strictuml
+skinparam sequence {
+    MessageAlignment center
+}
+
+actor "Customer(Actor)" as C
+participant "RhythmReserve" as RR
+participant "PendingCustomer" as PENDC
+participant "PaymentRegister" as PAYR
+participant "PaymentChannel" as PAYC
+participant "Customer(Instance)" as CINST
+
+C -> RR : register_request(name, username, ..., membership)
+activate RR
+
+opt search_user(username) == True
+    RR --[#red]> C : raise Exception("Have Account Already")
+end
+
+alt membership == STANDARD
+    create CINST
+    RR -> CINST : <<create>> Standard(...)
+    RR -> RR : add_customer_ls(customer)
+    RR -->> C : return customer
+else membership == PREMIUM / DIAMOND
+    ' --- 1. Class: PendingCustomer ---
+    create PENDC
+    RR -> PENDC : <<create>> (name, username, ..., membership)
+    
+    ' --- 2. Class: PaymentRegister (Internal Call) ---
+    RR -> RR : pay_register(username, membership, channel)
+    activate RR #LightBlue
+        create PAYR
+        RR -> PAYR : <<create>> (username, membership, channel)
+        
+        RR -> PAYR : process_payment()
+        activate PAYR
+            ' --- 3. Class: PaymentChannel ---
+            PAYR -> PAYC : process(amount, ref)
+            activate PAYC
+            
+            alt [validate_card success]
+                PAYC -->> PAYR : True
+                PAYR -->> RR : True
+                RR -> PENDC : set is_paid = True
+            else [validate_card failed]
+                PAYC --[#red]>> PAYR : False
+                deactivate PAYC
+                PAYR --[#red]>> RR : False
+                deactivate PAYR
+                RR --[#red]> C : raise Exception("Payment Unsuccessfully")
+            end
+    deactivate RR
+
+    ' --- 4. Class: Customer Instance (Premium/Diamond) ---
+    RR -> RR : confirm_register(...)
+    activate RR #LightBlue
+        RR -> PENDC : remove(pending)
+        destroy PENDC
+        
+        create CINST
+        RR -> CINST : <<create>> (Premium / Diamond)
+        RR -> RR : add_customer_ls(customer)
+    deactivate RR
+    
+    RR -->> C : return customer instance
+end
+
+deactivate RR
+@enduml

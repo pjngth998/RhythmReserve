@@ -1915,12 +1915,12 @@ class RhythmReserve():
                 for eq in booking.eq_list:
                     eq.update_timeslot_status(
                         booking.day, booking.start, booking.end, RoomEquipmentStatus.RESERVED)
-            self._auto_redeem_coupon(customer)
+            self.auto_redeem_coupon(customer)
             return service_in
 
         raise Exception("Payment failed")
 
-    def _auto_redeem_coupon(self, customer):
+    def auto_redeem_coupon(self, customer):
         try:
             if isinstance(customer, Diamond):
                 if customer.points >= 40:
