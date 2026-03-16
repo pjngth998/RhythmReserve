@@ -274,7 +274,6 @@ class Customer(User):
         if self.__id == customer_id:
             return self.username, self.__id, self.__reserve_list
 
-    @reserve_list.setter
     def add_reserve_list(self, reserve):
         self.__reserve_list.append(reserve)
 
@@ -1999,7 +1998,7 @@ class RhythmReserve():
             return booking
 
         service = ServiceIN(booking)
-        customer.add_reserve_list = service
+        customer.add_reserve_list(service)
         service.calculate_total()
         return service
 

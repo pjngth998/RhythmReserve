@@ -84,7 +84,7 @@ end
     SIN --> RR : ServiceIN
     deactivate SIN
     
-    RR -> CUS : add_reserve_list(service)
+    RR -> CUS : set add_reserve_list(service)
     
     RR -> SIN : calculate_total()
     activate SIN
