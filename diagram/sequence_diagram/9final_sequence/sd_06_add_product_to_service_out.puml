@@ -17,10 +17,9 @@ RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(reserve_id)
 activate CUS
 CUS -->> RR : reserve
-' deactivate CUS
 
 RR -> CUS : find_booking(booking_id)
-' activate CUS
+
 CUS -->> RR : booking
 deactivate CUS
 
@@ -29,12 +28,10 @@ activate BK
 BK -->> RR : service_out
 deactivate BK
 
-' --- ค้นหา Stock ---
 RR -> BR : branch.product (get list)
 activate BR
 BR -->> RR : stock_list
 deactivate BR
-
 
 loop for stock in stock list
     alt stock.type == product_type

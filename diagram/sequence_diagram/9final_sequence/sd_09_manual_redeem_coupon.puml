@@ -1,6 +1,13 @@
 @startuml
 title SD-09: manual_redeem_coupon
 
+skinparam Style strictuml
+skinparam MaxMessageSize 150
+skinparam sequence {
+    MessageAlignment center
+    ParticipantPadding 20
+}
+
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
@@ -10,67 +17,64 @@ participant "Diamond" as DMN
 participant "Coupon" as CPN
 
 C -> RR : manual_redeem_coupon(customer_id, points)
+activate RR
 
 RR -> RR : get_customer_by_id(customer_id)
-RR --> RR : customer
+activate RR 
+RR -> RR : customer
+deactivate RR
 
 alt customer is Standard
     alt points != 20
-        RR --> C : Exception("Standard รองรับเฉพาะ 20 แต้ม")
-    else
+        RR -> C : raise Exception("Standard รองรับเฉพาะ 20 แต้ม")
+    else points == 20
         RR -> STD : redeem_coupon()
+        activate STD
         STD -> STD : check points >= 20
-        alt points >= 20
-            STD -> STD : self.points -= 20
-            STD -> CPN : Coupon.create_coupon(0.05)
-            CPN -> CPN : coupon_id = "CP-{date}-{uuid}"
-            CPN --> STD : coupon
-            STD --> RR : coupon
-        else
-            STD --> RR : Exception("แต้มไม่พอ")
-        end
+        STD -> CPN : <<create>> Coupon(0.05)
+        activate CPN
+        CPN -> STD : coupon
+        deactivate CPN
+        STD -> RR : coupon
+        deactivate STD
     end
 
-else alt customer is Premium
+else customer is Premium
     RR -> PRM : redeem_coupon(points)
-    alt points == 20 and self.points >= 20
-        PRM -> PRM : self.points -= 20
-        PRM -> CPN : Coupon.create_coupon(0.10)
-        CPN --> PRM : coupon
-        PRM --> RR : coupon
-    else alt points == 30 and self.points >= 30
-        PRM -> PRM : self.points -= 30
-        PRM -> CPN : Coupon.create_coupon(0.15)
-        CPN --> PRM : coupon
-        PRM --> RR : coupon
-    else
-        PRM --> RR : Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
+    activate PRM
+    alt Valid Points & Balance
+        PRM -> CPN : <<create>> Coupon(discount_rate)
+        activate CPN
+        CPN -> PRM : coupon
+        deactivate CPN
+        PRM -> RR : coupon
+    else Invalid
+        PRM -> RR : raise Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
     end
+    deactivate PRM
 
-else alt customer is Diamond
+else customer is Diamond
     RR -> DMN : redeem_coupon(points)
-    alt points == 20 and self.points >= 20
-        DMN -> DMN : self.points -= 20
-        DMN -> CPN : Coupon.create_coupon(0.10)
-        CPN --> DMN : coupon
-        DMN --> RR : coupon
-    else alt points == 30 and self.points >= 30
-        DMN -> DMN : self.points -= 30
-        DMN -> CPN : Coupon.create_coupon(0.15)
-        CPN --> DMN : coupon
-        DMN --> RR : coupon
-    else alt points == 40 and self.points >= 40
-        DMN -> DMN : self.points -= 40
-        DMN -> CPN : Coupon.create_coupon(0.20)
-        CPN --> DMN : coupon
-        DMN --> RR : coupon
-    else
-        DMN --> RR : Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
+    activate DMN
+    alt Valid Points & Balance
+        DMN -> CPN : <<create>> Coupon(discount_rate)
+        activate CPN
+        CPN -> DMN : coupon
+        deactivate CPN
+        DMN -> RR : coupon
+    else Invalid
+        DMN -> RR : raise Exception("แต้มไม่พอหรือตัวเลือกไม่ถูกต้อง")
     end
+    deactivate DMN
 end
 
 RR -> CUS : add_coupon(coupon)
-CUS -> CUS : __coupon_list.append(coupon)
-RR --> C : coupon object
+activate CUS
+CUS -> CUS : append to __coupon_list
+CUS -> RR : void
+deactivate CUS
+
+RR -> C : coupon object
+deactivate RR
 
 @enduml
