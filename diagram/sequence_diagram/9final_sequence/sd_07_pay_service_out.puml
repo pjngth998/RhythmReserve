@@ -1,67 +1,111 @@
 @startuml
-title SD-07: pay_service_out
+title SD-07: pay_service_out (Refactored to Staff Delegation)
+
+skinparam Style strictuml
+skinparam MaxMessageSize 150
 
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
+participant "Staff" as STF
 participant "Booking" as BK
-participant "ServiceOUT" as SOUT
 participant "Policy" as POL
 participant "PaymentServiceOut" as PSOUT
-participant "PaymentChannel" as CHAN
+participant "ServiceOUT" as SOUT
 
-C -> RR : pay_service_out(customer_id, reserve_id,\nbooking_id, channel, is_room_damaged,\nroom_damage_cost, damaged_eq_ids)
+C -> RR : pay_service_out(...)
+activate RR
 
+' --- 1. Setup ข้อมูลพื้นฐาน ---
 RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(reserve_id)
+activate CUS
 CUS --> RR : reserve
-RR -> RR : reserve.get_booking(booking_id)
-RR -> BK : booking.service_out
-BK --> RR : serviceOUT
+RR -> CUS : find_booking(booking_id)
+CUS --> RR : booking
+deactivate CUS
 
-RR -> RR : now() → actual_time
-RR -> RR : datetime.combine(booking.day, booking.end) → expected_time
+RR -> BK : service_out
+activate BK
+BK --> RR : service_out
+deactivate BK
 
-RR -> POL : check_late_checkout(actual_time, expected_time,\nbooking_id, room.rate)
-alt actual_time > expected_time + 15min grace
-    POL -> POL : Penalty(LATE, rounded_hrs × rate, reason)
-    POL --> RR : late_penalty
-    RR -> SOUT : add_penalty(late_penalty)
-else
-    POL --> RR : None
-end
+' --- 2. ส่งงานต่อให้ Staff (ตามโค้ด staff.customer_check_out) ---
+RR -> STF : <<create>>Staff("system", "system", "System", branch)
+activate STF
+STF --> RR : Staff
+RR -> STF : customer_check_out(service_out, actual, expected, policy, booking, ...)
 
-opt is_room_damaged
-    RR -> POL : check_damage_penalty(booking_id, room_damage_cost, desc)
-    POL --> RR : damage_penalty
-    RR -> SOUT : add_penalty(damage_penalty)
-    RR -> BK : room.update_timeslot_status(..., MAINTENANCE)
-end
-
-loop ทุก eq ใน booking.eq_list
-    alt eq.id in damaged_eq_ids
-        RR -> POL : check_damage_penalty(booking_id, eq.price, desc)
-        POL --> RR : eq_penalty
-        RR -> SOUT : add_penalty(eq_penalty)
-        RR -> BK : eq.update_timeslot_status(..., MAINTENANCE)
-    else
-        RR -> BK : eq.update_timeslot_status(..., AVAILABLE)
+    ' Staff คุยกับ Policy เพื่อเช็ค Late
+    STF -> POL : check_late_checkout(actual, expected, ...)
+    activate POL
+    POL --> STF : late_penalty
+    deactivate POL
+    
+    alt late_penalty is not None
+        STF -> SOUT : add_penalty(late_penalty)
+        activate SOUT
+        SOUT --> STF : True
+        deactivate SOUT
     end
-end
 
-RR -> PSOUT ** : PaymentServiceOut(serviceOUT, channel)
-RR -> PSOUT : calculate_total()
-PSOUT -> SOUT : calculate_total_price()
-SOUT -> SOUT : sum(products) + sum(penalties)
-SOUT --> PSOUT : total_price
-PSOUT --> RR : total_price
+    ' Staff เช็คความเสียหายของห้อง
+    opt is_room_damaged
+        STF -> POL : check_damage_penalty(room_cost, ...)
+        activate POL
+        POL --> STF : damage_penalty
+        deactivate POL
+        STF -> SOUT : add_penalty(damage_penalty)
+        activate SOUT
+        SOUT --> STF : True
+        deactivate SOUT
+        STF -> BK : update_room_status(MAINTENANCE)
+        activate BK
+        BK --> STF : True
+        deactivate BK
+    end
 
-loop ทุก penalty ที่ status == PENDING
-    RR -> RR : penalty.change_penalty_status(APPLIED)
-    RR -> RR : report.add_penalty(penalty)
-end
+    ' Staff วนลูปเช็คอุปกรณ์
+    loop for each eq in booking.eq_list
+        alt eq.id in damaged_eq_ids
+            STF -> POL : check_damage_penalty(eq.price, ...)
+            activate POL
+            POL --> STF : damage_penalty
+            deactivate POL
+            STF -> SOUT : add_penalty(eq_penalty)
+            activate SOUT
+            SOUT --> STF : True
+            deactivate SOUT
+            STF -> BK : update_eq_status(MAINTENANCE)
+            activate BK
+            BK --> STF : True
+            deactivate BK
+        else
+            STF -> BK : update_eq_status(AVAILABLE)
+        end
+    end
 
+    ' Staff สร้างการชำระเงิน
+    STF -> PSOUT : <<create>>PaymentServiceOut(service_out, channel)
+    activate PSOUT
+    PSOUT --> STF : PaymentServiceOut
+    STF -> PSOUT : calculate_total()
+    PSOUT -> SOUT : calculate_total_price()
+    activate SOUT
+    SOUT --> PSOUT : total_price
+    deactivate SOUT
+    PSOUT --> STF : payment_sout
+    deactivate PSOUT
+
+STF --> RR : payment_sout
+deactivate STF
+
+' --- 3. สรุปผลที่ RR ---
 RR -> BK : set_payment_sout(payment_sout)
+activate BK
+BK --> RR : True
+deactivate BK
 RR --> C : { sout_id, products, penalties, total_price }
 
+deactivate RR
 @enduml
