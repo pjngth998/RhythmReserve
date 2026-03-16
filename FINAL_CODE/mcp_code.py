@@ -1092,6 +1092,7 @@ def view_service_out_summary(customer_id: str, service_id: str, booking_id: str)
         return {"success": True, **store.get_service_out_summary(customer_id, service_id, booking_id)}
     except Exception as e:
         return {"success": False, "error": str(e)}
+    
 
 
 #

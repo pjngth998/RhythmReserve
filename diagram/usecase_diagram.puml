@@ -15,8 +15,6 @@ skinparam actor {
   FontSize        13
 }
 skinparam ArrowColor #555555
-skinparam NoteBackgroundColor #F3E5F5
-skinparam NoteBorderColor     #9C27B0
 
 ' ─── Actors ───────────────────────────────────────────────
 actor  Customer        as C
@@ -29,180 +27,153 @@ rectangle "RhythmReserve System" {
   ' ── 1. Account Management ─────────────────────────────
   package "Account Management" {
 
-    usecase "Register Account"    as REG  #LightYellow
-    usecase "Pay Registration Fee" as PRF  #LightYellow
-    usecase "Login"               as LGN  #LightYellow
-    usecase "Logout"              as LGT  #LightYellow
-    usecase "Manage Profile\n(email / phone / address)" as MP  #LightYellow
-    usecase "Change Password"     as CHPW #LightYellow
-    usecase "View Notifications"  as VN   #LightYellow
+    usecase "customer_register_request" as REG  #LightYellow
+    usecase "pay_register"              as PR   #LightBlue
+    usecase "confirm_register"          as CR   #LightYellow
+    usecase "login"                     as LGN  #LightYellow
+    usecase "logout"                    as LGT  #LightYellow
+    usecase "edit_info"                 as EI   #LightYellow
+    usecase "change_password"           as CHPW #LightYellow
+    usecase "noti_send"                 as VN   #LightYellow
 
     C -- REG
     C -- LGN
     C -- LGT
-    C -- MP
+    C -- EI
     C -- CHPW
     C -- VN
 
-    REG  ..> PRF  : <<include>>\n[Premium / Diamond]
-    CHPW ..> MP   : <<extend>>
+    REG ..> PR : <<include>>\n[Premium / Diamond]
+    PR  ..> CR : <<include>>
   }
 
   ' ── 2. Room & Equipment Search ────────────────────────
   package "Room & Equipment Search" {
 
-    usecase "Search Available Room Slots"  as SAR #LightYellow
-    usecase "Filter by Date and Time"      as FDT #LightYellow
-    usecase "Filter by Room Size"          as FRS #LightYellow
-    usecase "Search Available Equipment"   as SAE #LightYellow
+    usecase "get_available_room_slots"  as GAR #LightYellow
+    usecase "get_available_equipment"   as GAE #LightYellow
 
-    C -- SAR
-    C -- SAE
-
-    SAR ..> FDT : <<include>>
-    SAR ..> FRS : <<include>>
-    SAE ..> FDT : <<include>>
+    C -- GAR
+    C -- GAE
   }
 
-  ' ── 3. Room Reservation (Service_IN) ─────────────────
-  package "Room Reservation  (Service_IN)" {
+  ' ── 3. Room Reservation (ServiceIN) ──────────────────
+  package "Room Reservation (ServiceIN)" {
 
-    usecase "Create Reservation\n(Service_IN)"   as CR  #LightBlue
-    usecase "Select Available Room"              as SR  #LightYellow
-    usecase "Select Time Slot"                   as STS #LightYellow
-    usecase "Add Equipment to Booking"           as AEQ #LightYellow
-    usecase "Check Equipment Quota"              as CEQ #LightYellow
-    usecase "Calculate Booking Price\n(room rate × duration + eq rate)" as CBP #LightYellow
+    usecase "create_service_in"   as CSI  #LightBlue
+    usecase "create_booking"      as CB   #LightYellow
+    usecase "check_selected_eq"   as CSE  #LightYellow
+    usecase "calculate_price"     as BCP  #LightYellow
 
-    usecase "Add Booking to Existing Service"    as ABS #LightBlue
+    usecase "pay_service_in"      as PSI  #LightBlue
+    usecase "calculate_total"     as SCT  #LightYellow
+    usecase "get_tier_discount"   as ATD  #LightYellow
+    usecase "get_discount"        as ACD  #LightYellow
 
-    usecase "View Reservation Summary"           as VRS #LightYellow
-    usecase "Apply Coupon Discount"              as ACD #LightYellow
+    usecase "cancel_booking"      as CANC #LightBlue
+    usecase "check_cancel_refund" as CCP  #LightYellow
+    usecase "cancel_b"            as CNCL #LightYellow
+    usecase "payment_refund"      as PREF #LightYellow
 
-    usecase "Checkout Reservation"               as CHK #LightBlue
-    usecase "Apply Tier Discount\n(STD 0% / PRM 3% / DMN 5%)" as ATD #LightYellow
-    usecase "Process Payment"                    as PP  #LightBlue
+    C -- CSI
+    C -- PSI
+    C -- CANC
 
-    usecase "Cancel Booking"                     as CB  #LightBlue
-    usecase "Check Cancellation Policy\n(STD 24h / PRM 12h / DMN 6h)" as CCP #LightYellow
-    usecase "Calculate Proportional Refund"      as CPR #LightYellow
-    usecase "Refund Payment"                     as RP  #LightBlue
+    CSI  ..> CB   : <<include>>
+    CSI  ..> CSE  : <<include>>
+    CB   ..> BCP  : <<include>>
 
-    C -- CR
-    C -- ABS
-    C -- VRS
-    C -- CHK
-    C -- CB
+    PSI  ..> SCT  : <<include>>
+    PSI  ..> ATD  : <<include>>
+    ACD  ..> PSI  : <<extend>>
 
-    CR  ..> SR  : <<include>>
-    CR  ..> STS : <<include>>
-    CR  ..> AEQ : <<include>>
-    CR  ..> CEQ : <<include>>
-    CR  ..> CBP : <<include>>
-
-    ABS ..> SR  : <<include>>
-    ABS ..> STS : <<include>>
-    ABS ..> AEQ : <<include>>
-    ABS ..> CEQ : <<include>>
-
-    ACD ..> VRS : <<extend>>
-
-    CHK ..> ATD : <<include>>
-    ACD ..> CHK : <<extend>>
-    CHK ..> PP  : <<include>>
-
-    CB  ..> CCP : <<include>>
-    CB  ..> CPR : <<include>>
-    RP  ..> CB  : <<extend>>
-    RP  ..> PP  : <<include>>
+    CANC ..> CCP  : <<include>>
+    CANC ..> CNCL : <<include>>
+    CNCL ..> PREF : <<include>>
   }
 
-  ' ── 4. Service_OUT  (Snacks & Penalty) ───────────────
-  package "Service_OUT\n(Snacks & Penalty)" {
+  ' ── 4. Check-in ───────────────────────────────────────
+  package "Check-in" {
 
-    usecase "Browse Snacks and Drinks"  as BSD #LightYellow
-    usecase "Buy Snacks and Drinks"     as BUY #LightBlue
-    usecase "Select Items"              as SI  #LightYellow
+    usecase "check_in"               as CIN   #LightBlue
+    usecase "update_timeslot_status" as UTS   #LightYellow
+    usecase "set_service_out"        as CSOUT #LightYellow
 
-    usecase "View Penalties"            as VP  #LightYellow
-    usecase "Pay Penalty"               as PAP #LightBlue
+    C -- CIN
 
-    C -- BSD
+    CIN ..> UTS   : <<include>>
+    CIN ..> CSOUT : <<include>>
+  }
+
+  ' ── 5. ServiceOUT ─────────────────────────────────────
+  package "ServiceOUT" {
+
+    usecase "add_product_to_service_out"  as BUY #LightBlue
+    usecase "get_service_out_summary"     as SOS #LightYellow
+    usecase "add_product"                 as ADP #LightYellow
+
     C -- BUY
-    C -- VP
-    C -- PAP
+    C -- SOS
 
-    BUY ..> SI  : <<include>>
-    BUY ..> PP  : <<include>>
-    PAP ..> PP  : <<include>>
+    BUY ..> ADP : <<include>>
   }
 
-  ' ── 5. Support ────────────────────────────────────────
-  package "Support" {
-    usecase "Report Room or\nEquipment Issue" as RI #LightYellow
-    C -- RI
+  ' ── 6. Checkout (ServiceOUT) ──────────────────────────
+  package "Checkout (ServiceOUT)" {
+
+    usecase "pay_service_out"       as PSO #LightBlue
+    usecase "check_late_checkout"   as CLC #LightYellow
+    usecase "check_damage_penalty"  as CDP #LightYellow
+    usecase "calculate_total_price" as CTP #LightYellow
+    usecase "add_points"            as AP  #LightYellow
+
+    C -- PSO
+
+    PSO ..> CLC : <<include>>
+    PSO ..> CTP : <<include>>
+    CDP ..> PSO : <<extend>>
+    PSO ..> AP  : <<include>>
   }
 
-  ' ── 6. Staff Operations ───────────────────────────────
+  ' ── 7. Points & Coupon ────────────────────────────────
+  package "Points & Coupon" {
+
+    usecase "manual_redeem_coupon"  as MRC #LightBlue
+    usecase "redeem_coupon"         as RC  #LightYellow
+    usecase "get_my_coupons"        as GMC #LightYellow
+
+    C -- MRC
+    C -- GMC
+
+    MRC ..> RC : <<include>>
+  }
+
+  ' ── 8. Staff Operations ───────────────────────────────
   package "Staff Operations" {
 
-    usecase "Staff Login"             as SL  #LightYellow
-    usecase "View Booking Schedule"   as VBS #LightYellow
+    usecase "customer_check_out"   as SCCO #LightBlue
+    usecase "confirm_checkout"     as SCC  #LightYellow
+    usecase "generate_report_data" as GDR  #LightYellow
+    usecase "add_room"             as MR   #LightYellow
+    usecase "add_equipment"        as ME   #LightYellow
+    usecase "staff_register"       as MST  #LightYellow
 
-    usecase "Customer Check-in"       as CCI #LightBlue
-    usecase "Verify Reservation"      as VR  #LightYellow
-    usecase "Update Room/EQ Status"   as URS #LightYellow
-
-    usecase "Customer Check-out"      as CCO #LightBlue
-    usecase "Check Late Checkout\n(grace 15 min → LATE penalty)" as CLC #LightYellow
-    usecase "Record Damage"           as RD  #LightBlue
-    usecase "Create Penalty\n(LATE / DAMAGE / CANCEL_LATE / NO_SHOW)" as CPN #LightBlue
-    usecase "Set to Maintenance"      as STM #LightYellow
-    usecase "Confirm Checkout\n& Collect Payment" as CCP2 #LightYellow
-    usecase "Update Daily Report"     as UDR #LightYellow
-
-    usecase "Generate Daily Report"   as GDR #LightYellow
-    usecase "View Penalty Breakdown"  as VPB #LightYellow
-
-    usecase "Manage Rooms"      as MR   #LightYellow
-    usecase "Manage Equipment"  as ME   #LightYellow
-    usecase "Manage Products"   as MPR  #LightYellow
-    usecase "Manage Pricing"    as MPRC #LightYellow
-    usecase "Manage Coupons"    as MC   #LightYellow
-    usecase "Manage Policies"   as MPOL #LightYellow
-
-    S -- SL
-    S -- VBS
-    S -- CCI
-    S -- CCO
-    S -- CCP2
+    S -- SCCO
+    S -- SCC
     S -- GDR
     S -- MR
     S -- ME
-    S -- MPR
-    S -- MPRC
-    S -- MC
-    S -- MPOL
+    S -- MST
 
-    CCI  ..> VR  : <<include>>
-    CCI  ..> URS : <<include>>
-
-    CCO  ..> URS : <<include>>
-    CCO  ..> CLC : <<include>>
-    RD   ..> CCO : <<extend>>
-    RD   ..> CPN : <<include>>
-    RD   ..> STM : <<include>>
-
-    CCP2 ..> PP  : <<include>>
-    CCP2 ..> UDR : <<include>>
-
-    GDR  ..> VPB : <<include>>
+    SCCO ..> CLC : <<include>>
+    SCCO ..> CDP : <<extend>>
+    SCC  ..> PSO : <<include>>
   }
 
-  ' ── Payment System connection ─────────────────────────
-  PP  --> Pay
-  PRF --> Pay
-  RP  --> Pay
+  ' ── Payment System connections ────────────────────────
+  PSI  --> Pay
+  PSO  --> Pay
+  PR   --> Pay
 }
 
 @enduml
