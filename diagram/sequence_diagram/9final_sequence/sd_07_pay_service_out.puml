@@ -16,7 +16,6 @@ participant "ServiceOUT" as SOUT
 C -> RR : pay_service_out(...)
 activate RR
 
-' --- 1. Setup ข้อมูลพื้นฐาน ---
 RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(reserve_id)
 activate CUS
@@ -30,77 +29,72 @@ activate BK
 BK --> RR : service_out
 deactivate BK
 
-' --- 2. ส่งงานต่อให้ Staff (ตามโค้ด staff.customer_check_out) ---
 RR -> STF : <<create>>Staff("system", "system", "System", branch)
 activate STF
 STF --> RR : Staff
 RR -> STF : customer_check_out(service_out, actual, expected, policy, booking, ...)
 
-    ' Staff คุยกับ Policy เพื่อเช็ค Late
-    STF -> POL : check_late_checkout(actual, expected, ...)
-    activate POL
-    POL --> STF : late_penalty
-    deactivate POL
-    
-    alt late_penalty is not None
-        STF -> SOUT : add_penalty(late_penalty)
-        activate SOUT
-        SOUT --> STF : True
-        deactivate SOUT
-    end
 
-    ' Staff เช็คความเสียหายของห้อง
-    opt is_room_damaged
-        STF -> POL : check_damage_penalty(room_cost, ...)
+STF -> POL : check_late_checkout(actual, expected, ...)
+activate POL
+POL --> STF : late_penalty
+deactivate POL
+
+alt late_penalty is not None
+    STF -> SOUT : add_penalty(late_penalty)
+    activate SOUT
+    SOUT --> STF : True
+    deactivate SOUT
+end
+
+opt is_room_damaged
+    STF -> POL : check_damage_penalty(room_cost, ...)
+    activate POL
+    POL --> STF : damage_penalty
+    deactivate POL
+    STF -> SOUT : add_penalty(damage_penalty)
+    activate SOUT
+    SOUT --> STF : True
+    deactivate SOUT
+    STF -> BK : update_room_status(MAINTENANCE)
+    activate BK
+    BK --> STF : True
+    deactivate BK
+end
+
+loop for each eq in booking.eq_list
+    alt eq.id in damaged_eq_ids
+        STF -> POL : check_damage_penalty(eq.price, ...)
         activate POL
         POL --> STF : damage_penalty
         deactivate POL
-        STF -> SOUT : add_penalty(damage_penalty)
+        STF -> SOUT : add_penalty(eq_penalty)
         activate SOUT
         SOUT --> STF : True
         deactivate SOUT
-        STF -> BK : update_room_status(MAINTENANCE)
+        STF -> BK : update_eq_status(MAINTENANCE)
         activate BK
         BK --> STF : True
         deactivate BK
+    else
+        STF -> BK : update_eq_status(AVAILABLE)
     end
+end
 
-    ' Staff วนลูปเช็คอุปกรณ์
-    loop for each eq in booking.eq_list
-        alt eq.id in damaged_eq_ids
-            STF -> POL : check_damage_penalty(eq.price, ...)
-            activate POL
-            POL --> STF : damage_penalty
-            deactivate POL
-            STF -> SOUT : add_penalty(eq_penalty)
-            activate SOUT
-            SOUT --> STF : True
-            deactivate SOUT
-            STF -> BK : update_eq_status(MAINTENANCE)
-            activate BK
-            BK --> STF : True
-            deactivate BK
-        else
-            STF -> BK : update_eq_status(AVAILABLE)
-        end
-    end
-
-    ' Staff สร้างการชำระเงิน
-    STF -> PSOUT : <<create>>PaymentServiceOut(service_out, channel)
-    activate PSOUT
-    PSOUT --> STF : PaymentServiceOut
-    STF -> PSOUT : calculate_total()
-    PSOUT -> SOUT : calculate_total_price()
-    activate SOUT
-    SOUT --> PSOUT : total_price
-    deactivate SOUT
-    PSOUT --> STF : payment_sout
-    deactivate PSOUT
+STF -> PSOUT : <<create>>PaymentServiceOut(service_out, channel)
+activate PSOUT
+PSOUT --> STF : PaymentServiceOut
+STF -> PSOUT : calculate_total()
+PSOUT -> SOUT : calculate_total_price()
+activate SOUT
+SOUT --> PSOUT : total_price
+deactivate SOUT
+PSOUT --> STF : payment_sout
+deactivate PSOUT
 
 STF --> RR : payment_sout
 deactivate STF
 
-' --- 3. สรุปผลที่ RR ---
 RR -> BK : set_payment_sout(payment_sout)
 activate BK
 BK --> RR : True

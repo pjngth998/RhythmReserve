@@ -17,15 +17,16 @@ participant "Customer" as CUS
 
 C -> RR : create_service_in(customer_id, branch_id,\n room_size, day, start, end, eq_list, addon_types)
 activate RR
+
 Note over RR: self.get_customer_by_id(...)
 RR -> RR : get_customer_by_id(customer_id)
-    '--- Internal Call: create_booking ---
+
 Note over RR: self.create_booking(...)
 RR -> RR : create_booking(customer_id, branch_id, ...)
 Note over RR: self.get_branch_by_id(...)
 RR -> RR : get_branch_by_id(branch_id)
 
-' เรียกผ่าน branch object
+
 Note over RR: self.get_available_room(...)
 RR -> BR : get_available_room(branch, room_size, start, end)
 activate BR
@@ -59,11 +60,9 @@ RR -> TS : <<create>> TimeSlot(day, start_t, end_t, RoomEquipmentStatus.PENDING)
 activate TS
 TS --> RR : TimeSlot
 deactivate TS
-' สร้าง TimeSlot และเพิ่มลงใน Room
-RR -> RM : add_timeslot(TimeSlot)
-' RM -> RM : self.__timeslot.append(new_timeslot)
 
-'--- สร้าง Booking Object ---
+RR -> RM : add_timeslot(TimeSlot)
+
 RR -> BK : <<create>> Booking(branch.name, room, selected_eqs, customer, room_slot)
 activate BK
 BK --> RR : Booking
@@ -75,25 +74,21 @@ opt if addon_types
      end
 end
 
-' RR -->> RR : booking instance
-'     deactivate RR
+RR -> SIN : <<create>> ServiceIN(booking)
+activate SIN
+SIN --> RR : ServiceIN
+deactivate SIN
 
-    '--- กลับมาที่ create_service_in ---
-    RR -> SIN : <<create>> ServiceIN(booking)
-    activate SIN
-    SIN --> RR : ServiceIN
-    deactivate SIN
-    
-    RR -> CUS : set add_reserve_list(service)
-    
-    RR -> SIN : calculate_total()
-    activate SIN
-        SIN -> BK : calculate_price()
-        activate BK
-        BK --> SIN : price
-        deactivate BK
-        SIN --> RR : total_price
-    deactivate SIN
+RR -> CUS : set add_reserve_list(service)
+
+RR -> SIN : calculate_total()
+activate SIN
+    SIN -> BK : calculate_price()
+    activate BK
+    BK --> SIN : price
+    deactivate BK
+    SIN --> RR : total_price
+deactivate SIN
 
 RR --> C : serviceIN object
 deactivate RR

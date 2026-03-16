@@ -1,83 +1,107 @@
 @startuml
-title SD-08: customer_check_out (Staff)
+title SD-08: customer_check_out & Payment Confirmation
+
+skinparam Style strictuml
+skinparam MaxMessageSize 150
+skinparam sequence {
+    MessageAlignment center
+    ParticipantPadding 15
+}
 
 actor Staff as S
 participant "RhythmReserve" as RR
+participant "Customer" as CUS
 participant "Staff" as ST
 participant "Booking" as BK
-participant "ServiceOUT" as SOUT
 participant "Policy" as POL
+participant "ServiceOUT" as SOUT
 participant "PaymentServiceOut" as PSOUT
-participant "PaymentChannel" as CHAN
 participant "DailyReport" as RPT
-participant "Customer" as CUS
 
-S -> RR : pay_service_out(customer_id, reserve_id,\nbooking_id, channel, ...)
+S -> RR : pay_service_out(...)
+activate RR
 
-RR -> RR : get_customer_by_id(customer_id)
-RR -> RR : customer.get_reserve(reserve_id)
-RR -> RR : reserve.get_booking(booking_id)
-RR -> BK : booking.service_out
-BK --> RR : serviceOUT
+activate CUS
+RR -> CUS : get_reserve(reserve_id)
+CUS -> RR : reserve
+RR -> CUS : find_booking(booking_id)
+CUS -> RR : booking
+deactivate CUS
 
-RR -> RR : get_branch_by_id(booking.room.branch_id)
-RR -> RR : get_daily_report(booking.day, branch) → report
+RR -> BK : get_service_out()
+activate BK
+BK -> RR : service_out
+deactivate BK
 
-RR -> ST ** : Staff("system", "system", "System", branch)
-RR -> ST : customer_check_out(serviceOUT, actual_time, expected_time,\npolicy, booking, report, channel, ...)
+RR -> RR : get_daily_report(booking.day, branch)
+activate RR 
+RR -> RR : report
+deactivate RR
 
-    ST -> POL : check_late_checkout(actual, expected, booking_id, room_rate)
-    POL --> ST : late_penalty (or None)
-    opt late_penalty
-        ST -> SOUT : add_penalty(late_penalty)
-    end
+RR -> ST  : <<create>> Staff(...)
+activate ST
+ST -> RR : staff
+deactivate ST
 
-    opt is_room_damaged
-        ST -> BK : room.update_timeslot_status(..., MAINTENANCE)
-        ST -> POL : check_damage_penalty(booking_id, room_damage_cost, desc)
-        POL --> ST : room_penalty
-        ST -> SOUT : add_penalty(room_penalty)
-    else
-        ST -> BK : room.update_timeslot_status(..., AVAILABLE)
-    end
+RR -> ST : customer_check_out(...)
+activate ST
+    
+ST -> POL : check_late_checkout(...)
+activate POL
+POL -> ST : late_penalty
+deactivate POL
 
-    loop ทุก eq ใน booking.eq_list
-        alt eq.id in damaged_eq_ids
-            ST -> BK : eq.update_timeslot_status(..., MAINTENANCE)
-            ST -> POL : check_damage_penalty(booking_id, eq.price, desc)
-            POL --> ST : eq_penalty
-            ST -> SOUT : add_penalty(eq_penalty)
-        else
-            ST -> BK : eq.update_timeslot_status(..., AVAILABLE)
-        end
-    end
+alt late_penalty is not None
+    ST -> SOUT : add_penalty(late_penalty)
+end
 
-    ST -> PSOUT ** : PaymentServiceOut(serviceOUT, channel)
-    ST -> PSOUT : calculate_total()
-    PSOUT -> SOUT : calculate_total_price()
-    SOUT --> PSOUT : total_price
-    PSOUT --> ST : total_price
+alt damage found
+    ST -> BK : update_status(MAINTENANCE)
+    ST -> POL : check_damage_penalty(...)
+    activate POL
+    POL -> ST : penalty
+    deactivate POL
+    ST -> SOUT : add_penalty(penalty)
+else
+    ST -> BK : update_status(AVAILABLE)
+end
 
-    loop ทุก penalty ที่ status == PENDING
-        ST -> ST : penalty.change_penalty_status(APPLIED)
-        ST -> RPT : add_penalty(penalty)
-    end
+ST -> PSOUT : <<create>> PaymentServiceOut(...)
+activate PSOUT
+PSOUT -> ST : payment_sout
+deactivate PSOUT
 
-    ST -> RPT : add_booking_record(booking)
-    ST --> RR : paymentServiceOut
+ST -> PSOUT : calculate_total()
+activate PSOUT
+PSOUT -> SOUT : calculate_total_price()
+activate SOUT
+SOUT -> PSOUT : total_price
+deactivate SOUT
+PSOUT -> ST : void
+deactivate PSOUT
 
-RR -> BK : set_payment_sout(payment_sout)
+loop for each penalty
+    ST -> RPT : add_penalty(penalty)
+end
 
-RR -> RR : confirm_pay_service_out(customer_id, reserve_id, booking_id)
+ST -> RPT : add_booking_record(booking)
+ST -> RR : payment_sout
+deactivate ST
+RR -> RR : confirm_checkout(payment_sout, report)
+activate RR 
 RR -> PSOUT : process_payment()
-PSOUT -> CHAN : process(total_price, ref=txn_id)
-CHAN --> PSOUT : True
-PSOUT -> PSOUT : TransactionRecord(txn_id, CHARGE, amount)
-PSOUT --> RR : True
+activate PSOUT
+PSOUT -> RR : success
+deactivate PSOUT
 
-RR -> RPT : add_revenue(total_price)
-RR -> CUS : add_points(booking.duration)
-RR -> RR : reserve.set_status(PAID)
-RR --> S : payment_sout.to_format()
+alt success is True
+    RR -> RPT : add_revenue(total_price)
+end
+
+RR -> RR : formatted_data
+deactivate RR
+
+RR -> S : formatted_data
+deactivate RR
 
 @enduml
