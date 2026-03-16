@@ -1,307 +1,15 @@
 @startuml
 
-class ReserveSystem{
-    -branch_list : list
-    -customer_list : list
-    -staff_list : list
-    -policy : list
-    +add_customer()
-    +search_customer()
-    +get_transaction()
-    +check_in()
-    +process_cancellation()
-    +create_reservation()
-    +notify_user()
-    +update_room_status()
-    +make_customer_id() : str
-    +make_branch_id(name) : str
-    +add_staff()
-    +remove_staff()
-    +add_penalty()
-    +add_transaction()
+' ─── ENUMERATIONS ─────────────────────────────────────────────────────────────
+
+enum RoomType {
+    SMALL
+    MEDIUM
+    LARGE
+    EXTRALARGE
 }
 
-class Branch{
-    -name : str
-    -branch_id : str
-    -room_list : list
-    -officer_list : list
-    -equipment_list : list
-    +id(): str
-    +name() : str
-    +room() : list
-    +room(new_room) : void
-    +equipment() : list
-    +equipment(new_equipment) : void
-    +get_available_slot(size, date) : list
-}
-
-class RoomEquipmentStatus <<enumeration>>{
-    AVAILABLE
-    RESERVED
-    OCCUPIED
-    MAINTENANCE
-}
-class Room {
-    -room_id : str
-    -time_slot : list
-    -size : str
-    -rate : float
-    -eq_quota : int
-    ' -size : str
-    ' -room_status : enum
-}
-
-
-class Time_slot{
-    -date : datetime
-    -start_time : datetime
-    -end_time : datetime
-    -status : str
-}
-
-
-class Equipment{
-    -eq_id : str
-    -time_slot : list
-    -size : int
-    +id() : str
-}
-
-
-
-class BookingStatus <<enumeration>> {
-    ORDERED
-    CONFIRMED
-    CANCELLED
-}
-
-class Booking {
-    -booking_id : str
-    -time_booking : datetime
-    -customer : class
-    ' -time_slot : class
-    -room_id : str
-    -equipment_list : list
-    -created_at : datetime
-    -status : Enum
-    -price : float
-
-    +add_equipment() : void
-    +remove_equipment(): void
-    +change_room() : void
-    +change_time_slot() : void
-    +calculate_price() : float
-    +change_booking_status() : void
-}
-
-class ServiceStatus <<enumeration>> {
-    PENDING_PAYMENT
-    PAID
-    CANCELLED
-    REFUNDED
-}
-
-' คือ ที่เก็บของการจองใน 1 ครั้งว่ามีห้องอะไรบ้าง
-class Service_IN{
-    -reserve_id : str
-    -customer : class
-    -booking_list : list
-    -total_price : float
-    +add_booking() : void
-    +remove_booking() : void
-    +calculate_total() : float
-    +change_status() : void
-}
-
-
-class PaymentChannel{
-    +process() : bool
-    +
-}
-
-class QrScan{
-    -qr_image : str
-    +generate_qr()
-}
-
-class CreditCard{
-    -card_number : str
-    -cvv : str
-    +validate_card()
-}
-
-class Payment{
-    -Service : class
-    -coupon : class
-    -fine : float
-    -refund : float
-    -payment_channel : class
-    -payment_status : Enum
-    -total_price : float 
-    +process_payment()
-    +payment_refund()
-    +calculate_total()
-}
-class TransStatus <<enumeration>> {
-    PENDING
-    CHECK_IN
-    COMPLETED
-    CANCELLED
-    FAILED
-}
-
-' class Transaction{
-'     -transaction_id : str
-'     -timestamp : datetime
-'     -type : str
-'     -status : enum
-'     +check_cancel_rule()
-'     +check_cancel_rule()
-'     +do_checkin()
-'     +do_checkout()
-'     +get_reserve_detail()
-' }
-
-
-class User{
-    -user_id : str
-    -username : str
-    -password : str
-    -name : str
-    -email : str
-    -phone : str
-    -birthday : datetime
-    +log_in()
-    +log_out()
-    +verify_password()
-    +update_profile()
-    +change_password()
-    +search_transaction()
-}
-
-class Staff{
-    -branch_id : str
-    -daily_report : list
-    +get_report()
-    +set_status() 
-    +add_Daily_report()
-    +customer_check_in()
-    +customer_check_out()
-}
-
-
-class Customer{
-    -current_points : int
-    -booking_history : list
-    -coupon_list : list
-    -reserve_list : list 
-    -membership 
-    +redeem_point()
-    +Booking_room()
-    +Report_room()
-}
-
-class Member{
-    -receive_point_per_hr : int (3)
-    +redeem_point()
-    +get_cancellation_limit_hours() : int { return 24 }
-}
-
-
-
-
-class PenaltyType <<enumeration>> {
-    NO_SHOW
-    CANCEL_LATE
-    DAMAGE
-}
-
-class PenaltyStatus <<enumeration>> {
-    PENDING      
-    APPLIED          
-}
-
-class Penalty {
-    -date :str
-    -reason :str
-    - penalty_id : str
-    - type : Enum 
-    - amount : float
-    - created_at : datetime
-    - status : Enum 
-    - booking : Booking
-    +change_penalty_status()
-}
-
-class Policy{
-    - policy_id : str
-    - name : str
-    - description : str
-    - cancel_before_hours : int
-    - rate : float
-    - active : bool
-    +check_cancel_rule() : void
-    + is_refundable() : bool
-}
-
-class NotiStatus <<enumeration>>{
-    PENDING
-    SENT
-    FAILED
-}
-
-class Notification{
-    -notification_id: str
-    -user : str
-    -order : class
-    -message: str
-    -is_read: bool
-    -status : enum
-    +send()
-    +format_massage()
-    +mark_as_read()
-    +retry_send()
-}
-
-class Service_OUT {
-    -product_list : list
-    -penalty_list : list
-    -total_price : float
-    +calculate_total_price()
-}
-
-
-class Coupon{
-    -expired_date : datetime
-    -discount : float
-}
-
-'to service_out
-class Products{ 
-    -name
-    -price
-}
-
-class Item{
-    -id
-}
-
-
-class Stock{
-    -item_list
-}
-
-
-
-class RoomType <<enumeration>>{
-    S
-    M
-    L
-    XL
-}
-
-class EquipmentType <<enumeration>> {
+enum EquipmentType {
     ELECTRICGUITAR
     ACOUSTICGUITAR
     DRUM
@@ -310,7 +18,7 @@ class EquipmentType <<enumeration>> {
     KEYBOARD
 }
 
-class SnackNDrinkType <<enumeration>> {
+enum ProductType {
     WATER
     COFFEE
     COKE
@@ -319,49 +27,539 @@ class SnackNDrinkType <<enumeration>> {
     TARO
 }
 
-class MemberShip <<enumeration>> {
+enum AddonType {
+    RECORDING
+    LIVESTREAM
+}
+
+enum Membership {
     STANDARD
     PREMIUM
     DIAMOND
 }
 
-class DailyReport {
-    date
-    total_booking
-    total_revenue
-    room_statuses : list
-    equipment_statuses : list
-    penalties : list
+enum UserStatus {
+    LOGIN
+    LOGOUT
 }
 
+enum ServiceStatus {
+    PENDING
+    PAID
+    CANCELLED
+}
 
-ReserveSystem o-- User
-Branch o-- Stock
-User <|-- Staff
+enum RoomEquipmentStatus {
+    AVAILABLE
+    PENDING
+    RESERVED
+    OCCUPIED
+    MAINTENANCE
+}
+
+enum TimeSlotStatus {
+    AVAILABLE
+    PENDING
+    RESERVED
+    OCCUPIED
+    MAINTENANCE
+}
+
+enum PenaltyType {
+    NO_SHOW
+    CANCEL_LATE
+    DAMAGE
+    LATE
+}
+
+enum PenaltyStatus {
+    PENDING
+    APPLIED
+}
+
+enum TXNType {
+    REGISTER
+    CHARGE
+    REFUND
+    PENALTY
+}
+
+enum NotiStatus {
+    PENDING
+    SENT
+    FAILED
+}
+
+enum UserField {
+    EMAIL
+    PHONE
+    ADDRESS
+}
+
+' ─── CORE ─────────────────────────────────────────────────────────────────────
+
+class RhythmReserve {
+    -id : str
+    -name : str
+    -branch_list : List[Branch]
+    -customer_list : List[Customer]
+    -staff_list : List[Staff]
+    -pending_register : List[PendingCustomer]
+    -policy : Policy
+    -daily_reports : dict
+    --
+    +customer_register_request(name, username, password, email, phone, birthday, membership, channel) : Customer
+    +pay_register(username, membership, channel) : bool
+    +confirm_register(name, username, password, email, phone, birthday, membership) : Customer
+    +staff_register(username, password, name, branch_id) : Staff
+    +login(username, password) : str
+    +logout(username) : str
+    +edit_info(username, data, new_info) : str
+    +change_password(username, old_password, n_password) : str
+    +check_in(customer_id, reserve_id, booking_id) : ServiceOUT
+    +create_service_in(customer_id, branch_id, room_size, day, start, end, eq_list, addon_types) : ServiceIN
+    +create_booking(customer_id, branch_id, room_size, day, start, end, eq_list, addon_types) : Booking
+    +add_booking_to_service(service_id, customer_id, branch_id, room_size, day, start, end, eq_list) : ServiceIN
+    +pay_service_in(customer_id, reserve_id, channel, coupon_id) : ServiceIN
+    +pay_service_out(customer_id, reserve_id, booking_id, channel, ...) : dict
+    +confirm_pay_service_out(customer_id, reserve_id, booking_id) : dict
+    +cancel_booking(customer_id, servicein_id, booking_id, cancel_time, policy) : str
+    +manual_redeem_coupon(customer_id, points) : Coupon
+    +get_available_room_slots(branch_id, day, room_size) : dict
+    +get_available_equipment(branch_id, day, start, end) : tuple
+    +get_daily_report(day, branch) : DailyReport
+}
+
+class Branch {
+    -id : str
+    -name : str
+    -room_list : List[Room]
+    -stock_product_list : List[StockProduct]
+    -stock_equipment_list : List[StockEquipment]
+    -officer_list : list
+    --
+    +get_eq_by_id(eq_id) : Equipment
+    +check_can_reserve(eq_id, day, s_time, e_time) : bool
+    +get_size_eq(eq_id) : int
+}
+
+class Room {
+    -id : str
+    -size : RoomType
+    -branch_id : str
+    -rate : float
+    -timeslot : List[TimeSlot]
+    -equipment_quota : int
+    --
+    +add_timeslot(new_timeslot) : void
+    +update_timeslot_status(day, start, end, status) : bool
+}
+
+class TimeSlot {
+    -date : date
+    -start_time : time
+    -end_time : time
+    -status : TimeSlotStatus
+    -duration : int
+    --
+    +set_status(status) : void
+    +check_overlab(second_start, second_end) : bool
+    +ready_reserve(target_date, s_time, e_time) : bool
+}
+
+class Equipment {
+    -id : str
+    -type : EquipmentType
+    -size : int
+    -rate : float
+    -price : float
+    -timeslot : List[TimeSlot]
+    --
+    +add_timeslot(new_timeslot) : void
+    +check_status(day, s_time, e_time) : RoomEquipmentStatus
+    +update_timeslot_status(day, start, end, status) : bool
+}
+
+class StockEquipment {
+    -id : str
+    -type : EquipmentType
+    -equipment_ls : List[Equipment]
+    --
+    +add_eq(eq) : Equipment
+    +reduce_eq(eq_id) : bool
+    +verify_available(eq_id, day, s_time, e_time) : bool
+    +get_eq(eq_id) : Equipment
+    +check_stock(eq_id) : bool
+}
+
+class StockProduct {
+    -id : str
+    -type : ProductType
+    -product_list : List[Products]
+    --
+    +add_stock(new_product) : void
+    +del_stock(product_id) : void
+}
+
+class Products {
+    -id : str
+    -type : ProductType
+    -price : float
+}
+
+class Addon {
+    -id : str
+    -type : AddonType
+    -price : float
+}
+
+' ─── USER HIERARCHY ───────────────────────────────────────────────────────────
+
+class User {
+    -username : str
+    -password : str
+    -name : str
+    -email : str
+    -phone : str
+    -birthday : date
+    -status : UserStatus
+    --
+    +verify_password(password) : bool
+    +set_status_user(n_status) : void
+}
+
+abstract class Customer {
+    -id : str
+    -membership : Membership
+    -points : int
+    -reserve_list : List[ServiceIN]
+    -coupon_list : List[Coupon]
+    -notification_list : List[Notification]
+    --
+    +get_reserve(reserve_id) : ServiceIN
+    +get_booking(booking_id) : Booking
+    +get_coupon(coupon_id) : Coupon
+    +add_coupon(coupon) : void
+    +add_points(duration_hrs) : void
+    +{abstract} get_tier_discount() : float
+    +{abstract} get_points_per_hr() : int
+    +{abstract} redeem_coupon() : Coupon
+    +{abstract} get_cancellation_limit_hours() : int
+}
+
+class Standard {
+    +get_tier_discount() : float
+    +get_points_per_hr() : int
+    +get_cancellation_limit_hours() : int
+    +redeem_coupon() : Coupon
+}
+
+class Premium {
+    +get_tier_discount() : float
+    +get_points_per_hr() : int
+    +get_cancellation_limit_hours() : int
+    +redeem_coupon(points) : Coupon
+}
+
+class Diamond {
+    +get_tier_discount() : float
+    +get_points_per_hr() : int
+    +get_cancellation_limit_hours() : int
+    +redeem_coupon(points) : Coupon
+}
+
+class PendingCustomer {
+    -name : str
+    -username : str
+    -password : str
+    -email : str
+    -phone : str
+    -birthday : date
+    -membership : Membership
+    -is_paid : bool
+}
+
+class Staff {
+    -id : str
+    -branch : Branch
+    --
+    +customer_check_out(service_out, actual_time, expected_time, policy, booking, report, channel) : PaymentServiceOut
+    +confirm_checkout(payment_sout, report) : dict
+}
+
+' ─── BOOKING & SERVICE ────────────────────────────────────────────────────────
+
+class Booking {
+    -id : str
+    -room : Room
+    -eq_list : List[Equipment]
+    -customer : Customer
+    -timeslot : TimeSlot
+    -price : float
+    -duration : int
+    -service_out : ServiceOUT
+    -payment_sout : PaymentServiceOut
+    -addon_list : List[Addon]
+    --
+    +calculate_price() : float
+    +booking_cancel() : bool
+    +set_service_out(service_out) : void
+    +set_payment_sout(payment_sout) : void
+    +add_addon(addon) : void
+}
+
+class ServiceIN {
+    -servicein_id : str
+    -booking_list : List[Booking]
+    -status : ServiceStatus
+    -total_price : float
+    -final_price : float
+    -payment : PaymentServiceIn
+    --
+    +add_booking(booking) : void
+    +remove_booking(booking_id) : void
+    +search_booking(booking_id) : Booking
+    +calculate_total() : float
+    +set_status(status) : bool
+    +set_payment(payment) : void
+    +set_final_price(value) : void
+    +checkout() : bool
+    +cancel_b(booking_id, original_txn_id) : bool
+}
+
+class ServiceOUT {
+    -sout_id : str
+    -booking : Booking
+    -product_list : List[Products]
+    -penalty_list : List[Penalty]
+    -status : ServiceStatus
+    -total_price : float
+    --
+    +add_product(product) : void
+    +add_penalty(penalty) : void
+    +calculate_total_price() : float
+}
+
+' ─── PAYMENT ──────────────────────────────────────────────────────────────────
+
+abstract class PaymentChannel {
+    +{abstract} process(amount, ref) : bool
+    +{abstract} refund(amount, original_ref, refund_ref) : bool
+}
+
+class CreditCard {
+    -card_number : str
+    -cvv : str
+    -expiry : str
+    --
+    +validate_card() : bool
+    +process(amount, ref) : bool
+    +refund(amount, original_ref, refund_ref) : bool
+}
+
+class QrScan {
+    +process(amount, ref) : bool
+    +refund(amount, original_ref, refund_ref) : bool
+    +get_qr_base64(amount, ref) : str
+}
+
+class PaymentServiceIn {
+    -servicein_id : str
+    -customer : Customer
+    -channel : PaymentChannel
+    -final_price : float
+    -is_success : bool
+    -refund_amount : float
+    -transaction_history : List[TransactionRecord]
+    --
+    +process_payment() : bool
+    +payment_refund(amount, original_txn_id) : bool
+    +lookup_charge_transaction(txn_id) : TransactionRecord
+    +get_transaction_history() : list
+}
+
+class PaymentServiceOut {
+    -service_out : ServiceOUT
+    -channel : PaymentChannel
+    -total_price : float
+    -is_paid : bool
+    -is_calculated : bool
+    -transaction_history : List[TransactionRecord]
+    --
+    +calculate_total() : float
+    +process_payment() : bool
+    +get_transaction_history() : list
+    +to_format() : dict
+}
+
+class PaymentRegister {
+    -username : str
+    -member : Membership
+    -cost : float
+    -channel : PaymentChannel
+    -is_success : bool
+    -transaction_history : List[TransactionRecord]
+    --
+    +process_payment() : bool
+}
+
+class TransactionRecord {
+    -txn_id : str
+    -servicein_id : str
+    -txn_type : TXNType
+    -amount : float
+    -channel_type : str
+    -ref_txn_id : str
+    -timestamp : datetime
+    --
+    +to_format() : dict
+}
+
+' ─── POLICY, PENALTY, COUPON ──────────────────────────────────────────────────
+
+class Policy {
+    +check_late_checkout(actual, expected, booking_id, room_rate) : Penalty
+    +check_damage_penalty(booking_id, cost, desc) : Penalty
+    +check_cancel_refund(customer, cancel_time, booking_start) : bool
+}
+
+class Penalty {
+    -penalty_id : str
+    -type : PenaltyType
+    -amount : float
+    -reason : str
+    -status : PenaltyStatus
+    -booking_id : str
+    --
+    +change_penalty_status(new_status) : void
+    +to_format() : dict
+}
+
+class PenaltySummary {
+    -type : str
+    -total : float
+    -count : int
+    --
+    +add(amount) : void
+    +to_format() : dict
+}
+
+class Coupon {
+    -coupon_id : str
+    -discount : float
+    -expired_date : datetime
+    -used : bool
+    --
+    +{static} create_coupon(discount) : Coupon
+    +get_discount() : float
+    +get_expired_date() : datetime
+    +is_expired() : bool
+    +mark_used() : void
+}
+
+' ─── NOTIFICATION & REPORT ────────────────────────────────────────────────────
+
+class Notification {
+    -noti_id : str
+    -username : str
+    -is_read : bool
+    -status : NotiStatus
+    --
+    +format_message(message) : str
+    +set_status_noti(status) : void
+    +noti_send(message) : bool
+    +mark_as_read() : void
+}
+
+class DailyReport {
+    -date : str
+    -branch : Branch
+    -bookings : List[Booking]
+    -penalties : List[Penalty]
+    -total_revenue : float
+    --
+    +add_revenue(amount) : void
+    +add_penalty(p) : void
+    +add_booking_record(b) : void
+    +generate_report_data() : dict
+}
+
+' ─── RELATIONSHIPS ────────────────────────────────────────────────────────────
+
+' RhythmReserve
+RhythmReserve "1" o-- "0..*" Branch
+RhythmReserve "1" o-- "0..*" Customer
+RhythmReserve "1" o-- "0..*" Staff
+RhythmReserve "1" *-- "0..*" PendingCustomer
+RhythmReserve "1" *-- "1" Policy
+RhythmReserve "1" o-- "0..*" DailyReport
+
+' Branch
+Branch "1" o-- "1..*" Room
+Branch "1" o-- "0..*" StockEquipment
+Branch "1" o-- "0..*" StockProduct
+
+' Room / Equipment / TimeSlot
+Room "1" o-- "0..*" TimeSlot
+Equipment "1" o-- "0..*" TimeSlot
+StockEquipment "1" o-- "0..*" Equipment
+StockProduct "1" o-- "0..*" Products
+
+' User hierarchy
 User <|-- Customer
-Customer <|-- Member
-Payment o-- PaymentChannel 
-PaymentChannel <|-- QrScan
+User <|-- Staff
+Customer <|-- Standard
+Customer <|-- Premium
+Customer <|-- Diamond
+
+' Customer associations
+Customer "1" o-- "0..*" ServiceIN
+Customer "1" o-- "0..*" Coupon
+Customer "1" o-- "0..*" Notification
+
+' Staff
+Staff "1" --> "1" Branch
+
+' Booking
+ServiceIN "1" o-- "1..*" Booking
+Booking "1" --> "1" Room
+Booking "1" o-- "0..*" Equipment
+Booking "1" o-- "0..*" Addon
+Booking "1" --> "0..1" Customer
+Booking "1" *-- "1" TimeSlot
+Booking "1" --> "0..1" ServiceOUT
+Booking "1" --> "0..1" PaymentServiceOut
+
+' ServiceIN
+ServiceIN "1" --> "0..1" PaymentServiceIn
+
+' ServiceOUT
+ServiceOUT "1" o-- "0..*" Products
+ServiceOUT "1" o-- "0..*" Penalty
+ServiceOUT "1" --> "1" Booking
+
+' Payment
 PaymentChannel <|-- CreditCard
-ReserveSystem o-- Branch
-ReserveSystem o-- Policy
-Customer o-- Coupon
-Branch o-- Room
-Stock o-- Equipment
-Room o-- Time_slot
-Equipment o-- Time_slot
-Service_IN o-- Booking
-Customer o-- Notification
-Service_IN <-- Payment
-Service_OUT o-- Payment
-Booking --> Room
-Booking o-- Equipment
-Branch o-- Products
-Service_OUT o-- Products
-Service_OUT o-- Penalty
-Customer o-- Service_OUT
-Customer o-- Service_IN
-Products <|-- Item
-Stock o-- Item
-Member <|-- Standard
+PaymentChannel <|-- QrScan
+
+PaymentServiceIn "1" --> "1" PaymentChannel
+PaymentServiceIn "1" o-- "0..*" TransactionRecord
+PaymentServiceIn "1" --> "1" Customer
+
+PaymentServiceOut "1" --> "1" PaymentChannel
+PaymentServiceOut "1" o-- "0..*" TransactionRecord
+PaymentServiceOut "1" --> "1" ServiceOUT
+
+PaymentRegister "1" --> "1" PaymentChannel
+PaymentRegister "1" o-- "0..*" TransactionRecord
+
+' Policy
+Policy "1" ..> "0..1" Penalty : creates
+
+' DailyReport
+DailyReport "1" --> "1" Branch
+DailyReport "1" o-- "0..*" Booking
+DailyReport "1" o-- "0..*" Penalty
+DailyReport "1" o-- "0..*" PenaltySummary
+
 @enduml
