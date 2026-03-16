@@ -57,8 +57,14 @@ alt Refund Success
     SIN -> BK : booking_cancel()
     activate BK
     BK -> R : update_timeslot_status(..., AVAILABLE)
+    activate R
+    R --> BK : True
+    deactivate R
     loop for eq in eq_list
         BK -> Eq : update_timeslot_status(..., AVAILABLE)
+        activate Eq
+        Eq --> BK : True
+        deactivate Eq
     end
     BK --> SIN : True
     deactivate BK

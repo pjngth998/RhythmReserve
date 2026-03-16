@@ -11,38 +11,51 @@ participant "Equipment" as EQ
 participant "ServiceOUT" as SOUT
 
 C -> RR : check_in(customer_id, reserve_id, booking_id)
-
+activate RR
 RR -> RR : get_customer_by_id(customer_id)
 RR -> CUS : get_reserve(reserve_id)
+activate CUS
 CUS --> RR : serviceIN
+deactivate CUS
 
 RR -> SIN : get_booking(booking_id)
+activate SIN
 SIN --> RR : booking
+deactivate SIN
 
 RR -> RR : now()
 
 alt current_time.date() != booking.day
     RR --> C : Exception("Not the booking date")
-else
-    alt current_time < check_in_open (booking.start - 10 min)
+else current_time < check_in_open (booking.start - 10 min)
         RR --> C : Exception("Too early to check in")
-    else alt current_time > check_in_close (booking.end)
+else current_time > check_in_close (booking.end)
         RR --> C : Exception("Check-in time has passed")
-    else
-        RR -> RM : update_timeslot_status(day, start, end, OCCUPIED)
-        RM --> RR : True
+else
+    RR -> RM : update_timeslot_status(day, start, end, OCCUPIED)
+    activate RM
+    RM --> RR : True
+    deactivate RM
 
-        loop ทุก eq ใน booking.eq_list
-            RR -> EQ : update_timeslot_status(day, start, end, OCCUPIED)
-            EQ --> RR : True
-        end
-
-        RR -> SOUT ** : ServiceOUT(booking)
-        RR -> BK : set_service_out(serviceOUT)
-        BK --> RR : void
-
-        RR --> C : serviceOUT object
+    loop all eq in booking.eq_list
+        RR -> EQ : update_timeslot_status(day, start, end, OCCUPIED)
+        activate EQ
+        EQ --> RR : True
+        deactivate EQ
     end
+
+    RR -> SOUT : <<create>> ServiceOUT(booking)
+    activate SOUT
+    SOUT --> RR : ServiceOUT
+    deactivate SOUT
+
+    RR -> BK : set_service_out(serviceOUT)
+    activate BK
+    BK --> RR : void
+    deactivate BK
+
+    RR --> C : serviceOUT object
 end
+deactivate RR
 
 @enduml

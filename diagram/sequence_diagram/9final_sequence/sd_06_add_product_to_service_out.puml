@@ -12,7 +12,7 @@ C -> RR : add_product_to_service_out(branch_id, customer_id,\nreserve_id, bookin
 
 RR -> RR : get_branch_by_id(branch_id)
 RR -> RR : get_customer_by_id(customer_id)
-RR -> RR : customer.get_reserve(reserve_id)
+RR -> CUS : get_reserve(reserve_id)
 RR -> RR : reserve.get_booking(booking_id)
 RR -> RR : booking.service_out
 
