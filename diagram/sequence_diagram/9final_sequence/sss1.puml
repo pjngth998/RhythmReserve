@@ -1,73 +1,92 @@
 @startuml
-title SD-01: Registration with 4 Participating Classes
+title SD-02: create_service_in (Standard & Equipment Logic)
 
 skinparam Style strictuml
 skinparam sequence {
     MessageAlignment center
+    ActivationBackgroundColor #F1F8E9
 }
 
-actor "Customer(Actor)" as C
+actor Customer as C
 participant "RhythmReserve" as RR
-participant "PendingCustomer" as PENDC
-participant "PaymentRegister" as PAYR
-participant "PaymentChannel" as PAYC
-participant "Customer(Instance)" as CINST
+participant "Branch" as BR
+participant "Room" as RM
+participant "Booking" as BK
+participant "ServiceIN" as SIN
+participant "CustomerInstance" as CI
 
-C -> RR : register_request(name, username, ..., membership)
+C -> RR : create_service_in(...)
 activate RR
 
-opt search_user(username) == True
-    RR --[#red]> C : raise Exception("Have Account Already")
-end
+RR -> RR : get_customer_by_id(customer_id)
 
-alt membership == STANDARD
-    create CINST
-    RR -> CINST : <<create>> Standard(...)
-    RR -> RR : add_customer_ls(customer)
-    RR -->> C : return customer
-else membership == PREMIUM / DIAMOND
-    ' --- 1. Class: PendingCustomer ---
-    create PENDC
-    RR -> PENDC : <<create>> (name, username, ..., membership)
+'--- Internal Call: create_booking ---
+Note over RR: self.create_booking(...)
+RR -> RR : create_booking(...)
+activate RR #LightBlue
+
+    RR -> RR : get_branch_by_id(branch_id)
     
-    ' --- 2. Class: PaymentRegister (Internal Call) ---
-    RR -> RR : pay_register(username, membership, channel)
-    activate RR #LightBlue
-        create PAYR
-        RR -> PAYR : <<create>> (username, membership, channel)
-        
-        RR -> PAYR : process_payment()
-        activate PAYR
-            ' --- 3. Class: PaymentChannel ---
-            PAYR -> PAYC : process(amount, ref)
-            activate PAYC
-            
-            alt [validate_card success]
-                PAYC -->> PAYR : True
-                PAYR -->> RR : True
-                RR -> PENDC : set is_paid = True
-            else [validate_card failed]
-                PAYC --[#red]>> PAYR : False
-                deactivate PAYC
-                PAYR --[#red]>> RR : False
-                deactivate PAYR
-                RR --[#red]> C : raise Exception("Payment Unsuccessfully")
-            end
-    deactivate RR
+    '--- ส่วนการหาห้องว่างตามรูปภาพที่คุณส่งมา ---
+    RR -> BR : get_available_room(branch, room_size, start, end)
+    activate BR
+         loop for room in self.__room_list
+              BR -> RM : _has_conflict(start, end)
+              activate RM
+              RM -->> BR : True (Conflict) / False (No conflict)
+              deactivate RM
+              
+              alt No conflict
+                   note over BR : select this room
+              end
+         end
+         BR -->> RR : room instance
+    deactivate BR
 
-    ' --- 4. Class: Customer Instance (Premium/Diamond) ---
-    RR -> RR : confirm_register(...)
-    activate RR #LightBlue
-        RR -> PENDC : remove(pending)
-        destroy PENDC
-        
-        create CINST
-        RR -> CINST : <<create>> (Premium / Diamond)
-        RR -> RR : add_customer_ls(customer)
-    deactivate RR
-    
-    RR -->> C : return customer instance
-end
+    RR -> RR : get_available_equipment(branch_id, day, start_t, end_t)
+    note over RR : available_ids = [eq.id for eq in available]
 
+    '--- การเช็คอุปกรณ์แบบรวบยอด (Validation) ---
+    alt all eq_id in eq_list are available
+        note over RR : proceed to next step
+    else some eq_id not in available_ids
+        RR --[#red]> C : raise Exception (Not available)
+    end
+
+    ' สร้าง TimeSlot และเพิ่มลงใน Room
+    RR -> RM : add_timeslot(TimeSlot_instance)
+
+    '--- สร้าง Booking Object ---
+    create BK
+    RR -> BK : <<create>> Booking(...)
+
+    opt if addon_types is not empty
+         loop every addon in list
+              RR -> BK : add_addon(Addon_instance)
+         end
+    end
+
+    RR -->> RR : booking instance
 deactivate RR
+'--- จบช่วง create_booking กลับมาที่ main logic ---
+
+create SIN
+RR -> SIN : <<create>> ServiceIN(booking)
+
+RR -> CI : set add_reserve_list = service
+
+RR -> SIN : calculate_total()
+activate SIN
+    loop for each booking in service
+        SIN -> BK : calculate_price()
+        activate BK
+        BK -->> SIN : price
+        deactivate BK
+    end
+    SIN -->> RR : total_price
+deactivate SIN
+
+RR -->> C : serviceIN object
+deactivate RR
+
 @enduml
