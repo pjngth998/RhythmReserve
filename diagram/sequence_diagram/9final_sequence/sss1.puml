@@ -1,90 +1,86 @@
 @startuml
-title SD-06: add_product_to_service_out (CUS Method Focus)
+title SD-07: pay_service_out (Refactored to Staff Delegation)
 
-' --- การตั้งค่าเพื่อความสวยงามและพอดีขอบ ---
 skinparam Style strictuml
-skinparam MaxMessageSize 200
-skinparam sequence {
-    MessageAlignment center
-    ParticipantPadding 20
-}
+skinparam MaxMessageSize 150
 
 actor Customer as C
 participant "RhythmReserve" as RR
 participant "Customer" as CUS
+participant "Staff" as STF
+participant "Policy" as POL
 participant "Booking" as BK
-participant "Branch" as BR
-participant "StockProduct" as STCK
 participant "ServiceOUT" as SOUT
+participant "PaymentServiceOut" as PSOUT
 
-C -> RR : add_product_to_service_out(...)
+C -> RR : pay_service_out(...)
 activate RR
 
-' --- 1. เตรียมข้อมูล Object จาก Customer ---
-RR -> RR : get_branch_by_id(branch_id)
+' --- 1. Setup ข้อมูลพื้นฐาน ---
 RR -> RR : get_customer_by_id(customer_id)
-
-' เรียกหา Reserve จาก Customer
 RR -> CUS : get_reserve(reserve_id)
 activate CUS
 CUS -->> RR : reserve
-deactivate CUS
-
-' เรียกหา Booking จาก Customer (อยู่คลาสเดียวกัน)
 RR -> CUS : find_booking(booking_id)
-activate CUS
 CUS -->> RR : booking
 deactivate CUS
 
-' ดึงถังเก็บค่าบริการจาก Booking
 RR -> BK : get_service_out()
 activate BK
 BK -->> RR : service_out
 deactivate BK
 
-' --- 2. ค้นหา Stock (ดึงรายการมาครั้งเดียวตามโค้ด) ---
-RR -> BR : branch.product
-activate BR
-BR -->> RR : stock_list
-deactivate BR
+' --- 2. ส่งงานต่อให้ Staff (ตามโค้ด staff.customer_check_out) ---
+RR -> STF ** : Staff("system", ...)
+RR -> STF : customer_check_out(service_out, actual, expected, policy, booking, ...)
+activate STF
 
-loop for each s in stock_list
-    alt s.type == product_type
-        RR -> RR : stock = s (found)
-    end
-end
-
-' --- 3. ตรวจสอบเงื่อนไขและจัดการสินค้า ---
-alt stock is None
-    RR --[#red]> C : Exception("Product type not found")
-else len(stock.get_stock) < amount
-    RR --[#red]> C : Exception("Not enough stock")
-else [Available]
+    ' Staff คุยกับ Policy เพื่อเช็ค Late
+    STF -> POL : check_late_checkout(actual, expected, ...)
+    activate POL
+    POL -->> STF : late_penalty
+    deactivate POL
     
-    loop i in range(amount)
-        RR -> STCK : get_stock[0]
-        activate STCK
-        STCK -->> RR : product
-        deactivate STCK
-
-        RR -> SOUT : add_product(product)
-        activate SOUT
-        SOUT -->> RR : void
-        deactivate SOUT
-
-        RR -> STCK : del_stock(product.id)
-        activate STCK
-        STCK -->> RR : void
-        deactivate STCK
+    alt late_penalty is not None
+        STF -> SOUT : add_penalty(late_penalty)
     end
 
-    RR -> SOUT : calculate_total_price()
-    activate SOUT
-    SOUT -->> RR : total_price
-    deactivate SOUT
+    ' Staff เช็คความเสียหายของห้อง
+    opt is_room_damaged
+        STF -> POL : check_damage_penalty(room_cost, ...)
+        activate POL
+        POL -->> STF : damage_penalty
+        deactivate POL
+        STF -> SOUT : add_penalty(damage_penalty)
+        STF -> BK : update_room_status(MAINTENANCE)
+    end
 
-    RR -->> C : { sout_id, products, total_price }
-end
+    ' Staff วนลูปเช็คอุปกรณ์
+    loop for each eq in booking.eq_list
+        alt eq.id in damaged_eq_ids
+            STF -> POL : check_damage_penalty(eq.price, ...)
+            STF -> SOUT : add_penalty(eq_penalty)
+            STF -> BK : update_eq_status(MAINTENANCE)
+        else
+            STF -> BK : update_eq_status(AVAILABLE)
+        end
+    end
+
+    ' Staff สร้างการชำระเงิน
+    STF -> PSOUT ** : PaymentServiceOut(service_out, channel)
+    STF -> PSOUT : calculate_total()
+    activate PSOUT
+    PSOUT -> SOUT : calculate_total_price()
+    SOUT -->> PSOUT : total_price
+    PSOUT -->> STF : payment_sout
+    deactivate PSOUT
+
+STF -->> RR : payment_sout
+deactivate STF
+
+' --- 3. สรุปผลที่ RR ---
+RR -> BK : set_payment_sout(payment_sout)
+RR -->> C : { sout_id, products, penalties, total_price }
 
 deactivate RR
 @enduml
